@@ -30,12 +30,22 @@ class Cut:
     text: str
 
 
+def sanitize(words: list[Word]) -> list[Word]:
+    """Drop Whisper hallucinations: zero-length words and words going back in time."""
+    out: list[Word] = []
+    for w in words:
+        if w[1] - w[0] < 0.02 or (out and w[0] < out[-1][0]):
+            continue
+        out.append(w)
+    return out
+
+
 def transcribe_cached(src: str, workdir: Path, model: str, language: str | None) -> list[Word]:
     st = Path(src).stat()
     key = hashlib.sha1(f"{src}:{st.st_size}:{st.st_mtime_ns}:{model}:{language}".encode()).hexdigest()[:12]
     cache = workdir / f"words_{Path(src).stem}_{key}.json"
     if cache.exists():
-        return [tuple(w) for w in json.loads(cache.read_text(encoding="utf-8"))]
+        return sanitize([tuple(w) for w in json.loads(cache.read_text(encoding="utf-8"))])
     from . import autosubs
     from .ffmpeg import run
     wav = workdir / f"asr_{key}.wav"
@@ -45,7 +55,7 @@ def transcribe_cached(src: str, workdir: Path, model: str, language: str | None)
         words += cue.words or [(cue.start, cue.end, cue.text)]
     wav.unlink(missing_ok=True)
     cache.write_text(json.dumps(words, ensure_ascii=False), encoding="utf-8")
-    return words
+    return sanitize(words)
 
 
 def find_retakes(words: list[Word], max_back_words: int = 25, max_back_sec: float = 15.0) -> list[tuple[int, int]]:
@@ -55,7 +65,8 @@ def find_retakes(words: list[Word], max_back_words: int = 25, max_back_sec: floa
     j = 1
     while j < len(words):
         found, run = None, 0
-        for i in range(j - 1, max(-1, j - 1 - max_back_words), -1):
+        floor = out[-1][1] if out else 0  # never reach back into an already cut attempt
+        for i in range(j - 1, max(floor - 1, j - 1 - max_back_words), -1):
             if words[j][0] - words[i][0] > max_back_sec:
                 break
             # length of the repeated run starting at i and j
@@ -64,7 +75,7 @@ def find_retakes(words: list[Word], max_back_words: int = 25, max_back_sec: floa
                 k += 1
             chars = sum(len(x) for x in n[j:j + k])
             immediate_stutter = k >= 1 and i + k == j and len(n[j]) >= 3  # "квартиру квартиру"
-            if (k >= 2 and chars >= 6) or immediate_stutter:
+            if k >= 3 or (k == 2 and chars >= 10) or immediate_stutter:
                 found, run = i, k  # keep searching back for the start of the failed attempt
         if found is not None:
             out.append((found, j))
@@ -87,24 +98,27 @@ def plan_cuts(words: list[Word], duration: float, cfg: dict, fps: int) -> tuple[
     pad = float(cfg.get("pad", 0.12))
     drop = [False] * len(words)
     cuts: list[Cut] = []
-    if cfg.get("cut_retakes", True):
-        for i, j in find_retakes(words):
-            for k in range(i, j):
+    manual = [(float(a), float(b)) for a, b in cfg.get("remove") or []]
+    for a, b in manual:
+        cuts.append(Cut(a, b, "вручную", ""))
+        for k, w in enumerate(words):
+            if w[0] >= a - 0.05 and w[1] <= b + 0.05:
                 drop[k] = True
-            cuts.append(Cut(words[i][0], words[j][0], "дубль/запинка", " ".join(w[2] for w in words[i:j])))
+    if cfg.get("cut_retakes", True):
+        # search retakes only among words that survived manual cuts
+        alive = [k for k in range(len(words)) if not drop[k]]
+        for i, j in find_retakes([words[k] for k in alive]):
+            for k in alive[i:j]:
+                drop[k] = True
+            wi, wj = words[alive[i]], words[alive[j]]
+            cuts.append(Cut(wi[0], wj[0], "дубль/запинка", " ".join(words[k][2] for k in alive[i:j])))
     if cfg.get("cut_fillers", True):
         for k, w in enumerate(words):
             if norm(w[2]) in FILLERS and not drop[k]:
                 drop[k] = True
                 cuts.append(Cut(w[0], w[1], "слово-паразит", w[2]))
-    for a, b in cfg.get("remove") or []:  # manual cuts in source seconds
-        cuts.append(Cut(float(a), float(b), "вручную", ""))
-        for k, w in enumerate(words):
-            if w[0] >= float(a) - 0.05 and w[1] <= float(b) + 0.05:
-                drop[k] = True
 
     kept = [w for w, d in zip(words, drop) if not d]
-    manual = [(float(a), float(b)) for a, b in cfg.get("remove") or []]
     iv: list[list[float]] = []
     for s, e, _ in kept:
         s, e = max(0.0, s - pad), min(duration, e + pad)
@@ -126,7 +140,7 @@ def plan_cuts(words: list[Word], duration: float, cfg: dict, fps: int) -> tuple[
         iv = nxt
     # pauses that were removed, for the report
     for (s0, e0), (s1, _) in zip(iv, iv[1:]):
-        if s1 - e0 > 0.25 and not any(c.start <= e0 + 0.3 and c.end >= s1 - 0.3 for c in cuts):
+        if s1 - e0 > 0.25 and not any(c.start < s1 and c.end > e0 for c in cuts):
             cuts.append(Cut(e0, s1, "пауза", ""))
     # snap to the frame grid so audio and video stay in sync after the cut
     snap = [(round(s * fps) / fps, round(e * fps) / fps) for s, e in iv]

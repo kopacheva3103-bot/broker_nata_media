@@ -15,7 +15,8 @@ def transcribe(audio: str | Path, model: str = "small", language: str | None = "
             "(или отключите subtitles.auto и подключите готовый .srt)"
         ) from e
     wm = WhisperModel(model, device="auto", compute_type="auto")
-    segments, _ = wm.transcribe(str(audio), language=language or None, word_timestamps=True, vad_filter=True)
+    segments, _ = wm.transcribe(str(audio), language=language or None, word_timestamps=True, vad_filter=True,
+                                condition_on_previous_text=False)
     cues = []
     for s in segments:
         words: list[tuple[float, float, str]] = []
