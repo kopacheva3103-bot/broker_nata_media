@@ -18,6 +18,16 @@ def transcribe(audio: str | Path, model: str = "small", language: str | None = "
     segments, _ = wm.transcribe(str(audio), language=language or None, word_timestamps=True, vad_filter=True)
     cues = []
     for s in segments:
-        words = [(w.start, w.end, w.word.strip()) for w in (s.words or []) if w.word.strip()]
+        words: list[tuple[float, float, str]] = []
+        for w in s.words or []:
+            text = w.word.strip()
+            if not text:
+                continue
+            # Whisper splits "кухня-гостиная" into "кухня" + "-гостиная": glue pieces back
+            if words and (not w.word.startswith(" ") or text.startswith("-")):
+                a, _, prev = words[-1]
+                words[-1] = (a, w.end, prev + text)
+            else:
+                words.append((w.start, w.end, text))
         cues.append(Cue(s.start, s.end, s.text.strip(), words or None))
     return cues
