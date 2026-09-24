@@ -218,22 +218,52 @@ def _word_times(cue: Cue) -> list[tuple[float, float, str]]:
     return out
 
 
+def _even(words: list, max_words: int, max_chars: int) -> list[list]:
+    import math
+    chars = sum(len(x[2]) + 1 for x in words)
+    parts = max(math.ceil(len(words) / max_words), math.ceil(chars / max_chars), 1)
+    size = len(words) / parts
+    return [words[round(p * size):round((p + 1) * size)] for p in range(parts) if words[round(p * size):round((p + 1) * size)]]
+
+
+def _split_sentence(sentence: list, max_words: int, max_chars: int) -> list[list]:
+    """Break at commas first (meaning), then split long clauses evenly."""
+    clauses, cur = [], []
+    for w in sentence:
+        cur.append(w)
+        if w[2][-1:] in ",;:—":
+            clauses.append(cur)
+            cur = []
+    if cur:
+        clauses.append(cur)
+    out: list[list] = []
+    for cl in clauses:
+        if out and len(out[-1]) + len(cl) <= max_words and \
+                sum(len(x[2]) + 1 for x in out[-1] + cl) <= max_chars:
+            out[-1] = out[-1] + cl
+        else:
+            out += _even(cl, max_words, max_chars)
+    # glue a lonely trailing word to the previous phrase when it still fits on two lines
+    if len(out) > 1 and len(out[-1]) == 1 and len(out[-2]) + 1 <= max_words + 1:
+        out[-2] = out[-2] + out.pop()
+    return out
+
+
 def chunk(cues: list[Cue], max_words: int, max_chars: int) -> list[list[tuple[float, float, str]]]:
-    """Split cues into short on-screen phrases (reels style)."""
+    """Split cues into short on-screen phrases (reels style).
+
+    Every sentence is split into evenly sized pieces, so no phrase ends with a
+    lonely word on screen ("…и санузлом." -> "…и" / "санузлом.").
+    """
     chunks = []
     for cue in cues:
-        cur: list[tuple[float, float, str]] = []
-        for w in _word_times(cue):
-            length = sum(len(x[2]) + 1 for x in cur) + len(w[2])
-            if cur and (len(cur) >= max_words or length > max_chars):
-                chunks.append(cur)
-                cur = []
-            cur.append(w)
-            if w[2][-1:] in ".!?" and max_words < 99:
-                chunks.append(cur)
-                cur = []
-        if cur:
-            chunks.append(cur)
+        sentence: list[tuple[float, float, str]] = []
+        words = _word_times(cue)
+        for k, w in enumerate(words):
+            sentence.append(w)
+            if w[2][-1:] in ".!?…" or k == len(words) - 1:
+                chunks += _split_sentence(sentence, max_words, max_chars)
+                sentence = []
     return chunks
 
 
