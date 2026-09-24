@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from . import ass, grading
+from . import ass, cleanup, grading
 from .ffmpeg import esc, hex_color, probe, run
 
 
@@ -119,6 +119,8 @@ def _cache_name(ctx: Ctx, idx: int, seg: dict, kind: str) -> Path:
 
 
 def segment_duration(seg: dict) -> float:
+    if seg.get("_keep"):
+        return sum(e - s for s, e in seg["_keep"])
     if seg["type"] == "video":
         start = float(seg.get("start", 0))
         end = seg.get("end")
@@ -151,28 +153,58 @@ def _overlay_ass(ctx: Ctx, idx: int, seg: dict, duration: float) -> str:
 
 def _video(ctx: Ctx, idx: int, seg: dict, out: Path) -> None:
     info = probe(seg["src"])
+    keep = seg.get("_keep")
     start = float(seg.get("start", 0))
-    speed = float(seg.get("speed", 1.0))
+    speed = 1.0 if keep else float(seg.get("speed", 1.0))
     dur = segment_duration(seg)
     src_len = dur * speed
     grade = grading.filters(seg["_grade"], f"g{idx}")
-    v = [f"setpts=(PTS-STARTPTS)/{speed}", _fit_seg(seg, ctx.w, ctx.h, f"f{idx}"), "setsar=1", f"fps={ctx.fps}"]
-    if grade:
-        v.append(grade)
-    vchain = "[0:v]" + ",".join(v) + _overlay_ass(ctx, idx, seg, dur) + ",format=yuv420p[v]"
+    beauty = grading.beauty(seg.get("_beauty"), f"b{idx}", ctx.h / 1920)
+    if keep:  # talking head: keep only the good takes (whole file is read)
+        vsel, asel = cleanup.select_filters(keep)
+        v = [f"setpts=PTS-STARTPTS,fps={ctx.fps}", vsel]
+        args = ["-i", seg["src"]]
+    else:
+        v = [f"setpts=(PTS-STARTPTS)/{speed}"]
+        args = ["-ss", f"{start:.3f}", "-t", f"{src_len:.3f}", "-i", seg["src"]]
+    v += [_to_sdr(info), _fit_seg(seg, ctx.w, ctx.h, f"f{idx}"), "setsar=1", f"fps={ctx.fps}"]
+    v += [f for f in (beauty, grade) if f]
+    vchain = "[0:v]" + ",".join(f for f in v if f)
+    # cutaways: other footage over the picture while the voice keeps going
+    for k, br in enumerate(seg.get("_broll") or []):
+        clip = render(ctx, idx * 100 + k + 1, br["_seg"])
+        n_in = len([a for a in args if a == "-i"])
+        args += ["-i", str(clip)]
+        at, d, fd = br["_at"], br["_dur"], float(br.get("fade", 0.2))
+        vchain += (f"[base{k}];[{n_in}:v]format=yuva420p,"
+                   f"fade=t=in:st=0:d={fd}:alpha=1,fade=t=out:st={max(d - fd, 0):.3f}:d={fd}:alpha=1,"
+                   f"setpts=PTS-STARTPTS+{at:.3f}/TB[br{k}];"
+                   f"[base{k}][br{k}]overlay=eof_action=pass:enable='between(t,{at:.3f},{at + d:.3f})'")
+    vchain += _overlay_ass(ctx, idx, seg, dur) + ",format=yuv420p[v]"
 
-    args = ["-ss", f"{start:.3f}", "-t", f"{src_len:.3f}", "-i", seg["src"]]
     vol = float(seg.get("volume", 1.0))
     if info.has_audio and vol > 0 and not seg.get("mute"):
-        a = f"[0:a]asetpts=PTS-STARTPTS,{_atempo(speed)},volume={vol},"
+        if keep:
+            a = f"[0:a]asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo,{asel},volume={vol},"
+        else:
+            a = f"[0:a]asetpts=PTS-STARTPTS,{_atempo(speed)},volume={vol},"
         fin, fout = float(seg.get("audio_fade_in", 0.05)), float(seg.get("audio_fade_out", 0.05))
         a += f"afade=t=in:d={fin},afade=t=out:st={max(dur - fout, 0):.3f}:d={fout},"
         achain = a + "aresample=48000,aformat=channel_layouts=stereo,apad[a]"
     else:
+        n_in = len([a for a in args if a == "-i"])
         args += ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]
-        achain = "[1:a]anull[a]"
+        achain = f"[{n_in}:a]anull[a]"
     run([*args, "-filter_complex", vchain + ";" + achain, "-map", "[v]", "-map", "[a]",
          "-t", f"{dur:.3f}", *ctx.enc(), str(out)], ctx.verbose)
+
+
+def _to_sdr(info) -> str:
+    """iPhone HDR (HLG / PQ, BT.2020) -> SDR BT.709, otherwise colours look washed out."""
+    if info.color_transfer in ("arib-std-b67", "smpte2084"):
+        return ("zscale=t=linear:npl=203,format=gbrpf32le,zscale=p=bt709,"
+                "tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p")
+    return ""
 
 
 def _still_then_motion(ctx: Ctx, idx: int, seg: dict, out: Path, still_args: list[str],

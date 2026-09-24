@@ -73,10 +73,11 @@ class AssDoc:
             f"{s['shadow'] * k:.1f},5,{round(s['margin_x'] * k)},{round(s['margin_x'] * k)},0,1"
         )
 
-    def add(self, start: float, end: float, style: str, text: str) -> None:
+    def add(self, start: float, end: float, style: str, text: str, margins: tuple[int, int, int] = (0, 0, 0)) -> None:
         if end - start <= 0.01:
             return
-        self.events.append(f"Dialogue: 0,{ts(start)},{ts(end)},{style},,0,0,0,,{text}")
+        ml, mr, mv = margins
+        self.events.append(f"Dialogue: 0,{ts(start)},{ts(end)},{style},,{ml},{mr},{mv},,{text}")
 
     def write(self, path: Path) -> Path:
         head = [
@@ -236,14 +237,32 @@ def chunk(cues: list[Cue], max_words: int, max_chars: int) -> list[list[tuple[fl
     return chunks
 
 
+CORNERS = {"top_right": 9, "top_left": 7, "bottom_right": 3, "bottom_left": 1, "top": 8, "bottom_center": 2}
+
+
 def subtitle_events(doc: AssDoc, cues: list[Cue], cfg: dict) -> None:
     style = doc.style("subtitle")
     upper = cfg.get("uppercase", False)
     karaoke = cfg.get("karaoke", True)
     hl = ass_color(style.get("highlight", "#FFD400"))
     pos = cfg.get("position", "bottom")
-    y = doc.y_for({"bottom": 0.72, "middle": 0.55, "top": 0.2}.get(pos, pos) if isinstance(pos, str) else pos)
-    base = r"{\an5\pos(" + f"{doc.width // 2},{y}" + ")}"
+    margins = (0, 0, 0)
+    if pos in CORNERS:
+        # Text box anchored to a corner. Margins are given in centimetres of a
+        # phone screen (the frame width is assumed to be ~6.6 cm when watched).
+        px_cm = doc.width / float(cfg.get("screen_width_cm", 6.6))
+        m = round(float(cfg.get("margin_cm", 0.5)) * px_cm)
+        box = round(doc.width * float(cfg.get("max_width", 0.6)))
+        an = CORNERS[pos]
+        left = an in (7, 1)
+        centre = an in (8, 2)
+        ml = m if left or centre else max(m, doc.width - m - box)
+        mr = m if not left or centre else max(m, doc.width - m - box)
+        margins = (ml, mr, m)
+        base = "{\\an" + str(an) + "}"
+    else:
+        y = doc.y_for({"bottom": 0.72, "middle": 0.55, "top": 0.2}.get(pos, pos) if isinstance(pos, str) else pos)
+        base = r"{\an5\pos(" + f"{doc.width // 2},{y}" + ")}"
     offset = float(cfg.get("offset", 0.0))
     chunks = chunk(cues, int(cfg.get("max_words", 4)), int(cfg.get("max_chars", 26)))
     for n, words in enumerate(chunks):
@@ -252,9 +271,10 @@ def subtitle_events(doc: AssDoc, cues: list[Cue], cfg: dict) -> None:
         # keep phrase on screen until the next one starts (no flicker), max +0.4s
         if n + 1 < len(chunks):
             end = max(end, min(chunks[n + 1][0][0] + offset, end + 0.4))
+        # libass wraps only at spaces, so a word is never split between lines
         tokens = [clean(w[2].upper() if upper else w[2]) for w in words]
         if not karaoke:
-            doc.add(start, end, "subtitle", base + " ".join(tokens))
+            doc.add(start, end, "subtitle", base + " ".join(tokens), margins)
             continue
         for i, (ws, we, _) in enumerate(words):
             ws += offset
@@ -263,4 +283,4 @@ def subtitle_events(doc: AssDoc, cues: list[Cue], cfg: dict) -> None:
                 (r"{\c" + hl + r"\fscx108\fscy108}" + t + r"{\r}") if j == i else t
                 for j, t in enumerate(tokens)
             )
-            doc.add(max(ws, start), we, "subtitle", base + line)
+            doc.add(max(ws, start), we, "subtitle", base + line, margins)

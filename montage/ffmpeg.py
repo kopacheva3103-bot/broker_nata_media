@@ -41,6 +41,7 @@ class MediaInfo:
     height: int
     has_video: bool
     has_audio: bool
+    color_transfer: str = ""
 
 
 def probe(path: str | Path) -> MediaInfo:
@@ -59,6 +60,7 @@ def probe(path: str | Path) -> MediaInfo:
         height=int((video or {}).get("height") or 0),
         has_video=video is not None,
         has_audio=audio is not None,
+        color_transfer=(video or {}).get("color_transfer", ""),
     )
 
 

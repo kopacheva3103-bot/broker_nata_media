@@ -7,7 +7,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import ass, assemble, grading, segments
+from . import ass, assemble, cleanup, grading, segments
 from .ffmpeg import probe
 
 
@@ -94,7 +94,10 @@ def normalise(p: dict) -> dict:
                 seg["_grade"] = grading.merge(g, sg)
         except ValueError as e:
             raise ConfigError(f"{where}: {e}") from e
-        tr = seg.get("transition", default_tr)
+        bty = seg.get("beauty", p.get("beauty") if t != "slide" else None)
+        seg["_beauty"] = {"skin_smooth": bty} if isinstance(bty, (int, float)) and not isinstance(bty, bool) else bty
+        seg["_broll_grade"] = grading.merge(g) if g else {}
+        tr = default_tr if p.get("uniform_transitions") else seg.get("transition", default_tr)
         seg["_transition"] = {"type": tr} if isinstance(tr, str) else {**default_tr, **tr}
         if segments.segment_duration(seg) <= 0:
             raise ConfigError(f"{where}: нулевая длительность")
@@ -120,11 +123,17 @@ def normalise(p: dict) -> dict:
 def _cues(p: dict, ctx: segments.Ctx, files: list[Path], joins: list) -> list[ass.Cue]:
     subs = p["subtitles"]
     cues: list[ass.Cue] = []
+    # speech of cleaned talking-head segments is already transcribed: reuse it
+    _, starts, _ = assemble.plan([segments.segment_duration(s) for s in p["segments"]],
+                                 [s["_transition"] for s in p["segments"][:-1]])
+    talk = [(st, s["_words"]) for st, s in zip(starts, p["segments"]) if s.get("_words")]
+    for st, words in talk:
+        cues += _sentences([(a + st, b + st, w) for a, b, w in words])
     if subs.get("srt"):
         cues += ass.parse_srt(Path(subs["srt"]).read_text(encoding="utf-8-sig"))
     for item in subs.get("items") or []:
         cues.append(ass.Cue(float(item["start"]), float(item["end"]), str(item["text"])))
-    if subs.get("auto"):
+    if subs.get("auto") and not talk:
         from . import autosubs
         from .ffmpeg import run
         wav = ctx.workdir / "voice.wav"
@@ -144,7 +153,119 @@ def _cues(p: dict, ctx: segments.Ctx, files: list[Path], joins: list) -> list[as
         ass.write_srt(auto, srt)
         print(f"  субтитры сохранены в {srt} — можно поправить и подключить через subtitles.srt")
         cues += auto
+    fixes = {cleanup.norm(k): v for k, v in (subs.get("replace") or {}).items()}
+    if fixes:  # correct recognition mistakes: {"каборг": "коворкинг"}
+        def fix(w: str) -> str:
+            key = cleanup.norm(w)
+            if key not in fixes:
+                return w
+            tail = w[len(w.rstrip(".,!?:;…")):]
+            new = fixes[key]
+            return (new[:1].upper() + new[1:] if w[:1].isupper() else new) + tail
+        for c in cues:
+            if c.words:
+                c.words = [(a, b, fix(w)) for a, b, w in c.words]
+            c.text = " ".join(fix(w) for w in c.text.split())
     return sorted(cues, key=lambda c: c.start)
+
+
+def _sentences(words: list) -> list[ass.Cue]:
+    cues, cur = [], []
+    for w in words:
+        cur.append(w)
+        if w[2][-1:] in ".!?…" or (len(cur) > 1 and w[0] - cur[-2][1] > 0.6):
+            cues.append(ass.Cue(cur[0][0], cur[-1][1], " ".join(x[2] for x in cur), list(cur)))
+            cur = []
+    if cur:
+        cues.append(ass.Cue(cur[0][0], cur[-1][1], " ".join(x[2] for x in cur), list(cur)))
+    return cues
+
+
+def _clean_talk(p: dict, ctx: segments.Ctx, report: Path) -> None:
+    """Transcribe talking-head clips and plan cuts of pauses and failed takes."""
+    report.unlink(missing_ok=True)
+    subs = p.get("subtitles") or {}
+    for i, seg in enumerate(p["segments"], 1):
+        cfg = seg.get("cleanup")
+        if seg["type"] != "video" or not cfg:
+            continue
+        cfg = {} if cfg is True else cfg
+        print(f"  [{i}] распознаю речь и ищу паузы/дубли: {Path(seg['src']).name}")
+        words = cleanup.transcribe_cached(seg["src"], ctx.workdir, subs.get("model", "small"),
+                                          subs.get("language", "ru"))
+        a = float(seg.get("start", 0))
+        b = float(seg["end"]) if seg.get("end") is not None else seg["_src_duration"]
+        words = [w for w in words if w[0] >= a - 0.05 and w[1] <= b + 0.05]
+        if not words:
+            print(f"      речь не найдена — сегмент остаётся без вырезок")
+            continue
+        keep, cuts = cleanup.plan_cuts(words, b, cfg, ctx.fps)
+        keep = [(max(s, a), min(e, b)) for s, e in keep if e > a and s < b]
+        seg["_keep"] = keep
+        seg["_words"] = cleanup.remap(words, keep)
+        cleanup.report(cuts, report, seg["src"])
+        before, after = b - a, sum(e - s for s, e in keep)
+        print(f"      {before:.1f} c → {after:.1f} c, вырезано фрагментов: {len(cuts)}")
+
+
+def _out_time(seg: dict, t: float) -> float:
+    """Source time of a video segment -> time inside the rendered segment."""
+    keep = seg.get("_keep")
+    if not keep:
+        return max(0.0, (t - float(seg.get("start", 0))) / float(seg.get("speed", 1.0)))
+    acc = 0.0
+    for s, e in keep:
+        if t < s:
+            return acc
+        if t <= e:
+            return acc + t - s
+        acc += e - s
+    return acc
+
+
+def _resolve_broll(p: dict) -> None:
+    base = Path(p["_base"])
+    for i, seg in enumerate(p["segments"], 1):
+        if not seg.get("broll"):
+            continue
+        dur = segments.segment_duration(seg)
+        out = []
+        for br in seg["broll"]:
+            br = dict(br)
+            at = br.get("at", 0)
+            if isinstance(at, str):  # a phrase from the speech
+                words = seg.get("_words") or []
+                target = [cleanup.norm(x) for x in at.split()]
+                normed = [cleanup.norm(w[2]) for w in words]
+                hit = next((k for k in range(len(normed))
+                            if all(normed[k + m].startswith(target[m]) for m in range(len(target))
+                                   if k + m < len(normed)) and k + len(target) <= len(normed)), None)
+                if hit is None:
+                    print(f"  ! сегмент #{i}: фраза «{at}» не найдена в речи — перебивка пропущена")
+                    continue
+                t = words[hit][0] + float(br.get("offset", 0))
+            else:
+                t = _out_time(seg, float(at))
+            src = _abs(base, br["src"])
+            _need(src, f"Сегмент #{i}, перебивка")
+            d = min(float(br.get("duration", 3.0)), max(dur - t, 0.1))
+            is_img = Path(src).suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".heic")
+            sub = {"type": "image" if is_img else "video", "src": src, "duration": d, "mute": True,
+                   "fit": br.get("fit", "fill"), "_grade": seg.get("_broll_grade", {})}
+            if is_img:
+                sub["motion"] = br.get("motion", "zoom_in")
+            else:
+                sub["start"] = float(br.get("start", 0))
+                sub["_src_duration"] = probe(src).duration
+                sub["end"] = min(sub["start"] + d, sub["_src_duration"])
+                d = sub["end"] - sub["start"]
+                sub.pop("duration")
+            for key in ("focus_x", "focus_y"):
+                if key in br:
+                    sub[key] = br[key]
+            br.update({"_at": t, "_dur": d, "_seg": sub})
+            out.append(br)
+        seg["_broll"] = out
 
 
 def render(p: dict, preview: bool = False, jobs: int | None = None, verbose: bool = False) -> Path:
@@ -167,6 +288,9 @@ def render(p: dict, preview: bool = False, jobs: int | None = None, verbose: boo
         extra={"final_preset": "veryfast" if preview else "medium", "final_crf": 23 if preview else 18},
     )
     segs = p["segments"]
+    if any(s.get("cleanup") for s in segs):
+        _clean_talk(p, ctx, out.with_suffix(".cuts.txt"))
+    _resolve_broll(p)
     print(f"Монтаж: {len(segs)} сегм., {ctx.w}x{ctx.h} @ {ctx.fps}fps → {out}")
 
     def job(i: int) -> Path:

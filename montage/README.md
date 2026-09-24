@@ -104,6 +104,37 @@ segments:
 
 Стили текста задаются в `styles:` (`title`, `text`, `caption`, `subtitle`) и `subtitle_style:`. Доступные поля: `size`, `color`, `highlight`, `outline`, `outline_color`, `shadow`, `bold`, `box`, `box_color`, `box_opacity`, `font`. Размеры указываются для кадра 1080×1920.
 
+## Ролик с речью на камеру
+
+```yaml
+font: "PT Serif"
+uniform_transitions: true               # один и тот же переход везде
+transition: {type: fade, duration: 0.25}
+beauty: {skin_smooth: 0.14, skin_tone: 0.5}   # разглаживание кожи 14 %, выравнивание тона
+subtitles:
+  position: top_right                    # top_right | top_left | bottom_right | bottom_left | top | bottom
+  margin_cm: 0.5                         # отступ от краёв экрана телефона
+  karaoke: false                         # без подсветки слов
+  model: large-v3                        # точнее распознаёт русский (медленнее)
+  replace: {каборг: коворкинг}           # исправить ошибки распознавания
+styles:
+  subtitle: {font: "PT Serif", color: "#FFFFFF", bold: false, size: 60, outline: 2}
+
+segments:
+  - src: clips/talk.mov
+    cleanup:                             # вырезать паузы, «э-э», неудачные дубли
+      max_pause: 0.35                    # паузы длиннее — сокращаются
+      cut_retakes: true                  # запнулась и повторила — первая попытка удаляется
+      remove: [[12.0, 15.5]]             # вырезать вручную (секунды исходника)
+    broll:                               # перебивки: картинка меняется, голос идёт
+      - {src: clips/lobby.mov, at: "лобби", duration: 3}     # по фразе из речи
+      - {src: photos/river.jpg, at: 42.0, duration: 2.5}    # по секунде исходника
+```
+
+После рендера рядом с роликом появляется `*.cuts.txt`: там перечислено, что вырезано и почему.
+Сглаживание и выравнивание тона действуют только на участки цвета кожи, глаза, брови и губы остаются чёткими.
+Отступ в сантиметрах рассчитан на экран телефона шириной около 6,6 см (`screen_width_cm`).
+
 ## Как поставить задачу на монтаж
 
 Отдельный «промт» писать не нужно: задание для программы — это `project.yaml`. Если не хочется писать YAML вручную, выложите материал в папку и опишите ролик словами, а `project.yaml` по этому описанию соберёт Claude. Примерный бриф:

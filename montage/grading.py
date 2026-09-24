@@ -116,3 +116,36 @@ def filters(grade: dict, label_prefix: str = "g") -> str:
     if g.get("grain"):
         f.append(f"noise=alls={int(g['grain'])}:allf=t")
     return ",".join(f)
+
+
+def beauty(cfg: dict | None, p: str = "b", k: float = 1.0) -> str:
+    """Skin smoothing + skin tone evening, limited to skin-coloured areas.
+
+    cfg: {skin_smooth: 0..1 (0.14 = 14 %), skin_tone: 0..1}
+    A soft skin mask is built from chroma (Cb/Cr skin range); inside it the
+    luma is smoothed edge-preservingly (bilateral) and the chroma is evened
+    out (blotches / redness blend into the surrounding tone).
+    """
+    if not cfg:
+        return ""
+    smooth = float(cfg.get("skin_smooth", 0))
+    tone = float(cfg.get("skin_tone", 0))
+    if smooth <= 0 and tone <= 0:
+        return ""
+    u0, u1 = cfg.get("cb_range", (80, 130))
+    v0, v1 = cfg.get("cr_range", (135, 178))
+    ramp = 6
+
+    def band(lo: int, hi: int) -> str:
+        return f"255*clip((val-{lo})/{ramp},0,1)*clip(({hi}-val)/{ramp},0,1)"
+
+    return (
+        f"format=yuv444p,split=3[{p}o][{p}m][{p}s];"
+        f"[{p}m]extractplanes=u+v[{p}u][{p}v];"
+        f"[{p}u]lut=c0='{band(u0, u1)}'[{p}mu];[{p}v]lut=c0='{band(v0, v1)}'[{p}mv];"
+        f"[{p}mu][{p}mv]blend=all_mode=multiply,gblur=sigma={6 * k:.1f},split=2[{p}m1][{p}m2];"
+        f"[{p}m1]lut=c0='val*{min(smooth, 1):.3f}'[{p}ml];[{p}m2]lut=c0='val*{min(tone, 1):.3f}'[{p}mc];"
+        f"[{p}ml][{p}mc]mergeplanes=format=yuv444p:map0s=0:map0p=0:map1s=1:map1p=0:map2s=1:map2p=0[{p}mask];"
+        f"[{p}s]bilateral=sigmaS={12 * k:.1f}:sigmaR=0.10:planes=1,gblur=sigma={10 * k:.1f}:planes=6[{p}sm];"
+        f"[{p}o][{p}sm][{p}mask]maskedmerge"
+    )
