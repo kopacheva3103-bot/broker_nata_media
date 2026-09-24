@@ -45,17 +45,17 @@ segments:
   - type: slide
     duration: 3
     background: {gradient: ["#0f2027", "#2c5364"]}
-    title: "ЖК Долина Премьер"
-    text: "Квартира 220 млн ₽"
+    title: "ЖК Остров"
+    text: "Квартира 137 м²"
     bullets: ["3 спальни", "Вид на парк", "Сдача 2026"]
     animation: slide_up
     transition: {type: slideup, duration: 0.5}
 
-  - src: ../../photos/1789710083_dolina-premier-220mln.jpg
-    duration: 4
-    motion: zoom_in           # zoom_in|zoom_out|pan_left|pan_right|pan_up|pan_down|none
-    fit: blur                 # fill (обрезать под 9:16) | blur (размытый фон) | fit (чёрные поля)
-    text: "Фасад"
+  # - src: photos/facade.jpg
+  #   duration: 4
+  #   motion: zoom_in         # zoom_in|zoom_out|pan_left|pan_right|pan_up|pan_down|none
+  #   fit: blur               # fill (обрезать под 9:16) | blur (размытый фон) | fit (чёрные поля)
+  #   text: "Фасад"
 
   # - src: clips/living_room.mp4
   #   start: 2.5              # с какой секунды взять
@@ -68,7 +68,7 @@ segments:
 
   - type: slide
     duration: 3
-    background: {image: ../../photos/1789710083_dolina-premier-220mln.jpg, blur: 40, darken: 0.45}
+    background: {gradient: ["#1c2a38", "#0b1118"]}   # или {image: photos/facade.jpg, blur: 40, darken: 0.45}
     title: "Звоните"
     text: "+7 900 000-00-00\nНаталья, брокер"
     animation: pop

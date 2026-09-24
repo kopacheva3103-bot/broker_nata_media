@@ -21,7 +21,7 @@
 
 ```
 reels/
-└── dolina-premier/
+└── ostrov/
     ├── project.yaml      ← сценарий ролика (что за чем идёт)
     ├── clips/            ← видео с телефона: .mp4 .mov
     ├── photos/           ← фото: .jpg .png .webp
@@ -36,8 +36,8 @@ reels/
 ## Запуск
 
 ```bash
-python -m montage render reels/dolina-premier/project.yaml --preview   # черновик за секунды, 540×960
-python -m montage render reels/dolina-premier/project.yaml             # финальный рендер
+python -m montage render reels/ostrov/project.yaml --preview   # черновик за секунды, 540×960
+python -m montage render reels/ostrov/project.yaml             # финальный рендер
 python -m montage transcribe clips/talk.mp4                             # речь → talk.srt
 python -m montage presets                                               # список пресетов цвета
 ```
@@ -59,7 +59,7 @@ segments:
   - type: slide                      # титульный слайд
     duration: 3
     background: {gradient: ["#0f2027", "#2c5364"]}
-    title: "ЖК Долина Премьер"
+    title: "ЖК Остров"
     bullets: ["3 спальни", "Вид на парк"]
 
   - src: clips/living.mp4            # видео: тип определяется по расширению
@@ -140,9 +140,9 @@ segments:
 Отдельный «промт» писать не нужно: задание для программы — это `project.yaml`. Если не хочется писать YAML вручную, выложите материал в папку и опишите ролик словами, а `project.yaml` по этому описанию соберёт Claude. Примерный бриф:
 
 ```
-Ролик 20–25 сек про ЖК «Долина Премьер», тон — премиум, спокойный.
+Ролик 20–25 сек про ЖК «Остров», тон — премиум, спокойный.
 Материал: clips/ (3 видео), photos/ (6 фото), music/calm.mp3.
-1) Титр: «ЖК Долина Премьер · от 220 млн ₽», тёмно-синий градиент.
+1) Титр: «ЖК Остров · 137 м²», тёмно-синий градиент.
 2) Фасад: photos/facade.jpg, медленный наезд.
 3) Гостиная: clips/living.mp4 с 3-й по 8-ю секунду, подпись «Гостиная 45 м²».
 4) Вид из окна: clips/view.mp4, замедлить.
