@@ -1,0 +1,74 @@
+# Пример проекта ролика. Все пути — относительно этого файла.
+# Запуск:  python -m montage render montage/example/project.yaml
+output: out/reel.mp4          # куда сохранить готовый ролик
+width: 1080                   # 9:16 вертикаль
+height: 1920
+fps: 30
+font: "Montserrat"            # имя шрифта; свои .ttf можно положить в fonts_dir
+# fonts_dir: fonts/
+
+# Цветокоррекция для всех видео и фото (у сегмента можно переопределить)
+grade:
+  preset: interior            # none|natural|interior|warm|cool|cinematic|vivid|film|moody|bw
+  vignette: 0.3
+  # brightness: 0.02  contrast: 1.05  saturation: 1.1  gamma: 1.05
+  # temperature: 6000         # <6500 теплее, >6500 холоднее
+  # lut: luts/my.cube         # свой LUT
+  # lut_intensity: 0.7
+
+transition: {type: fade, duration: 0.4}   # переход по умолчанию между сегментами
+
+audio:
+  # music: music/track.mp3   # фоновый трек (mp3/wav/m4a)
+  # voiceover: voice.m4a      # закадровый голос (запись с диктофона)
+  # voiceover_start: 0.5      # с какой секунды ролика он начинается
+  music_volume: 0.3
+  duck: true                  # музыка тише, когда говорят
+  fade_in: 1
+  fade_out: 2
+  lufs: -14                   # громкость как у Reels/TikTok
+
+subtitles:
+  srt: subs.srt               # готовые субтитры...
+  # auto: true                # ...или распознать речь (pip install faster-whisper)
+  # language: ru
+  max_words: 3                # сколько слов на экране одновременно
+  uppercase: true
+  karaoke: true               # подсветка текущего слова
+  position: bottom            # top|middle|bottom или число 0..1 (доля высоты)
+
+subtitle_style: {size: 78, color: "#FFFFFF", highlight: "#FFD400", outline: 5}
+
+# watermark: {src: logo.png, position: top_right, width: 200, opacity: 0.85}
+
+segments:
+  - type: slide
+    duration: 3
+    background: {gradient: ["#0f2027", "#2c5364"]}
+    title: "ЖК Долина Премьер"
+    text: "Квартира 220 млн ₽"
+    bullets: ["3 спальни", "Вид на парк", "Сдача 2026"]
+    animation: slide_up
+    transition: {type: slideup, duration: 0.5}
+
+  - src: ../../photos/1789710083_dolina-premier-220mln.jpg
+    duration: 4
+    motion: zoom_in           # zoom_in|zoom_out|pan_left|pan_right|pan_up|pan_down|none
+    fit: blur                 # fill (обрезать под 9:16) | blur (размытый фон) | fit (чёрные поля)
+    text: "Фасад"
+
+  # - src: clips/living_room.mp4
+  #   start: 2.5              # с какой секунды взять
+  #   end: 7                  # до какой секунды
+  #   speed: 1.2
+  #   volume: 0.6             # 0 — без звука
+  #   grade: {preset: cinematic}
+  #   text: "Гостиная 45 м²"
+  #   transition: wipeleft
+
+  - type: slide
+    duration: 3
+    background: {image: ../../photos/1789710083_dolina-premier-220mln.jpg, blur: 40, darken: 0.45}
+    title: "Звоните"
+    text: "+7 900 000-00-00\nНаталья, брокер"
+    animation: pop
