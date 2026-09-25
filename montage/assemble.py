@@ -75,9 +75,28 @@ def final(ctx: Ctx, files: list[Path], durations: list[float], transitions: list
     n = len(files)
 
     # subtitles over the whole reel
-    if cues:
+    title = project.get("title")
+    if title and title.get("darken"):
+        # darkened lower part of the frame while the title is on screen
+        t0, t1 = float(title.get("start", 0)), float(title.get("end", 3.5))
+        k, h = float(title["darken"]), ctx.h
+        gh = int(h * float(title.get("darken_height", 0.45))) // 2 * 2
+        args += ["-f", "lavfi", "-t", f"{t1:.3f}", "-i", f"color=c=black:s={ctx.w}x{gh}:r={ctx.fps}"]
+        graph.append(f"[{n}:v]format=rgba,geq=r=0:g=0:b=0:a='255*{k}*pow(Y/H,1.1)',"
+                     f"fade=t=in:st={t0}:d=0.35:alpha=1,fade=t=out:st={max(t1 - 0.4, 0):.3f}:d=0.4:alpha=1,"
+                     f"setpts=PTS-STARTPTS[dk]")
+        graph.append(f"[{vcur}][dk]overlay=0:H-h:eof_action=pass[vd]")
+        vcur = "vd"
+        n += 1
+    if cues or title:
         doc = ass.AssDoc(ctx.width, ctx.height, ctx.font, ctx.styles)
-        ass.subtitle_events(doc, cues, project.get("subtitles") or {})
+        scfg = dict(project.get("subtitles") or {})
+        if title and scfg.get("hide_during_title", True):
+            scfg["_hide_until"] = float(title.get("end", 3.5))
+        if cues:
+            ass.subtitle_events(doc, cues, scfg)
+        if title:
+            ass.title_events(doc, title)
         path = doc.write(ctx.workdir / "subtitles.ass")
         graph.append(f"[{vcur}]{ctx.ass_filter(path)}[vs]")
         vcur = "vs"

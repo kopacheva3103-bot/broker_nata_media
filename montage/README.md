@@ -137,6 +137,31 @@ segments:
 Сглаживание и выравнивание тона действуют только на участки цвета кожи, глаза, брови и губы остаются чёткими.
 Отступ в сантиметрах рассчитан на экран телефона шириной около 6,6 см (`screen_width_cm`).
 
+## Заголовок в два цвета и субтитры «как в Reels»
+
+```yaml
+fonts_dir: fonts/                      # сюда положить PlayfairDisplay-*.ttf (Google Fonts, есть кириллица)
+title:                                 # крупный заголовок в начале ролика
+  start: 0
+  end: 3.8
+  y: 0.70                              # центр блока, доля высоты кадра
+  darken: 0.72                         # затемнить низ кадра, пока виден заголовок
+  lines:
+    - {text: "Сколько времени", style: title}
+    - {text: "вы тратите на детей", style: accent}   # второй цвет, курсив
+    - {text: "каждый день?", style: title}
+subtitles:
+  position: 0.62                       # по центру, чуть ниже середины
+  lowercase: true                      # предложения со строчной буквы, имена остаются
+  hide_during_title: true
+styles:
+  subtitle: {font: "Playfair Display", size: 64, outline: 0, shadow: 0, glow: true}
+  title:    {font: "Playfair Display", size: 124, outline: 0, shadow: 0, glow: true}
+  accent:   {font: "Playfair Display", color: "#E7C9A0", italic: true, size: 112, outline: 0, shadow: 0, glow: true}
+```
+
+`glow: true` рисует под текстом мягкую тёмную тень вместо обводки, поэтому белые буквы читаются и на светлом фоне.
+
 ## Как поставить задачу на монтаж
 
 Отдельный «промт» писать не нужно: задание для программы — это `project.yaml`. Если не хочется писать YAML вручную, выложите материал в папку и опишите ролик словами, а `project.yaml` по этому описанию соберёт Claude. Примерный бриф:

@@ -39,6 +39,8 @@ DEFAULT_STYLES: dict[str, dict] = {
              "bold": False, "margin_x": 100},
     "caption": {"size": 70, "color": "#FFFFFF", "outline_color": "#000000", "outline": 4, "shadow": 2,
                 "bold": True, "margin_x": 80, "box": False, "box_color": "#000000", "box_opacity": 0.45},
+    "accent": {"size": 112, "color": "#E7C9A0", "outline_color": "#000000", "outline": 0, "shadow": 0,
+               "bold": False, "italic": True, "margin_x": 40},
     "subtitle": {"size": 78, "color": "#FFFFFF", "outline_color": "#000000", "outline": 5, "shadow": 2,
                  "bold": True, "margin_x": 70, "highlight": "#FFD400", "box": False,
                  "box_color": "#000000", "box_opacity": 0.45},
@@ -77,6 +79,17 @@ class AssDoc:
         if end - start <= 0.01:
             return
         ml, mr, mv = margins
+        st = self.style(style)
+        if st.get("glow"):
+            # soft dark halo on a lower layer instead of a hard outline (keeps glyphs crisp)
+            g = float(st.get("glow_opacity", 0.58))
+            halo = (r"{\1c&H000000&\3c&H000000&\shad0" + f"\\bord{st.get('glow_size', 7) * self.k:.1f}"
+                    + f"\\blur{st.get('glow_blur', 16) * self.k:.1f}\\1a&H{round((1 - g) * 255):02X}&"
+                    + f"\\3a&H{round((1 - g) * 255):02X}&}}")
+            glow_text = re.sub(r"\\(1?c|3c)&H[0-9A-Fa-f]+&", "", text).replace("{\\r}", "{\\r" + halo[1:])
+            self.events.append(f"Dialogue: 0,{ts(start)},{ts(end)},{style},,{ml},{mr},{mv},,{halo}{glow_text}")
+            self.events.append(f"Dialogue: 1,{ts(start)},{ts(end)},{style},,{ml},{mr},{mv},,{text}")
+            return
         self.events.append(f"Dialogue: 0,{ts(start)},{ts(end)},{style},,{ml},{mr},{mv},,{text}")
 
     def write(self, path: Path) -> Path:
@@ -302,6 +315,8 @@ def subtitle_events(doc: AssDoc, cues: list[Cue], cfg: dict) -> None:
         if n + 1 < len(chunks):
             end = max(end, min(chunks[n + 1][0][0] + offset, end + 0.4))
         # libass wraps only at spaces, so a word is never split between lines
+        if start < float(cfg.get("_hide_until", 0)):
+            continue
         tokens = [clean(w[2].upper() if upper else w[2]) for w in words]
         if not karaoke:
             doc.add(start, end, "subtitle", base + " ".join(tokens), margins)
@@ -314,3 +329,18 @@ def subtitle_events(doc: AssDoc, cues: list[Cue], cfg: dict) -> None:
                 for j, t in enumerate(tokens)
             )
             doc.add(max(ws, start), we, "subtitle", base + line, margins)
+
+
+def title_events(doc: AssDoc, cfg: dict) -> None:
+    """Big multi-line title, every line with its own style (e.g. white + gold italic)."""
+    start, end = float(cfg.get("start", 0)), float(cfg.get("end", 3.5))
+    lines = cfg.get("lines") or []
+    y0 = doc.y_for(cfg.get("y", 0.7))
+    gap = float(cfg.get("line_gap", 130)) * doc.k
+    top = y0 - gap * (len(lines) - 1) / 2
+    fin, fout = int(cfg.get("fade_in", 0.35) * 1000), int(cfg.get("fade_out", 0.4) * 1000)
+    for i, line in enumerate(lines):
+        if isinstance(line, str):
+            line = {"text": line}
+        tag = r"{\an5\pos(" + f"{doc.width // 2},{round(top + i * gap)}" + r")\fad(" + f"{fin},{fout})" + "}"
+        doc.add(start, end, line.get("style", "title"), tag + clean(line["text"]))

@@ -173,7 +173,8 @@ def _cues(p: dict, ctx: segments.Ctx, files: list[Path], joins: list) -> list[as
         if c.words:
             ws = []
             for a, b, w in c.words:
-                ws.append((a, b, w[:1].upper() + w[1:] if prev_end else w))
+                ws.append((a, b, w[:1].upper() + w[1:] if prev_end and not subs.get("lowercase") else
+                           (w[:1].lower() + w[1:] if prev_end and (len(w) == 1 or not w[1].isupper()) else w)))
                 prev_end = w[-1:] in ".!?…"
             c.words = ws
     return cues
