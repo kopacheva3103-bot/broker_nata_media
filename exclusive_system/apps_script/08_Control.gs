@@ -47,7 +47,7 @@ function openDashboard() { sheet_('DASH').activate(); }
  */
 function refreshStats() {
   const fixed = fillMissing_();
-  ['OBJ', 'STR', 'ACT', 'LEAD', 'PF', 'HIST', 'ARCH'].forEach(code => {
+  ['OBJ', 'STR', 'ACT', 'PF', 'HIST', 'ARCH'].forEach(code => {
     const sh = sheet_(code);
     const last = lastDataRow_(sh, sheetSpecs_()[code]);
     if (sh.getMaxRows() - last < 200) extendSheet_(code, 1000);
@@ -59,7 +59,7 @@ function refreshStats() {
 function fillMissing_() {
   let fixed = 0;
   const user = userEmail_();
-  ['ACT', 'LEAD', 'PF'].forEach(code => {
+  ['ACT', 'PF'].forEach(code => {
     const t = readTable_(code);
     const cache = {};
     t.rows.forEach(o => {

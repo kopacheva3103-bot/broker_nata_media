@@ -48,7 +48,7 @@ function selfTest_(withDrive) {
   eq('01: проверка ID — без замечаний', ost.id_check, '');
   eq('01: цена за м² (Остров)', ost.price_m2, Math.round(185000000 / 450));
   eq('01: дней в продаже (Остров)', ost.days_on_market, days(today_(), addDays_(M, -60)));
-  eq('01: дней без активности (Павловы)', pav.days_idle, days(today_(), addDays_(M, -21)));
+  eq('01: дней без активности (Павловы)', pav.days_idle, days(today_(), addDays_(M, -19)));
   eq('01: флаг RISK (Павловы)', pav.risk_flag, 'RISK');
   has('01: последнее действие (Остров)', ost.last_action, 'Рассылка');
   truthy('01: следующее действие заполнено (Остров)', ost.next_action && ost.next_action !== '—', ost.next_action);
@@ -58,27 +58,37 @@ function selfTest_(withDrive) {
   const a3 = acts.find(a => a.obj_id === ost.id && a.fact.indexOf('премиум-сегмента') > 0 && a.type === 'Рассылка');
   eq('03: неделя из даты', a3 ? a3.week : '', wkP);
 
-  // 3. Воронка 04 с фильтром по объекту и неделе
-  const lead = sheet_('LEAD');
-  const LB = leadBlockLayout_();
-  const keepLB = [lead.getRange(LB.selObj).getValue(), lead.getRange(LB.selWeek).getValue()];
-  lead.getRange(LB.selObj).setValue(objLabel_(ost.id, ost.name));
-  lead.getRange(LB.selWeek).setValue(weekLabelByKey_(wkP));
+  // 3. Воронка 04 (из журнала действий) с фильтром по объекту и неделе
+  const fun = sheet_('FUN');
+  const FB = funnelLayout_();
+  const keepFB = [fun.getRange(FB.selObj).getValue(), fun.getRange(FB.selWeek).getValue()];
+  fun.getRange(FB.selObj).setValue(objLabel_(ost.id, ost.name));
+  fun.getRange(FB.selWeek).setValue(weekLabelByKey_(wkP));
   SpreadsheetApp.flush();
-  const lv = a1 => lead.getRange(a1).getValue();
-  eq('04: контакты (Остров, неделя P)', lv(LB.at.contacts), 50);
-  eq('04: ответы', lv(LB.at.responses), 8);
-  eq('04: лиды', lv(LB.at.leads), 3);
-  eq('04: квалифицированы', lv(LB.at.qual), 2);
-  eq('04: конверсия контакт → ответ', lv(LB.conv['Контакт → ответ']), 0.16);
-  eq('04: конверсия ответ → квалифицирован', lv(LB.conv['Ответ → квалифицирован']), 0.25);
-  eq('04: стоимость лида', lv(LB.conv['Стоимость лида']), 5000);
-  lead.getRange(LB.selObj).setValue('Все');
-  lead.getRange(LB.selWeek).setValue('Все время');
+  const fv = a1 => fun.getRange(a1).getValue();
+  eq('04: контакты (Остров, неделя P)', fv(FB.at.contacts), 50);
+  eq('04: ответы', fv(FB.at.responses), 8);
+  eq('04: лиды (заинтересовались)', fv(FB.at.leads), 3);
+  eq('04: презентации', fv(FB.at.pres), 2);
+  eq('04: показы', fv(FB.at.show), 1);
+  eq('04: переговоры', fv(FB.at.neg), 1);
+  eq('04: отказы', fv(FB.at.refusals), 1);
+  eq('04: конверсия контакт → ответ', fv(FB.conv['Контакт → ответ']), 0.16);
+  eq('04: конверсия ответ → интерес', fv(FB.conv['Ответ → интерес (лид)']), 0.375);
+  eq('04: стоимость лида', fv(FB.conv['Стоимость лида']), 5000);
+  const chRows = fun.getRange(8, FUN_CH_COL, 40, Object.keys(FB.chLetter).length).getValues();
+  const chHdr = Object.keys(FB.chLetter);
+  const br = chRows.find(r => r[0] === 'Брокеры') || [];
+  eq('04: канал Брокеры — лиды', br[chHdr.indexOf('Лиды')], 1);
+  eq('04: канал Брокеры — показы', br[chHdr.indexOf('Показы')], 1);
+  const refTbl = fun.getRange(FB.refRow + 1, 1, 5, 2).getValues();
+  truthy('04: причины отказов — «Цена» 1 раз', refTbl.some(r => r[0] === 'Цена' && Number(r[1]) === 1), JSON.stringify(refTbl.slice(0, 3)));
+  fun.getRange(FB.selObj).setValue('Все');
+  fun.getRange(FB.selWeek).setValue('Все время');
   SpreadsheetApp.flush();
-  eq('04: все объекты, всё время — лиды', lv(LB.at.leads), 11);
-  lead.getRange(LB.selObj).setValue(keepLB[0] || 'Все');
-  lead.getRange(LB.selWeek).setValue(keepLB[1] || 'Все время');
+  eq('04: все объекты, всё время — лиды', fv(FB.at.leads), 8);
+  fun.getRange(FB.selObj).setValue(keepFB[0] || 'Все');
+  fun.getRange(FB.selWeek).setValue(keepFB[1] || 'Все время');
 
   // 4. План-факт
   const pf = sheet_('PF');
@@ -118,8 +128,7 @@ function selfTest_(withDrive) {
   eq('05: объект — действия', so['Действия'], 9);
   eq('05: объект — контакты', so['Контакты'], 100);
   eq('05: объект — ответы', so['Ответы'], 14);
-  eq('05: объект — лиды', so['Лиды'], 4);
-  eq('05: объект — квал. лиды', so['Квал. лиды'], 3);
+  eq('05: объект — лиды (заинтересованные)', so['Лиды'], 5);
   eq('05: объект — показы', so['Показы'], 2);
   eq('05: объект — первая цена', so['Первая цена'], 195000000);
   eq('05: объект — изменение цены', so['Изменение цены, ₽'], -10000000);
@@ -127,13 +136,13 @@ function selfTest_(withDrive) {
   const sc = sec('channel', 'ЦИАН');
   eq('05: канал ЦИАН — просмотры', sc['Просмотры объявлений'], 850);
   eq('05: канал ЦИАН — контакты', sc['Контакты'], 8);
-  eq('05: канал ЦИАН — лиды', sc['Лиды'], 2);
+  eq('05: канал ЦИАН — лиды', sc['Лиды'], 0);
   eq('05: канал ЦИАН — объявление → контакт', sc['Объявление → контакт'], 8 / 850);
   const sw = sec('week', wkP);
   eq('05: неделя P — контакты (все объекты)', sw['Контакты'], 65);
-  eq('05: неделя P — лиды', sw['Лиды'], 5);
+  eq('05: неделя P — лиды', sw['Лиды'], 6);
   const stt = sec('total', 'Итого');
-  eq('05: итого — контакты', stt['Контакты'], 118);
+  eq('05: итого — контакты', stt['Контакты'], 121);
   st.getRange('B2').setValue(objLabel_(ost.id, ost.name));
   SpreadsheetApp.flush();
   eq('05: фильтр по объекту — итого контакты', sec('total', 'Итого')['Контакты'], 100);
@@ -152,7 +161,7 @@ function selfTest_(withDrive) {
   eq('07: действий', v.ACTIONS, '5');
   eq('07: контакты', v.CONTACTS, '50');
   eq('07: ответы', v.RESPONSES, '8');
-  eq('07: лиды', v.LEADS, '3');
+  eq('07: заинтересовались (лиды)', v.INTERESTED, '3');
   eq('07: показы', v.SHOWINGS, '1');
   eq('07: переговоры', v.NEGOTIATIONS, '1');
   eq('07: предложения', v.OFFERS, '0');
@@ -162,7 +171,7 @@ function selfTest_(withDrive) {
   has('07: воронка', v.CONVERSIONS, 'Воронка недели: контакты 50 → ответы 8 → заинтересовались 3');
   has('07: конверсия контакт → ответ', v.CONVERSIONS, 'Контакт → ответ: 16%');
   has('07: обратная связь рынка', v.MARKET_FEEDBACK, 'планировка');
-  has('07: возражения с подсчётом', v.OBJECTIONS, 'Цена — 2');
+  has('07: возражения с подсчётом', v.OBJECTIONS, 'Цена — 1');
   has('07: изменения стратегии', v.STRATEGY_CHANGES, 'Каналы продвижения');
   has('07: изменение цены', v.STRATEGY_CHANGES, 'Цена скорректирована');
   has('07: план следующей недели', v.NEXT_WEEK, 'повторный показ');
@@ -182,7 +191,6 @@ function selfTest_(withDrive) {
   truthy('11: эксклюзив заканчивается — Павловы', hasAlert(ALERT.EXCL_END, pav.id));
   truthy('11: просроченная задача — Остров', hasAlert(ALERT.TASK_OVERDUE, ost.id));
   truthy('11: просроченное действие — Остров', hasAlert(ALERT.ACTION_OVERDUE, ost.id));
-  truthy('11: лид без следующего контакта — Остров', hasAlert(ALERT.LEAD_NO_NEXT, ost.id));
   truthy('11: задача без ответственного — Остров', hasAlert(ALERT.NO_OWNER, ost.id));
   truthy('11: нет ложной тревоги «нет активности» — Остров', !hasAlert(ALERT.IDLE_HIGH, ost.id));
 

@@ -114,13 +114,12 @@ function kpiFactExpr_() {
   for (let i = KPI_SOURCES.length - 1; i >= 0; i--) {
     const k = KPI_SOURCES[i];
     let val;
-    if (k.lead) val = 'COUNTIF(k_lead,c_ow)';
-    else if (k.count) val = 'IF(t_="",COUNTIF(k_ow&"|"&[[ACT.status_class]],c_ow&"|DONE"),COUNTIF(k_owt&"|"&[[ACT.status_class]],c_owt&"|DONE"))';
+    if (k.count) val = 'IF(t_="",COUNTIF(k_ow&"|"&[[ACT.status_class]],c_ow&"|DONE"),COUNTIF(k_owt&"|"&[[ACT.status_class]],c_owt&"|DONE"))';
     else val = 'IF(t_="",SUMIF(k_ow,c_ow,[[ACT.' + k.act + ']]),SUMIF(k_owt,c_owt,[[ACT.' + k.act + ']]))';
     expr = 'IF(m_=[[D.kpi_metrics:' + (i + 1) + ']],' + val + ',' + expr + ')';
   }
   return 'LET(k_ow,[[ACT.obj_id]]&"|"&[[ACT.week]],k_owt,[[ACT.obj_id]]&"|"&[[ACT.week]]&"|"&[[ACT.type]],' +
-    'k_lead,[[LEAD.obj_id]]&"|"&[[LEAD.week]],c_ow,[[@obj_id]]&"|"&[[@week]],c_owt,[[@obj_id]]&"|"&[[@week]]&"|"&[[@type]],' +
+    'c_ow,[[@obj_id]]&"|"&[[@week]],c_owt,[[@obj_id]]&"|"&[[@week]]&"|"&[[@type]],' +
     'm_,[[@kpi_metric]],t_,[[@type]],' + expr + ')';
 }
 
@@ -156,9 +155,7 @@ function statCommonCols_() {
     { t: 'Действия', m: 'done', d: 'Выполненные действия (статус класса DONE)' },
     { t: 'Контакты', m: 'sum', f: 'contacts' },
     { t: 'Ответы', m: 'sum', f: 'responses' },
-    { t: 'Заинтересованные', m: 'sum', f: 'interested' },
-    { t: 'Лиды', m: 'leads', d: 'Из 04_ЛИДЫ по дате первого контакта' },
-    { t: 'Квал. лиды', m: 'qual' },
+    { t: 'Лиды', m: 'sum', f: 'interested', d: 'Лиды = «Количество заинтересованных» в 03_ДЕЙСТВИЯ' },
     { t: 'Презентации', m: 'sum', f: 'presentations' },
     { t: 'Показы', m: 'sum', f: 'showings' },
     { t: 'Повторные контакты', m: 'sum', f: 'repeat_contacts' },
@@ -166,12 +163,13 @@ function statCommonCols_() {
     { t: 'Предложения', m: 'sum', f: 'offers' },
     { t: 'Брони', m: 'sum', f: 'bookings' },
     { t: 'Сделки', m: 'sum', f: 'deals' },
+    { t: 'Отказы', m: 'refusals', d: 'Действия с указанной причиной отказа' },
     { t: 'Расходы, ₽', m: 'sum', f: 'cost', fmt: 'money' },
     { t: 'Просмотры объявлений', m: 'listing', f: 'views', fmt: '#,##0' },
     { t: 'Контакты по объявлениям', m: 'listing', f: 'contacts' },
     { t: 'Ответ / контакт', m: 'ratio', a: 'Ответы', b: 'Контакты', fmt: 'pct' },
     { t: 'Лид / контакт', m: 'ratio', a: 'Лиды', b: 'Контакты', fmt: 'pct' },
-    { t: 'Квал. лид / лид', m: 'ratio', a: 'Квал. лиды', b: 'Лиды', fmt: 'pct' },
+    { t: 'Лид / ответ', m: 'ratio', a: 'Лиды', b: 'Ответы', fmt: 'pct' },
     { t: 'Показ / лид', m: 'ratio', a: 'Показы', b: 'Лиды', fmt: 'pct' },
     { t: 'Переговоры / показ', m: 'ratio', a: 'Переговоры', b: 'Показы', fmt: 'pct' },
     { t: 'Предложение / переговоры', m: 'ratio', a: 'Предложения', b: 'Переговоры', fmt: 'pct' },
@@ -183,7 +181,6 @@ function statCommonCols_() {
     { t: 'Действий на 1 лид', m: 'ratio', a: 'Действия', b: 'Лиды', fmt: '0.0' },
     { t: 'Контактов до показа', m: 'ratio', a: 'Контакты', b: 'Показы', fmt: '0.0' },
     { t: 'Показов до переговоров', m: 'ratio', a: 'Показы', b: 'Переговоры', fmt: '0.0' },
-    { t: 'Дней лид → сделка (ср.)', m: 'avgdays', fmt: '0' },
   ];
 }
 
@@ -239,23 +236,23 @@ function statsLayout_(gid) {
     const keys = rng('A');
     const crit = '$B$3';
     const dimMap = {
-      total: { ak: '[[ACT.obj_id]]', lk: '[[LEAD.obj_id]]', c: crit },
-      object: { ak: '[[ACT.obj_id]]', lk: '[[LEAD.obj_id]]', c: keys },
-      channel: { ak: '[[ACT.obj_id]]&"|"&[[ACT.channel]]', lk: '[[LEAD.obj_id]]&"|"&[[LEAD.channel]]', c: crit + '&"|"&' + keys },
-      week: { ak: '[[ACT.obj_id]]&"|"&[[ACT.week]]', lk: '[[LEAD.obj_id]]&"|"&[[LEAD.week]]', c: crit + '&"|"&' + keys },
-      month: { ak: '[[ACT.obj_id]]&"|"&[[ACT.month]]', lk: '[[LEAD.obj_id]]&"|"&[[LEAD.month]]', c: crit + '&"|"&' + keys },
+      total: { ak: '[[ACT.obj_id]]', c: crit },
+      object: { ak: '[[ACT.obj_id]]', c: keys },
+      channel: { ak: '[[ACT.obj_id]]&"|"&[[ACT.channel]]', c: crit + '&"|"&' + keys },
+      week: { ak: '[[ACT.obj_id]]&"|"&[[ACT.week]]', c: crit + '&"|"&' + keys },
+      month: { ak: '[[ACT.obj_id]]&"|"&[[ACT.month]]', c: crit + '&"|"&' + keys },
     }[dim];
 
     // ключи строк
     const keyF = {
       total: null,
       object: '=ARRAYFORMULA(IFERROR(FILTER({[[OBJ.id]],[[OBJ.name]]},[[OBJ.name]]<>"",[[OBJ.id]]<>"",([[OBJ.id]]=$B$3)+($B$3="*")),""))',
-      channel: '=ARRAYFORMULA(IFERROR(LET(ch_all,{[[ACT.channel]];[[LEAD.channel]]},ob_all,{[[ACT.obj_id]];[[LEAD.obj_id]]},' +
+      channel: '=ARRAYFORMULA(IFERROR(LET(ch_all,[[ACT.channel]],ob_all,[[ACT.obj_id]],' +
         'ch_u,SORT(UNIQUE(FILTER(ch_all,ch_all<>"",(ob_all=$B$3)+($B$3="*")))),{ch_u,IFERROR(VLOOKUP(ch_u,[[D.channels:tbl]],2,FALSE),"")}),""))',
-      week: '=ARRAYFORMULA(IFERROR(LET(wk_all,{[[ACT.week]];[[LEAD.week]]},ob_all,{[[ACT.obj_id]];[[LEAD.obj_id]]},' +
+      week: '=ARRAYFORMULA(IFERROR(LET(wk_all,[[ACT.week]],ob_all,[[ACT.obj_id]],' +
         'wk_u,SORT(UNIQUE(FILTER(wk_all,wk_all<>"",(ob_all=$B$3)+($B$3="*"))),1,FALSE),' +
         '{wk_u,IFERROR(TEXT(VLOOKUP(wk_u,[[D.weeks:tbl]],2,FALSE),"dd.mm")&"–"&TEXT(VLOOKUP(wk_u,[[D.weeks:tbl]],3,FALSE),"dd.mm.yy"),"")}),""))',
-      month: '=ARRAYFORMULA(IFERROR(LET(mo_all,{[[ACT.month]];[[LEAD.month]]},ob_all,{[[ACT.obj_id]];[[LEAD.obj_id]]},' +
+      month: '=ARRAYFORMULA(IFERROR(LET(mo_all,[[ACT.month]],ob_all,[[ACT.obj_id]],' +
         'SORT(UNIQUE(FILTER(mo_all,mo_all<>"",(ob_all=$B$3)+($B$3="*"))),1,FALSE)),""))',
     }[dim];
     if (dim === 'total') {
@@ -271,16 +268,12 @@ function statsLayout_(gid) {
       const L = colLetter_(3 + i);
       cells.push({ a1: L + s.header, v: c.t, style: 'header', note: c.d });
       let e;
-      const ak = dimMap.ak, lk = dimMap.lk, cr = dimMap.c;
+      const ak = dimMap.ak, cr = dimMap.c;
       switch (c.m) {
         case 'done': e = 'COUNTIF(' + ak + '&"|"&[[ACT.status_class]],' + cr + '&"|DONE")'; break;
         case 'sum': e = 'SUMIF(' + ak + ',' + cr + ',[[ACT.' + c.f + ']])'; break;
-        case 'leads': e = 'COUNTIF(' + lk + ',' + cr + ')'; break;
-        case 'qual': e = 'COUNTIF(' + lk + '&"|"&IF([[LEAD.f_qual]],"1","0"),' + cr + '&"|1")'; break;
+        case 'refusals': e = 'COUNTIF(' + ak + '&"|"&IF([[ACT.refusal]]="","0","1"),' + cr + '&"|1")'; break;
         case 'listing': e = 'SUMIF(' + ak + '&"|"&[[ACT.is_listing]],' + cr + '&"|ДА",[[ACT.' + c.f + ']])'; break;
-        case 'avgdays':
-          e = 'IFERROR(SUMIF(' + lk + ',' + cr + ',[[LEAD.days_to_deal]])/COUNTIF(' + lk + '&"|"&IF([[LEAD.days_to_deal]]="","0","1"),' + cr + '&"|1"),"")';
-          break;
         case 'ratio': e = 'IFERROR(' + rng(letterOf[c.a]) + '/' + rng(letterOf[c.b]) + ',"")'; break;
         case 'obj': e = 'IFERROR(VLOOKUP(' + keys + ',{[[OBJ.id]],[[OBJ.' + c.f + ']]},2,FALSE),"")'; break;
         case 'firstprice':
@@ -302,58 +295,59 @@ function statsLayout_(gid) {
   return { cells: cells, formats: formats };
 }
 
-// ───────────────────────── блок конверсий в 04_ЛИДЫ ─────────────────────────
+// ───────────────────────── 04_ВОРОНКА ─────────────────────────
+// Воронка и конверсии считаются только из журнала действий 03 (карточек покупателей в системе нет — они в CRM).
 
-function leadBlockLayout_() {
-  const start = sheetSpecs_().LEAD.fields.length + 2; // одна пустая колонка-разделитель
-  const A = colLetter_(start), B = colLetter_(start + 1), C = colLetter_(start + 2);
+const FUN_CH_COL = 5; // E — таблица по каналам
+
+function funnelLayout_() {
   const cells = [];
-  cells.push({ a1: A + '1', v: 'ВОРОНКА И КОНВЕРСИИ (уникальные лиды)', style: 'section', spanCols: 3 });
-  cells.push({ a1: A + '2', v: 'Объект:', style: 'label' });
-  cells.push({ a1: B + '2', v: 'Все', style: 'select', validation: { list: 'D.obj_filter' } });
-  cells.push({ a1: A + '3', v: 'Неделя первого контакта:', style: 'label' });
-  cells.push({ a1: B + '3', v: 'Все время', style: 'select', validation: { list: 'D.week_filter' } });
-  cells.push({ a1: A + '4', v: 'критерий объекта', style: 'muted' });
-  cells.push({ a1: B + '4', f: '=IF(OR(' + B + '2="",' + B + '2="Все"),"*",REGEXEXTRACT(' + B + '2,"^(.*?) · "))', style: 'muted' });
-  cells.push({ a1: A + '5', v: 'критерий недели', style: 'muted' });
-  cells.push({ a1: B + '5', f: '=IF(OR(' + B + '3="",' + B + '3="Все время"),"*",REGEXEXTRACT(' + B + '3,"^[^ ]+"))', style: 'muted' });
-  const oc = '$' + B + '$4', wc = '$' + B + '$5';
+  cells.push({ a1: 'A1', v: 'ВОРОНКА И КОНВЕРСИИ — считается из 03_ДЕЙСТВИЯ', style: 'title' });
+  cells.push({ a1: 'A2', v: 'Объект:', style: 'label' });
+  cells.push({ a1: 'B2', v: 'Все', style: 'select', validation: { list: 'D.obj_filter' } });
+  cells.push({ a1: 'A3', v: 'Неделя:', style: 'label' });
+  cells.push({ a1: 'B3', v: 'Все время', style: 'select', validation: { list: 'D.week_filter' } });
+  cells.push({ a1: 'A4', v: 'критерий объекта', style: 'muted' });
+  cells.push({ a1: 'B4', f: '=IF(OR(B2="",B2="Все"),"*",REGEXEXTRACT(B2,"^(.*?) · "))', style: 'muted' });
+  cells.push({ a1: 'A5', v: 'критерий недели', style: 'muted' });
+  cells.push({ a1: 'B5', f: '=IF(OR(B3="",B3="Все время"),"*",REGEXEXTRACT(B3,"^[^ ]+"))', style: 'muted' });
+  const oc = '$B$4', wc = '$B$5';
   const act = f => '=SUMIFS([[ACT.' + f + ']],[[ACT.obj_id]],' + oc + ',[[ACT.week]],' + wc + ')';
-  const lead = extra => '=COUNTIFS([[LEAD.obj_id]],' + oc + ',[[LEAD.week]],' + wc + (extra ? ',' + extra : '') + ')';
   const rows = [
-    ['contacts', 'Контакты', act('contacts'), '03_ДЕЙСТВИЯ'],
-    ['responses', 'Ответы', act('responses'), '03_ДЕЙСТВИЯ'],
-    ['leads', 'Лиды', lead(), '04 — все лиды'],
-    ['qual', 'Квалифицированы', lead('[[LEAD.f_qual]],TRUE'), '04 — чекбокс'],
-    ['pres', 'Презентация', lead('[[LEAD.f_pres]],TRUE'), '04 — чекбокс'],
-    ['show', 'Показ', lead('[[LEAD.f_show]],TRUE'), '04 — чекбокс'],
-    ['neg', 'Переговоры', lead('[[LEAD.f_neg]],TRUE'), '04 — чекбокс'],
-    ['offer', 'Предложение', lead('[[LEAD.f_offer]],TRUE'), '04 — чекбокс'],
-    ['book', 'Бронь', lead('[[LEAD.f_book]],TRUE'), '04 — чекбокс'],
-    ['deal', 'Сделка', lead('[[LEAD.f_deal]],TRUE'), '04 — чекбокс'],
-    ['lost', 'Потеряны', lead('[[LEAD.status_class]],"LOST"'), '04 — статус'],
-    ['cost', 'Расходы, ₽', act('cost'), '03_ДЕЙСТВИЯ'],
+    ['actions', 'Действий выполнено', '=COUNTIFS([[ACT.obj_id]],' + oc + ',[[ACT.week]],' + wc + ',[[ACT.status_class]],"DONE")'],
+    ['contacts', 'Контакты', act('contacts')],
+    ['responses', 'Ответы', act('responses')],
+    ['leads', 'Лиды (заинтересовались)', act('interested')],
+    ['pres', 'Презентации', act('presentations')],
+    ['show', 'Показы', act('showings')],
+    ['repeat', 'Повторные контакты', act('repeat_contacts')],
+    ['neg', 'Переговоры', act('negotiations')],
+    ['offer', 'Предложения', act('offers')],
+    ['book', 'Брони', act('bookings')],
+    ['deal', 'Сделки', act('deals')],
+    ['refusals', 'Отказы (действий с причиной отказа)', '=COUNTIFS([[ACT.obj_id]],' + oc + ',[[ACT.week]],' + wc + ',[[ACT.refusal]],"?*")'],
+    ['cost', 'Расходы, ₽', act('cost')],
   ];
-  cells.push({ a1: A + '7', v: 'Показатель', style: 'header' });
-  cells.push({ a1: B + '7', v: 'Значение', style: 'header' });
-  cells.push({ a1: C + '7', v: 'Источник', style: 'header' });
+  cells.push({ a1: 'A7', v: 'Этап', style: 'header' });
+  cells.push({ a1: 'B7', v: 'Количество', style: 'header' });
   const at = {};
   rows.forEach((r, i) => {
     const row = 8 + i;
-    at[r[0]] = B + row;
-    cells.push({ a1: A + row, v: r[1] });
-    cells.push({ a1: B + row, f: r[2], fmt: r[0] === 'cost' ? 'money' : '0' });
-    cells.push({ a1: C + row, v: r[3], style: 'muted' });
+    at[r[0]] = 'B' + row;
+    cells.push({ a1: 'A' + row, v: r[1] });
+    cells.push({ a1: 'B' + row, f: r[2], fmt: r[0] === 'cost' ? 'money' : '0' });
   });
   let row = 8 + rows.length + 1;
-  cells.push({ a1: A + row, v: 'Конверсия', style: 'header' });
-  cells.push({ a1: B + row, v: '%', style: 'header' });
-  cells.push({ a1: C + row, v: 'Расчёт', style: 'header' });
+  cells.push({ a1: 'A' + row, v: 'Конверсия', style: 'header' });
+  cells.push({ a1: 'B' + row, v: '%', style: 'header' });
+  cells.push({ a1: 'C' + row, v: 'Расчёт', style: 'header' });
   const conv = [
     ['Контакт → ответ', 'responses', 'contacts'],
-    ['Ответ → квалифицирован', 'qual', 'responses'],
-    ['Квалифицирован → презентация', 'pres', 'qual'],
+    ['Ответ → интерес (лид)', 'leads', 'responses'],
+    ['Контакт → лид', 'leads', 'contacts'],
+    ['Лид → презентация', 'pres', 'leads'],
     ['Презентация → показ', 'show', 'pres'],
+    ['Лид → показ', 'show', 'leads'],
     ['Показ → переговоры', 'neg', 'show'],
     ['Переговоры → предложение', 'offer', 'neg'],
     ['Предложение → бронь', 'book', 'offer'],
@@ -363,16 +357,64 @@ function leadBlockLayout_() {
   const convCells = {};
   conv.forEach(c => {
     row++;
-    cells.push({ a1: A + row, v: c[0] });
-    cells.push({ a1: B + row, f: '=IFERROR(' + at[c[1]] + '/' + at[c[2]] + ',"")', fmt: 'pct' });
-    cells.push({ a1: C + row, f: '=' + at[c[1]] + '&" из "&' + at[c[2]], style: 'muted' });
-    convCells[c[0]] = B + row;
+    cells.push({ a1: 'A' + row, v: c[0] });
+    cells.push({ a1: 'B' + row, f: '=IFERROR(' + at[c[1]] + '/' + at[c[2]] + ',"")', fmt: 'pct' });
+    cells.push({ a1: 'C' + row, f: '=' + at[c[1]] + '&" из "&' + at[c[2]], style: 'muted' });
+    convCells[c[0]] = 'B' + row;
   });
   row++;
-  cells.push({ a1: A + row, v: 'Стоимость лида, ₽' });
-  cells.push({ a1: B + row, f: '=IFERROR(' + at.cost + '/' + at.leads + ',"")', fmt: 'money' });
-  convCells['Стоимость лида'] = B + row;
-  return { cells: cells, startCol: start, at: at, conv: convCells, selObj: B + '2', selWeek: B + '3' };
+  cells.push({ a1: 'A' + row, v: 'Стоимость лида, ₽' });
+  cells.push({ a1: 'B' + row, f: '=IFERROR(' + at.cost + '/' + at.leads + ',"")', fmt: 'money' });
+  convCells['Стоимость лида'] = 'B' + row;
+
+  // причины отказов
+  row += 2;
+  const refRow = row;
+  cells.push({ a1: 'A' + row, v: 'ПРИЧИНЫ ОТКАЗОВ (возражения рынка)', style: 'section', spanCols: 3 });
+  cells.push({ a1: 'A' + (row + 1), f: '=IFERROR(QUERY(FILTER([[ACT.refusal]],[[ACT.refusal]]<>"",([[ACT.obj_id]]=' + oc + ')+(' + oc + '="*"),([[ACT.week]]=' + wc + ')+(' + wc + '="*")),' +
+    '"select Col1, count(Col1) group by Col1 order by count(Col1) desc label Col1 \'Причина\', count(Col1) \'Раз\'",0),"Отказов не зафиксировано")' });
+
+  // по каналам
+  const chCols = [
+    ['Канал', null],
+    ['Действия', k => 'COUNTIF(KEYA_&"|"&[[ACT.status_class]],KEYC_&"|DONE")', '0'],
+    ['Контакты', k => 'SUMIF(KEYA_,KEYC_,[[ACT.contacts]])', '0'],
+    ['Ответы', k => 'SUMIF(KEYA_,KEYC_,[[ACT.responses]])', '0'],
+    ['Лиды', k => 'SUMIF(KEYA_,KEYC_,[[ACT.interested]])', '0'],
+    ['Показы', k => 'SUMIF(KEYA_,KEYC_,[[ACT.showings]])', '0'],
+    ['Переговоры', k => 'SUMIF(KEYA_,KEYC_,[[ACT.negotiations]])', '0'],
+    ['Сделки', k => 'SUMIF(KEYA_,KEYC_,[[ACT.deals]])', '0'],
+    ['Отказы', k => 'COUNTIF(KEYA_&"|"&IF([[ACT.refusal]]="","0","1"),KEYC_&"|1")', '0'],
+    ['Расходы, ₽', k => 'SUMIF(KEYA_,KEYC_,[[ACT.cost]])', 'money'],
+    ['Контакт → лид', 'ratio', 'pct', 'Лиды', 'Контакты'],
+    ['Лид → показ', 'ratio', 'pct', 'Показы', 'Лиды'],
+    ['Стоимость лида, ₽', 'ratio', 'money', 'Расходы, ₽', 'Лиды'],
+  ];
+  const E = colLetter_(FUN_CH_COL);
+  cells.push({ a1: E + '6', v: 'ПО КАНАЛАМ — какой канал даёт результат (тот же фильтр)', style: 'section', spanCols: chCols.length });
+  const keys = '$' + E + '$8:$' + E;
+  const keyA = '[[ACT.obj_id]]&"|"&[[ACT.week]]&"|"&[[ACT.channel]]';
+  const keyC = oc + '&"|"&' + wc + '&"|"&' + keys;
+  const letter = {};
+  chCols.forEach((c, i) => { letter[c[0]] = colLetter_(FUN_CH_COL + i); });
+  const formats = [];
+  chCols.forEach((c, i) => {
+    const L = colLetter_(FUN_CH_COL + i);
+    cells.push({ a1: L + '7', v: c[0], style: 'header' });
+    let f;
+    if (i === 0) {
+      f = '=ARRAYFORMULA(IFERROR(SORT(UNIQUE(FILTER([[ACT.channel]],[[ACT.channel]]<>"",([[ACT.obj_id]]=' + oc + ')+(' + oc + '="*"),([[ACT.week]]=' + wc + ')+(' + wc + '="*")))),""))';
+    } else if (c[1] === 'ratio') {
+      const r = x => '$' + letter[x] + '$8:$' + letter[x];
+      f = '=ARRAYFORMULA(IF(' + keys + '="","",IFERROR(' + r(c[3]) + '/' + r(c[4]) + ',"")))';
+    } else {
+      f = '=ARRAYFORMULA(IF(' + keys + '="","",' + c[1]().replace(/KEYA_/g, keyA).replace(/KEYC_/g, keyC) + '))';
+    }
+    cells.push({ a1: L + '8', f: f });
+    const fmt = c[1] === 'ratio' ? c[2] : c[2];
+    if (fmt) formats.push({ range: L + '8:' + L, fmt: fmt });
+  });
+  return { cells: cells, at: at, conv: convCells, formats: formats, refRow: refRow, chLetter: letter, selObj: 'B2', selWeek: 'B3' };
 }
 
 // ───────────────────────── блок итогов в 06_ПЛАН_ФАКТ ─────────────────────────
@@ -423,8 +465,7 @@ function pfBlockLayout_() {
     cells.push({ a1: lbl, f: '=[[D.kpi_metrics:' + (i + 1) + ']]' });
     cells.push({ a1: B + row, f: '=SUMIFS([[PF.kpi_plan]],[[PF.kpi_metric]],' + lbl + ',[[PF.week]],' + wk + ',[[PF.obj_id]],' + oc + ')', fmt: '0' });
     let fact;
-    if (k.lead) fact = '=COUNTIFS([[LEAD.week]],' + wk + ',[[LEAD.obj_id]],' + oc + ')';
-    else if (k.count) fact = '=COUNTIFS([[ACT.week]],' + wk + ',[[ACT.obj_id]],' + oc + ',[[ACT.status_class]],"DONE")';
+    if (k.count) fact = '=COUNTIFS([[ACT.week]],' + wk + ',[[ACT.obj_id]],' + oc + ',[[ACT.status_class]],"DONE")';
     else fact = '=SUMIFS([[ACT.' + k.act + ']],[[ACT.week]],' + wk + ',[[ACT.obj_id]],' + oc + ')';
     cells.push({ a1: C + row, f: fact, fmt: '0' });
     cells.push({ a1: D + row, f: '=IF(' + B + row + '=0,"",IFERROR(' + C + row + '/' + B + row + ',""))', fmt: 'pct' });
@@ -435,7 +476,7 @@ function pfBlockLayout_() {
 
 // ───────────────────────── 07_ОТЧЕТ ─────────────────────────
 
-const REP_PARAMS = { id: '$E$3', wk: '$E$4', start: '$E$5', end: '$E$6', next: '$E$7', qual: '$E$8' };
+const REP_PARAMS = { id: '$E$3', wk: '$E$4', start: '$E$5', end: '$E$6', next: '$E$7' };
 
 function reportRows_() {
   const P = REP_PARAMS;
@@ -458,8 +499,7 @@ function reportRows_() {
     },
     { ph: 'CONTACTS', label: 'Контакты', f: sumAct('contacts') },
     { ph: 'RESPONSES', label: 'Ответы', f: sumAct('responses') },
-    { ph: 'INTERESTED', label: 'Заинтересовались', f: sumAct('interested') },
-    { ph: 'LEADS', label: 'Новые лиды', f: '=IF(' + P.id + '="","",COUNTIFS([[LEAD.obj_id]],' + P.id + ',[[LEAD.week]],' + P.wk + '))' },
+    { ph: 'INTERESTED', label: 'Заинтересовались (лиды)', f: sumAct('interested') },
     { ph: 'PRESENTATIONS', label: 'Презентации', f: sumAct('presentations') },
     { ph: 'SHOWINGS', label: 'Показы', f: sumAct('showings') },
     { ph: 'NEGOTIATIONS', label: 'Переговоры', f: sumAct('negotiations') },
@@ -471,7 +511,7 @@ function reportRows_() {
       f: '=IF(' + P.id + '="","",TEXTJOIN(CHAR(10),TRUE,' +
         '"Воронка недели: контакты "&[[R.CONTACTS]]&" → ответы "&[[R.RESPONSES]]&" → заинтересовались "&[[R.INTERESTED]]&" → презентации "&[[R.PRESENTATIONS]]&" → показы "&[[R.SHOWINGS]]&" → переговоры "&[[R.NEGOTIATIONS]],' +
         conv('Контакт → ответ', 'RESPONSES', 'CONTACTS') + ',' +
-        'IF(N([[R.RESPONSES]])>0,"Ответ → квалифицированный интерес: "&TEXT(' + P.qual + '/[[R.RESPONSES]],"0%")&" ("&' + P.qual + '&" из "&[[R.RESPONSES]]&")",""),' +
+        conv('Ответ → интерес', 'INTERESTED', 'RESPONSES') + ',' +
         conv('Интерес → презентация', 'PRESENTATIONS', 'INTERESTED') + ',' +
         conv('Презентация → показ', 'SHOWINGS', 'PRESENTATIONS') + ',' +
         conv('Показ → переговоры', 'NEGOTIATIONS', 'SHOWINGS') + ',' +
@@ -485,9 +525,7 @@ function reportRows_() {
     },
     {
       ph: 'OBJECTIONS', label: 'Какие возражения получили', list: true,
-      f: '=IFERROR(ARRAYFORMULA(LET(r_act,IFERROR(FILTER([[ACT.refusal]],' + actCond + ',' + rep + ',[[ACT.refusal]]<>""),""),' +
-        'r_lead,IFERROR(FILTER([[LEAD.refusal]],[[LEAD.obj_id]]=' + P.id + ',[[LEAD.last_contact_week]]=' + P.wk + ',[[LEAD.refusal]]<>""),""),' +
-        'r_all,{r_act;r_lead},r_nb,FILTER(r_all,r_all<>""),' +
+      f: '=IFERROR(ARRAYFORMULA(LET(r_nb,FILTER([[ACT.refusal]],' + actCond + ',' + rep + ',[[ACT.refusal]]<>""),' +
         'r_q,QUERY(r_nb,"select Col1, count(Col1) group by Col1 order by count(Col1) desc label count(Col1) \'\'",0),' +
         'TEXTJOIN(CHAR(10),TRUE,INDEX(r_q,0,1)&" — "&INDEX(r_q,0,2)))),"Возражений не зафиксировано.")',
     },
@@ -550,7 +588,6 @@ function reportLayout_() {
     ['D5', 'Начало', 'E5', '=IFERROR(VLOOKUP(E4,[[D.weeks:tbl]],2,FALSE),"")'],
     ['D6', 'Конец', 'E6', '=IF(E5="","",E5+6)'],
     ['D7', 'Следующая неделя', 'E7', '=IF(E5="","",YEAR(E5+10)&"-W"&TEXT(ISOWEEKNUM(E5+7),"00"))'],
-    ['D8', 'Квал. лиды недели', 'E8', '=IF(E3="","",COUNTIFS([[LEAD.obj_id]],E3,[[LEAD.week]],E4,[[LEAD.f_qual]],TRUE))'],
   ];
   params.forEach(p => {
     cells.push({ a1: p[0], v: p[1], style: 'muted' });
@@ -595,21 +632,19 @@ function ctrlMonitorCols_() {
     { k: 'name', t: 'Объект', e: 'IFERROR(VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.name]]},2,FALSE),"")' },
     { k: 'owner', t: 'Ответственный', e: 'IFERROR(VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.manager]]},2,FALSE),"")' },
     { k: 'idle', t: 'Дней без активности', e: 'IFERROR(VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.days_idle]]},2,FALSE),"")', fmt: '0' },
-    { k: 'last_lead', t: 'Последний лид', e: 'IFERROR(VLOOKUP(' + K + ',SORT({[[LEAD.obj_id]],[[LEAD.first_date]]},2,FALSE),2,FALSE),"")', fmt: 'date' },
+    { k: 'last_lead', t: 'Последний интерес (лид)', e: 'IFERROR(VLOOKUP(' + K + ',SORT(FILTER({[[ACT.obj_id]],[[ACT.date]]},[[ACT.interested]]>0),2,FALSE),2,FALSE),"")', fmt: 'date' },
     { k: 'no_leads', t: 'Дней без новых лидов', e: 'IF(' + col('last_lead') + '="",IFERROR(TODAY()-VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.date_sign]]},2,FALSE),""),TODAY()-' + col('last_lead') + ')', fmt: '0' },
     { k: 'c_r', t: 'Контакты (посл. период)', e: 'SUMIF([[ACT.obj_id]]&"|"&[[ACT.window]],' + K + '&"|R",[[ACT.contacts]])', fmt: '0' },
-    { k: 'l_r', t: 'Лиды (посл. период)', e: 'COUNTIF([[LEAD.obj_id]]&"|"&[[LEAD.window]],' + K + '&"|R")', fmt: '0' },
+    { k: 'l_r', t: 'Лиды (посл. период)', e: 'SUMIF([[ACT.obj_id]]&"|"&[[ACT.window]],' + K + '&"|R",[[ACT.interested]])', fmt: '0' },
     { k: 'cv_r', t: 'Конв. контакт→лид (посл.)', e: 'IFERROR(' + col('l_r') + '/' + col('c_r') + ',0)', fmt: 'pct' },
     { k: 'c_p', t: 'Контакты (пред. период)', e: 'SUMIF([[ACT.obj_id]]&"|"&[[ACT.window]],' + K + '&"|P",[[ACT.contacts]])', fmt: '0' },
-    { k: 'l_p', t: 'Лиды (пред. период)', e: 'COUNTIF([[LEAD.obj_id]]&"|"&[[LEAD.window]],' + K + '&"|P")', fmt: '0' },
+    { k: 'l_p', t: 'Лиды (пред. период)', e: 'SUMIF([[ACT.obj_id]]&"|"&[[ACT.window]],' + K + '&"|P",[[ACT.interested]])', fmt: '0' },
     { k: 'cv_p', t: 'Конв. контакт→лид (пред.)', e: 'IFERROR(' + col('l_p') + '/' + col('c_p') + ',0)', fmt: 'pct' },
     {
       k: 'drop', t: 'Падение конверсии',
       e: 'IF((' + col('c_r') + '>=[[CFG.MIN_CONTACTS]])*(' + col('c_p') + '>=[[CFG.MIN_CONTACTS]])*(' + col('cv_p') + '>0)*(' + col('cv_r') + '<' + col('cv_p') + '*(1-[[CFG.CONV_DROP]])),"ДА","")',
     },
-    { k: 'leads', t: 'Лидов всего', e: 'COUNTIF([[LEAD.obj_id]],' + K + ')', fmt: '0' },
-    { k: 'lost', t: 'Потеряно', e: 'COUNTIF([[LEAD.obj_id]]&"|"&[[LEAD.status_class]],' + K + '&"|LOST")', fmt: '0' },
-    { k: 'lost_share', t: 'Доля потерь', e: 'IFERROR(' + col('lost') + '/' + col('leads') + ',0)', fmt: 'pct' },
+    { k: 'refusals', t: 'Отказов за окно сравнения', e: 'COUNTIF([[ACT.obj_id]]&"|"&[[ACT.window]]&"|"&IF([[ACT.refusal]]="","0","1"),' + K + '&"|R|1")+COUNTIF([[ACT.obj_id]]&"|"&[[ACT.window]]&"|"&IF([[ACT.refusal]]="","0","1"),' + K + '&"|P|1")', fmt: '0' },
     { k: 'review', t: 'Дата пересмотра стратегии', e: 'IFERROR(VLOOKUP(' + K + ',{[[STR.obj_id]],[[STR.review_date]]},2,FALSE),"")', fmt: 'date' },
     { k: 'next_report', t: 'Следующий отчёт', e: 'IFERROR(VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.next_report]]},2,FALSE),"")', fmt: 'date' },
     { k: 'to_end', t: 'Дней до конца эксклюзива', e: 'LET(e_d,IFERROR(VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.date_end]]},2,FALSE),""),IF(e_d="","",e_d-TODAY()))', fmt: '0' },
@@ -655,9 +690,9 @@ function alertsFormula_(m) {
   blocks.push(monBlock(SEVERITY.MID, ALERT.IDLE_WARN, '"Нет действий "&' + m.idle + '&" дн."', on(K, ''), SHEET_NAMES.ACT, '(' + m.idle + '>CFG_WARN_ACTIVITY_DAYS)*(' + m.idle + '<=CFG_NO_ACTIVITY_DAYS)'));
   blocks.push(monBlock(SEVERITY.HIGH, ALERT.EXCL_END, 'IF(' + m.to_end + '<0,"Эксклюзив истёк "&-' + m.to_end + '&" дн. назад","До окончания эксклюзива "&' + m.to_end + '&" дн.")', 'IFERROR(TEXT(TODAY()+' + m.to_end + ',"dd.mm.yyyy"),"")', SHEET_NAMES.OBJ, '(' + m.to_end + '<>"")*(' + m.to_end + '<=CFG_EXCL_END_WARN_DAYS)'));
   blocks.push(monBlock(SEVERITY.MID, ALERT.REPORT_DUE, '"Отчёт клиенту должен быть готов"', fmtD(m.next_report), SHEET_NAMES.REP, '(' + m.next_report + '<>"")*(' + m.next_report + '<=TODAY())'));
-  blocks.push(monBlock(SEVERITY.MID, ALERT.NO_LEADS, '"Нет новых лидов "&' + m.no_leads + '&" дн."', fmtD(m.last_lead), SHEET_NAMES.LEAD, '(' + m.no_leads + '<>"")*(' + m.no_leads + '>CFG_NO_LEADS_DAYS)'));
-  blocks.push(monBlock(SEVERITY.MID, ALERT.CONV_DROP, '"Контакт→лид: было "&TEXT(' + m.cv_p + ',"0%")&", стало "&TEXT(' + m.cv_r + ',"0%")', on(K, ''), SHEET_NAMES.STAT, m.drop + '="ДА"'));
-  blocks.push(monBlock(SEVERITY.MID, ALERT.MANY_LOST, '"Потеряно "&' + m.lost + '&" из "&' + m.leads + '&" лидов"', on(K, ''), SHEET_NAMES.LEAD, '(' + m.leads + '>=CFG_MIN_LEADS)*(' + m.lost_share + '>=CFG_LOST_SHARE)'));
+  blocks.push(monBlock(SEVERITY.MID, ALERT.NO_LEADS, '"Нет новых заинтересованных "&' + m.no_leads + '&" дн."', fmtD(m.last_lead), SHEET_NAMES.ACT, '(' + m.no_leads + '<>"")*(' + m.no_leads + '>CFG_NO_LEADS_DAYS)'));
+  blocks.push(monBlock(SEVERITY.MID, ALERT.CONV_DROP, '"Контакт→интерес: было "&TEXT(' + m.cv_p + ',"0%")&", стало "&TEXT(' + m.cv_r + ',"0%")', on(K, ''), SHEET_NAMES.STAT, m.drop + '="ДА"'));
+  blocks.push(monBlock(SEVERITY.MID, ALERT.MANY_LOST, '"Отказов за последние "&(CFG_RECENT_DAYS+CFG_COMPARE_DAYS)&" дн.: "&' + m.refusals, on(K, ''), SHEET_NAMES.FUN, m.refusals + '>=CFG_MANY_REFUSALS'));
   blocks.push(monBlock(SEVERITY.MID, ALERT.STRATEGY_OLD, 'IF(' + m.review + '="","Дата пересмотра стратегии не указана","Пересмотр был "&TEXT(' + m.review + ',"dd.mm.yyyy"))', fmtD(m.review), SHEET_NAMES.STR, 'IF(' + m.review + '="",TRUE,TODAY()-' + m.review + '>CFG_STRATEGY_REVIEW_DAYS)'));
   blocks.push(monBlock(SEVERITY.MID, ALERT.STRATEGY_FLAG, '"Отмечено вручную в 02_СТРАТЕГИЯ"', on(K, ''), SHEET_NAMES.STR, m.need_change + '=TRUE'));
 
@@ -672,12 +707,6 @@ function alertsFormula_(m) {
   blocks.push('IFERROR(FILTER({' + on(ACo, SEVERITY.HIGH) + ',' + on(ACo, ALERT.ACTION_OVERDUE) + ',' + ACo + ',[[ACT.obj_name]],"Действие "&[[ACT.id]]&" «"&[[ACT.type]]&" "&[[ACT.goal]]&"» не отмечено выполненным",[[ACT.owner]],' + fmtD('[[ACT.date]]') + ',' + on(ACo, SHEET_NAMES.ACT) + '},[[ACT.status_class]]="OPEN",[[ACT.date]]<>"",[[ACT.date]]<TODAY()),E_)');
   blocks.push('IFERROR(FILTER({' + on(PFo, SEVERITY.LOW) + ',' + on(PFo, ALERT.NO_OWNER) + ',' + PFo + ',[[PF.obj_name]],"Задача «"&IF([[PF.task]]="",[[PF.kpi_metric]],[[PF.task]])&"» ("&[[PF.task_id]]&") без ответственного",' + on(PFo, '') + ',' + fmtD('[[PF.deadline]]') + ',' + on(PFo, SHEET_NAMES.PF) + '},' + PFo + '<>"",[[PF.owner]]="",([[PF.status_class]]="OPEN")+([[PF.status_class]]="FAIL")),E_)');
   blocks.push('IFERROR(FILTER({' + on(ACo, SEVERITY.LOW) + ',' + on(ACo, ALERT.NO_OWNER) + ',' + ACo + ',[[ACT.obj_name]],"Действие "&[[ACT.id]]&" без ответственного",' + on(ACo, '') + ',' + fmtD('[[ACT.date]]') + ',' + on(ACo, SHEET_NAMES.ACT) + '},' + ACo + '<>"",[[ACT.owner]]="",[[ACT.status_class]]="OPEN"),E_)');
-
-  // лиды
-  const LO = '[[LEAD.obj_id]]';
-  const leadOwner = 'IFERROR(VLOOKUP(' + LO + ',{[[OBJ.id]],[[OBJ.manager]]},2,FALSE),"")';
-  blocks.push('IFERROR(FILTER({' + on(LO, SEVERITY.MID) + ',' + on(LO, ALERT.LEAD_NO_NEXT) + ',' + LO + ',[[LEAD.obj_name]],"Лид "&[[LEAD.id]]&" ("&[[LEAD.status]]&") — не назначен следующий контакт",' + leadOwner + ',' + on(LO, '') + ',' + on(LO, SHEET_NAMES.LEAD) + '},' + LO + '<>"",[[LEAD.next_contact]]="",([[LEAD.status_class]]="OPEN")+([[LEAD.status_class]]="PAUSED")),E_)');
-  blocks.push('IFERROR(FILTER({' + on(LO, SEVERITY.MID) + ',' + on(LO, ALERT.LEAD_OVERDUE) + ',' + LO + ',[[LEAD.obj_name]],"Лид "&[[LEAD.id]]&" — контакт был запланирован",' + leadOwner + ',' + fmtD('[[LEAD.next_contact]]') + ',' + on(LO, SHEET_NAMES.LEAD) + '},' + LO + '<>"",[[LEAD.next_contact]]<>"",[[LEAD.next_contact]]<TODAY(),([[LEAD.status_class]]="OPEN")+([[LEAD.status_class]]="PAUSED")),E_)');
 
   const body = 'LET(E_,{"","","","","","","",""},all_,{' + blocks.join(';') + '},res_,FILTER(all_,INDEX(all_,0,2)<>""),SORT(res_,1,TRUE,2,TRUE,3,TRUE))';
   return resolveF_('=IFERROR(ARRAYFORMULA(' + body + '),{"✓ Предупреждений нет","","","","","","",""})', { extra: m });
@@ -731,7 +760,7 @@ function dashLayout_() {
   const wm = [
     ['Действия', w => 'COUNTIFS([[ACT.week]],' + w + ',[[ACT.status_class]],"DONE")'],
     ['Контакты', w => 'SUMIFS([[ACT.contacts]],[[ACT.week]],' + w + ')'],
-    ['Лиды', w => 'COUNTIFS([[LEAD.week]],' + w + ')'],
+    ['Лиды', w => 'SUMIFS([[ACT.interested]],[[ACT.week]],' + w + ')'],
     ['Показы', w => 'SUMIFS([[ACT.showings]],[[ACT.week]],' + w + ')'],
     ['Переговоры', w => 'SUMIFS([[ACT.negotiations]],[[ACT.week]],' + w + ')'],
     ['Предложения', w => 'SUMIFS([[ACT.offers]],[[ACT.week]],' + w + ')'],
@@ -755,8 +784,8 @@ function dashLayout_() {
   // КОНВЕРСИИ
   cells.push({ a1: 'A14', v: 'КОНВЕРСИИ', style: 'section', spanCols: 9 });
   const conv = [
-    ['Контакт → лид', 'Лиды', 'Контакты', 'COUNTIF([[LEAD.obj_id]],"?*")', 'SUM([[ACT.contacts]])'],
-    ['Лид → показ', 'Показы', 'Лиды', 'SUM([[ACT.showings]])', 'COUNTIF([[LEAD.obj_id]],"?*")'],
+    ['Контакт → лид', 'Лиды', 'Контакты', 'SUM([[ACT.interested]])', 'SUM([[ACT.contacts]])'],
+    ['Лид → показ', 'Показы', 'Лиды', 'SUM([[ACT.showings]])', 'SUM([[ACT.interested]])'],
     ['Показ → переговоры', 'Переговоры', 'Показы', 'SUM([[ACT.negotiations]])', 'SUM([[ACT.showings]])'],
     ['Переговоры → предложение', 'Предложения', 'Переговоры', 'SUM([[ACT.offers]])', 'SUM([[ACT.negotiations]])'],
     ['Предложение → бронь', 'Брони', 'Предложения', 'SUM([[ACT.bookings]])', 'SUM([[ACT.offers]])'],
@@ -789,11 +818,11 @@ function dashLayout_() {
     ['Цена', look('price'), 'money_short'],
     ['Цена за м²', look('price_m2'), 'money'],
     ['Дни на рынке', look('days_on_market'), '0'],
-    ['Лиды', 'COUNTIF([[LEAD.obj_id]],' + K + ')', '0'],
+    ['Лиды', 'SUMIF([[ACT.obj_id]],' + K + ',[[ACT.interested]])', '0'],
     ['Показы', 'SUMIF([[ACT.obj_id]],' + K + ',[[ACT.showings]])', '0'],
     ['Переговоры', 'SUMIF([[ACT.obj_id]],' + K + ',[[ACT.negotiations]])', '0'],
     ['Брони', 'SUMIF([[ACT.obj_id]],' + K + ',[[ACT.bookings]])', '0'],
-    ['Конверсия лид → показ', 'IFERROR(SUMIF([[ACT.obj_id]],' + K + ',[[ACT.showings]])/COUNTIF([[LEAD.obj_id]],' + K + '),"")', 'pct'],
+    ['Конверсия лид → показ', 'IFERROR(SUMIF([[ACT.obj_id]],' + K + ',[[ACT.showings]])/SUMIF([[ACT.obj_id]],' + K + ',[[ACT.interested]]),"")', 'pct'],
     ['Последнее действие', look('last_action')],
     ['Следующее действие', look('next_action')],
     ['Дедлайн', look('next_action_deadline'), 'date'],
@@ -817,7 +846,7 @@ function dashLayout_() {
   const chartCols = [
     ['Неделя', '=ARRAYFORMULA(TEXT(TODAY()-WEEKDAY(TODAY(),2)+1+7*SEQUENCE(12,1,-11,1),"dd.mm"))'],
     ['Действия', 'COUNTIF([[ACT.week]]&"|"&[[ACT.status_class]],KEYS_&"|DONE")'],
-    ['Лиды', 'COUNTIF([[LEAD.week]],KEYS_)'],
+    ['Лиды', 'SUMIF([[ACT.week]],KEYS_,[[ACT.interested]])'],
     ['Показы', 'SUMIF([[ACT.week]],KEYS_,[[ACT.showings]])'],
     ['Переговоры', 'SUMIF([[ACT.week]],KEYS_,[[ACT.negotiations]])'],
   ];

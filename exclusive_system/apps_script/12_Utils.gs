@@ -166,7 +166,7 @@ function appendRow_(code, obj) {
   return row;
 }
 
-/** Следующий ID: ACT-0012, LEAD-0005, TASK-0031 … (максимум существующих + 1). */
+/** Следующий ID: ACT-0012, TASK-0031 … (максимум существующих + 1). */
 function nextId_(code, cache) {
   const spec = sheetSpecs_()[code];
   if (cache && cache[code] !== undefined) { cache[code]++; return formatId_(spec, cache[code]); }

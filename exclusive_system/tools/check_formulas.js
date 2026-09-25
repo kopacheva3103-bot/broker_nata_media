@@ -15,7 +15,7 @@ function allFormulas() {
   const gen = x.dictGeneratedFormulas_();
   Object.keys(gen).forEach(k => out.push({ where: `08_СПРАВОЧНИКИ ${k}`, f: x.resolveF_(gen[k]) }));
   const blocks = [
-    ['05_СТАТИСТИКА', x.statsLayout_(0).cells], ['04 блок', x.leadBlockLayout_().cells], ['06 блок', x.pfBlockLayout_().cells],
+    ['05_СТАТИСТИКА', x.statsLayout_(0).cells], ['04_ВОРОНКА', x.funnelLayout_().cells], ['06 блок', x.pfBlockLayout_().cells],
     ['07_ОТЧЕТ', x.reportLayout_().cells], ['11_КОНТРОЛЬ', x.ctrlLayout_().cells], ['09_ДЭШБОРД', x.dashLayout_().cells],
   ];
   blocks.forEach(([name, cells]) => cells.forEach(c => { if (c.f) out.push({ where: `${name}!${c.a1}`, f: x.resolveF_(c.f) }); }));

@@ -6,7 +6,7 @@
  * защита формул, onEdit-логика и документация (tools/gen_docs.js).
  *
  * Типы полей (kind):
- *   id    — уникальный ID, ставит скрипт (ACT-0001, LEAD-0001, TASK-0001). ID объекта — из CRM, вручную
+ *   id    — уникальный ID, ставит скрипт (ACT-0001, TASK-0001). ID объекта — из CRM, вручную
  *   text  — ручной ввод текста
  *   dd    — ручной выбор из выпадающего списка (dict = справочник, list = другой лист)
  *   date  — ручной ввод даты (календарь)
@@ -166,7 +166,7 @@ function sheetSpecs_() {
       F('status', 'Статус', 'dd', { dict: 'task_status', track: true, d: 'По умолчанию «Выполнено». «Запланировано» с прошедшей датой = просрочка.' }),
       cnt('contacts', 'Количество контактов'),
       cnt('responses', 'Количество ответов'),
-      cnt('interested', 'Количество заинтересованных'),
+      cnt('interested', 'Количество заинтересованных', { d: 'Сколько человек проявили интерес = ЛИДЫ. Из этого столбца считаются лиды, конверсии и стоимость лида.' }),
       cnt('presentations', 'Количество презентаций'),
       cnt('showings', 'Количество показов'),
       cnt('repeat_contacts', 'Количество повторных контактов'),
@@ -182,7 +182,7 @@ function sheetSpecs_() {
       F('next_step_date', 'Дата следующего шага', 'date'),
       F('comment', 'Комментарий', 'text', { w: 180, internal: true, d: 'Внутренний. В отчёт клиенту не попадает.' }),
       F('views', 'Просмотры (охват)', 'num', { fmt: '#,##0', d: 'Просмотры объявления / охват публикации.' }),
-      F('cost', 'Расходы, ₽', 'money', { internal: true, d: 'Для расчёта стоимости лида.' }),
+      F('cost', 'Расходы, ₽', 'money', { internal: true, d: 'Для расчёта стоимости лида (расходы / заинтересованные).' }),
       F('to_report', 'В отчёт клиенту', 'cb', { d: 'Снимите галочку, если действие внутреннее и не должно попасть в отчёт.' }),
       F('month', 'Месяц', 'f', { helper: true, f: MONTH_OF_('[[@date]]') }),
       F('status_class', 'Класс статуса', 'f', { helper: true, guard: 'status', f: 'IFERROR(VLOOKUP([[@status]],[[D.task_status:tbl]],2,FALSE),"")' }),
@@ -192,52 +192,6 @@ function sheetSpecs_() {
         helper: true,
         f: 'IF(TODAY()-[[@date]]<=[[CFG.RECENT_DAYS]],"R",IF(TODAY()-[[@date]]<=[[CFG.RECENT_DAYS]]+[[CFG.COMPARE_DAYS]],"P",""))',
       }),
-      F('created_at', 'Создано', 'sys', { fmt: 'datetime', helper: true }),
-      F('author', 'Автор', 'sys', { helper: true }),
-    ],
-  };
-
-  // ─────────────────────────────── 04_ЛИДЫ_И_КОНВЕРСИИ ───────────────────────────────
-  const mark = (key, title) => F(key, title, 'cb', { w: 90, d: 'Отмечается автоматически при смене статуса; можно поставить вручную.' });
-  S.LEAD = {
-    code: 'LEAD', guard: 'first_date', frozenCols: 3, idField: 'id', idPrefix: 'LEAD-', idPad: 4,
-    about: 'Воронка. Одна строка = один лид/контакт. Подробности клиента — в CRM, здесь только управленческие поля.',
-    fields: [
-      F('id', 'ID лида', 'id'),
-      F('first_date', 'Дата первого контакта', 'date', { d: 'Если не указать — скрипт поставит сегодняшнюю.' }),
-      F('obj_id', 'ID объекта', 'dd', { list: 'OBJ.id' }),
-      F('obj_name', 'Объект', 'f', { guard: 'obj_id', w: 150, f: OBJ_NAME_F_('obj_id') }),
-      F('source', 'Источник', 'dd', { dict: 'lead_sources' }),
-      F('channel', 'Канал', 'dd', { dict: 'channels' }),
-      F('name', 'Имя / название', 'text', { w: 160, internal: true, d: 'Коротко, без телефонов — карточка клиента живёт в CRM.' }),
-      F('crm_link', 'Ссылка на CRM', 'link', { w: 110, internal: true }),
-      F('client_type', 'Тип клиента', 'dd', { dict: 'client_types' }),
-      F('budget', 'Бюджет', 'money', { internal: true }),
-      F('need', 'Потребность', 'text', { w: 180, internal: true }),
-      F('status', 'Статус', 'dd', { dict: 'lead_status', track: true }),
-      F('last_contact', 'Дата последнего контакта', 'date', { d: 'Обновляется автоматически при смене статуса.' }),
-      F('next_contact', 'Следующий контакт', 'date'),
-      F('contacts_count', 'Количество контактов', 'num', { fmt: '0' }),
-      mark('f_qual', 'Квалифицирован'),
-      mark('f_show', 'Был ли показ'),
-      mark('f_pres', 'Была ли презентация'),
-      mark('f_offer', 'Было ли предложение'),
-      mark('f_neg', 'Переговоры'),
-      mark('f_book', 'Бронь'),
-      mark('f_deal', 'Сделка'),
-      F('refusal', 'Причина отказа', 'dd', { dict: 'refusal_reasons', client: true }),
-      F('loss', 'Причина потери', 'dd', { dict: 'loss_reasons', internal: true }),
-      F('comment', 'Комментарий', 'text', { w: 180, internal: true }),
-      F('week', 'Неделя', 'f', { f: WEEK_OF_('[[@first_date]]'), d: 'Неделя первого контакта.' }),
-      F('days_to_deal', 'Дней от лида до сделки', 'f', { fmt: '0', f: 'IF([[@deal_date]]="","",[[@deal_date]]-[[@first_date]])' }),
-      F('deal_date', 'Дата сделки', 'sys', { fmt: 'date', d: 'Ставит скрипт при статусе «Сделка».' }),
-      F('month', 'Месяц', 'f', { helper: true, f: MONTH_OF_('[[@first_date]]') }),
-      F('last_contact_week', 'Неделя последнего контакта', 'f', { helper: true, guard: 'last_contact', f: WEEK_OF_('[[@last_contact]]') }),
-      F('window', 'Окно сравнения', 'f', {
-        helper: true,
-        f: 'IF(TODAY()-[[@first_date]]<=[[CFG.RECENT_DAYS]],"R",IF(TODAY()-[[@first_date]]<=[[CFG.RECENT_DAYS]]+[[CFG.COMPARE_DAYS]],"P",""))',
-      }),
-      F('status_class', 'Класс статуса', 'f', { helper: true, guard: 'status', f: 'IFERROR(VLOOKUP([[@status]],[[D.lead_status:tbl]],2,FALSE),"")' }),
       F('created_at', 'Создано', 'sys', { fmt: 'datetime', helper: true }),
       F('author', 'Автор', 'sys', { helper: true }),
     ],
@@ -258,7 +212,7 @@ function sheetSpecs_() {
       F('plan', 'План', 'text', { w: 160, track: true }),
       F('fact', 'Факт', 'text', { w: 160 }),
       F('result', 'Результат', 'text', { w: 160 }),
-      F('kpi_metric', 'KPI', 'dd', { dict: 'kpi_metrics', client: true, d: 'Какой показатель планируем (контакты, лиды, показы…).' }),
+      F('kpi_metric', 'KPI', 'dd', { dict: 'kpi_metrics', client: true, d: 'Какой показатель планируем (контакты, лиды = заинтересованные, показы…).' }),
       F('kpi_plan', 'KPI план', 'num', { fmt: '0', track: true, client: true }),
       F('kpi_fact', 'Фактический KPI', 'f', { guard: 'kpi_metric', fmt: '0', f: '__KPI_FACT__', d: 'Считается автоматически из 03_ДЕЙСТВИЯ / 04_ЛИДЫ по объекту и неделе.' }),
       F('kpi_pct', '% выполнения KPI', 'f', { guard: 'kpi_plan', fmt: 'pct', f: 'IFERROR([[@kpi_fact]]/[[@kpi_plan]],"")' }),

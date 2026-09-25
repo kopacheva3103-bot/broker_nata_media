@@ -54,10 +54,10 @@ function runSetup_(log) {
   SHEET_ORDER.forEach(code => ensureSheet_(code));
   buildSettings_(); log.push('10_НАСТРОЙКИ');
   buildDict_(); log.push('08_СПРАВОЧНИКИ');
-  ['OBJ', 'STR', 'ACT', 'LEAD', 'PF', 'HIST', 'ARCH'].forEach(code => { buildDataSheet_(code); log.push(SHEET_NAMES[code]); });
-  buildLeadBlock_();
+  ['OBJ', 'STR', 'ACT', 'PF', 'HIST', 'ARCH'].forEach(code => { buildDataSheet_(code); log.push(SHEET_NAMES[code]); });
   buildPfBlock_();
   SpreadsheetApp.flush();
+  buildFunnel_(); log.push(SHEET_NAMES.FUN);
   buildStats_(); log.push(SHEET_NAMES.STAT);
   buildReportSheet_(); log.push(SHEET_NAMES.REP);
   buildCtrl_(); log.push(SHEET_NAMES.CTRL);
@@ -216,7 +216,7 @@ function buildDataSheet_(code) {
   const spec = sheetSpecs_()[code];
   const sh = sheet_(code);
   const n = spec.fields.length;
-  const extraCols = code === 'LEAD' ? 4 : code === 'PF' ? 5 : 0;
+  const extraCols = code === 'PF' ? 5 : 0;
   ensureSize_(sh, SYS.DATA_ROWS, n + extraCols);
   checkHeaders_(sh, spec);
   removeSysProtections_(sh);
@@ -370,12 +370,6 @@ function applyDataCF_(code, sh) {
     add('=$' + col('status_class') + '2="DONE"', colRange('status'), grn);
     add('=($' + col('id') + '2<>"")*($' + col('to_report') + '2=FALSE)', colRange('to_report'), [null, COLORS.GREY_FG]);
   }
-  if (code === 'LEAD') {
-    add('=$' + col('status_class') + '2="WON"', row, grn);
-    add('=$' + col('status_class') + '2="LOST"', row, [null, COLORS.GREY_FG]);
-    add('=($' + col('next_contact') + '2<>"")*($' + col('next_contact') + '2<TODAY())*(($' + col('status_class') + '2="OPEN")+($' + col('status_class') + '2="PAUSED"))', colRange('next_contact'), red);
-    add('=($' + col('id') + '2<>"")*($' + col('next_contact') + '2="")*(($' + col('status_class') + '2="OPEN")+($' + col('status_class') + '2="PAUSED"))', colRange('next_contact'), yel);
-  }
   if (code === 'PF') {
     add('=$' + col('overdue') + '2="ПРОСРОЧЕНО"', row, red);
     add('=$' + col('status_class') + '2="DONE"', colRange('status'), grn);
@@ -423,19 +417,22 @@ function styleCell_(sh, r, c) {
   }
 }
 
-/** Блок «Воронка и конверсии» справа от журнала лидов. */
-function buildLeadBlock_() {
-  const sh = sheet_('LEAD');
-  const L = leadBlockLayout_();
-  const keepObj = safeGet_(sh, L.selObj), keepWeek = safeGet_(sh, L.selWeek);
-  const rng = sh.getRange(1, L.startCol, 40, 3);
-  rng.clear(); rng.clearDataValidations();
+/** 04_ВОРОНКА — расчётный лист (воронка, конверсии, каналы, причины отказов) из 03_ДЕЙСТВИЯ. */
+function buildFunnel_() {
+  const sh = sheet_('FUN');
+  const L = funnelLayout_();
+  const keep = [safeGet_(sh, L.selObj), safeGet_(sh, L.selWeek)];
+  resetSheet_(sh);
+  ensureSize_(sh, 300, FUN_CH_COL + 14);
   applyCells_(sh, L.cells);
-  restoreSel_(sh, L.selObj, keepObj);
-  restoreSel_(sh, L.selWeek, keepWeek);
-  sh.setColumnWidth(L.startCol - 1, 24);
-  sh.setColumnWidth(L.startCol, 220); sh.setColumnWidth(L.startCol + 1, 150); sh.setColumnWidth(L.startCol + 2, 150);
-  protectWarn_(sh.getRange(4, L.startCol, 37, 3), 'Расчёт воронки');
+  L.formats.forEach(f => sh.getRange(f.range).setNumberFormat(nf_(f.fmt)));
+  restoreSel_(sh, L.selObj, keep[0]);
+  restoreSel_(sh, L.selWeek, keep[1]);
+  sh.setColumnWidth(1, 290); sh.setColumnWidth(2, 130); sh.setColumnWidth(3, 110); sh.setColumnWidth(4, 24);
+  sh.setColumnWidth(FUN_CH_COL, 190);
+  for (let c = FUN_CH_COL + 1; c < FUN_CH_COL + 14; c++) sh.setColumnWidth(c, 100);
+  sh.setRowHeight(7, 40);
+  protectWarn_(sh.getRange(4, 1, sh.getMaxRows() - 3, sh.getMaxColumns()), 'Воронка считается автоматически');
 }
 
 /** Блок «План-факт недели» справа от журнала задач. */

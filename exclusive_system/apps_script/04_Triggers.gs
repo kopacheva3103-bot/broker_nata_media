@@ -2,10 +2,9 @@
  * 04_Triggers — автоматика при редактировании (устанавливаемый триггер onEdit).
  *
  * Что делает при вводе данных:
- *  - ставит ID действиям, лидам, задачам (ACT-0001, LEAD-0001, TASK-0001), дату, статус по умолчанию, автора;
+ *  - ставит ID действиям и задачам (ACT-0001, TASK-0001), дату, статус по умолчанию, автора;
  *  - ID объекта вводится вручную (из CRM): скрипт проверяет его и при исправлении обновляет во всех листах;
  *  - пишет изменения цены, статусов, стратегии, дедлайнов в 12_ИСТОРИЯ (старое значение не теряется);
- *  - у лида по статусу отмечает этапы воронки (чекбоксы) и дату сделки;
  *  - задача со статусом «Перенесено» копируется на следующую неделю, исходная остаётся в истории;
  *  - при создании объекта добавляет ему строку в 02_СТРАТЕГИЯ.
  */
@@ -118,26 +117,6 @@ function applyDefaults_(code, o, upd, isNew, user, editedKeys) {
     set('created_at', now);
     set('author', user);
   }
-  if (code === 'LEAD') {
-    if (isNew) {
-      if (!o.first_date) set('first_date', today);
-      if (!o.status) set('status', dictValues_('lead_status')[0] || '');
-      if (!o.last_contact) set('last_contact', o.first_date);
-      set('created_at', now);
-      set('author', user);
-    }
-    if (editedKeys.indexOf('status') >= 0 && o.status) {
-      const row = dictRows_('lead_status').find(r => r[0] === o.status);
-      if (row) {
-        String(row[2] || '').split(',').map(s => s.trim()).filter(Boolean).forEach(m => {
-          const k = LEAD_MARK_FIELDS[m];
-          if (k && o[k] !== true) set(k, true);
-        });
-        if (row[1] === CLS.WON && !o.deal_date) set('deal_date', today);
-      }
-      if (!isNew) set('last_contact', today);
-    }
-  }
   if (code === 'PF' && isNew) {
     if (!o.week) set('week', isoWeekKey_(today));
     if (!o.status) set('status', dictFirstByClass_('task_status', CLS.OPEN));
@@ -173,7 +152,7 @@ function sameValue_(a, b) {
 
 /** Исправили ID объекта в 01 → заменить старый ID в связанных листах и в именах папок Drive. */
 function renameObjectId_(oldId, newId) {
-  ['STR', 'ACT', 'LEAD', 'PF', 'ARCH'].forEach(code => {
+  ['STR', 'ACT', 'PF', 'ARCH'].forEach(code => {
     const sh = sheet_(code);
     const col = fieldIndex_(code, 'obj_id');
     sh.getRange(2, col, sh.getMaxRows() - 1, 1).createTextFinder(oldId).matchEntireCell(true).replaceAllWith(newId);

@@ -201,7 +201,7 @@ function ensureReportTemplate_() {
   const res = b.appendTable([
     ['Показатель', 'Значение'],
     ['Контакты с потенциальными покупателями', '{{CONTACTS}}'], ['Получили ответ', '{{RESPONSES}}'],
-    ['Проявили интерес', '{{INTERESTED}}'], ['Новые лиды', '{{LEADS}}'], ['Презентации', '{{PRESENTATIONS}}'],
+    ['Проявили интерес (лиды)', '{{INTERESTED}}'], ['Презентации', '{{PRESENTATIONS}}'],
     ['Показы', '{{SHOWINGS}}'], ['Переговоры', '{{NEGOTIATIONS}}'], ['Предложения', '{{OFFERS}}'],
     ['Брони', '{{BOOKINGS}}'], ['Сделки', '{{DEALS}}'],
   ]);

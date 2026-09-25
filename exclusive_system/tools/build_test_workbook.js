@@ -55,7 +55,7 @@ X.dictDefs_().forEach(d => {
   else d.values.forEach((row, i) => row.forEach((v, j) => put(N.DICT, col(c + j) + (i + 2), { v })));
 });
 // журналы: заголовки и формулы
-['OBJ', 'STR', 'ACT', 'LEAD', 'PF', 'HIST', 'ARCH'].forEach(code => {
+['OBJ', 'STR', 'ACT', 'PF', 'HIST', 'ARCH'].forEach(code => {
   const spec = X.sheetSpecs_()[code];
   spec.fields.forEach((f, i) => put(spec.name, col(i + 1) + 1, f.kind === 'f' ? { f: X.headerFormula_(spec, f) } : { v: f.title }));
 });
@@ -67,15 +67,15 @@ const P = X.addDays_(M, -7); const wkP = X.isoWeekKey_(P);
 const lbl = X.objLabel_(ids.OSTROV, 'Остров');
 const weekLabel = wkP + ' · ' + X.fmtDate_(P, 'dd.MM') + '–' + X.fmtDate_(X.addDays_(P, 6), 'dd.MM.yyyy');
 const apply = (sheet, cells, sel) => cells.forEach(c => put(sheet, c.a1, c.f ? { f: X.resolveF_(c.f) } : { v: sel && sel[c.a1] !== undefined ? sel[c.a1] : (c.v === undefined ? '' : c.v) }));
-const LB = X.leadBlockLayout_(); apply(N.LEAD, LB.cells, { [LB.selObj]: lbl, [LB.selWeek]: weekLabel });
+const FB = X.funnelLayout_(); apply(N.FUN, FB.cells, { B2: lbl, B3: weekLabel });
 const PB = X.pfBlockLayout_(); apply(N.PF, PB.cells, { [PB.selObj]: lbl, [PB.selWeek]: weekLabel });
 apply(N.STAT, X.statsLayout_(0).cells, { B2: 'Все' });
 apply(N.REP, X.reportLayout_().cells, { B3: lbl, B4: weekLabel, B5: 'Тестовый комментарий' });
 apply(N.CTRL, X.ctrlLayout_().cells);
 apply(N.DASH, X.dashLayout_().cells, { C2: '' });
 
-const out = { sheets: {}, names, ids, wkP, weekLabel, meta: { LB: { at: LB.at, conv: LB.conv }, PB: { at: PB.at, kpiRows: PB.kpiRows, cols: PB.cols }, rowOf: X.reportLayout_().rowOf } };
-const ser = v => v instanceof Date ? { d: [v.getFullYear(), v.getMonth() + 1, v.getDate(), v.getHours(), v.getMinutes()] } : { v };
+const out = { sheets: {}, names, ids, wkP, weekLabel, meta: { FB: { at: FB.at, conv: FB.conv }, PB: { at: PB.at, kpiRows: PB.kpiRows, cols: PB.cols }, rowOf: X.reportLayout_().rowOf } };
+const ser = v => Object.prototype.toString.call(v) === '[object Date]' ? { d: [v.getFullYear(), v.getMonth() + 1, v.getDate(), v.getHours(), v.getMinutes()] } : { v };
 Object.keys(book).forEach(s => { out.sheets[s] = {}; Object.entries(book[s].cells).forEach(([a, c]) => { out.sheets[s][a] = c.f ? { f: c.f } : ser(c.v); }); });
 fs.mkdirSync(path.join(__dirname, 'out'), { recursive: true });
 fs.writeFileSync(path.join(__dirname, 'out', 'test_book.json'), JSON.stringify(out));

@@ -15,7 +15,7 @@ function loadTestData() {
     ui.alert('Тестовые данные уже загружены (есть объект «' + TEST_NAMES.OSTROV + '»).');
     return;
   }
-  const ok = ui.alert('Тестовые данные', 'Будут добавлены 3 тестовых объекта с действиями, лидами, задачами и историей цены. Продолжить?', ui.ButtonSet.OK_CANCEL);
+  const ok = ui.alert('Тестовые данные', 'Будут добавлены 3 тестовых объекта с действиями, задачами и историей цены. Продолжить?', ui.ButtonSet.OK_CANCEL);
   if (ok !== ui.Button.OK) return;
   const ids = loadTestData_();
   ui.alert('Готово', 'Добавлены: ' + ids.OSTROV + ' Остров, ' + ids.ANOSINO + ' Аносино Парк, ' + ids.PAVLOVY + ' Павловы Озёра.\n\nТеперь запустите «Самопроверку».', ui.ButtonSet.OK);
@@ -110,32 +110,9 @@ function loadTestData_() {
       { showings: 2, negotiations: 1, offers: 1, feedback: 'Покупатели отмечают качество строительства' }),
     A(d(M, 0), ids.ANOSINO, 'Переговоры', 'Партнёры', 'Переговоры по предложению покупателя', { negotiations: 1 }),
     A(d(M, -21), ids.PAVLOVY, 'Авито', 'Авито', 'Размещено объявление на Авито', { views: 400, contacts: 3, responses: 1 }),
-  ]);
-
-  // ── лиды
-  const lc = {};
-  const L = (first, obj, source, channel, name, status, marks, extra) => {
-    const o = Object.assign({
-      id: nextId_('LEAD', lc), first_date: first, obj_id: obj, source: source, channel: channel, name: name, client_type: 'Покупатель',
-      status: status, last_contact: first, created_at: now, author: 'test',
-    }, extra || {});
-    ['f_qual', 'f_show', 'f_pres', 'f_offer', 'f_neg', 'f_book', 'f_deal'].forEach(k => { o[k] = marks.indexOf(k) >= 0; });
-    return o;
-  };
-  appendRows_('LEAD', [
-    L(d(Q, 2), ids.OSTROV, 'ЦИАН', 'ЦИАН', 'Покупатель А. (CRM #1021)', 'Переговоры', ['f_qual', 'f_pres', 'f_show', 'f_neg'],
-      { budget: 180000000, last_contact: d(P, 3), next_contact: d(M, 7), contacts_count: 4 }),
-    L(d(P, 0), ids.OSTROV, 'CRM-база', 'CRM-база', 'Семья Б.', 'Презентация', ['f_qual', 'f_pres'], { last_contact: d(P, 1), contacts_count: 2 }),
-    L(d(P, 1), ids.OSTROV, 'Брокер', 'Брокеры', 'Клиент брокера В.', 'Потерян', ['f_qual'],
-      { last_contact: d(P, 2), refusal: 'Цена', loss: 'Не согласовали цену', contacts_count: 2 }),
-    L(d(P, 2), ids.OSTROV, 'ЦИАН', 'ЦИАН', 'Г.', 'Контакт', [], { next_contact: d(M, 2), contacts_count: 1 }),
-    L(d(P, 0), ids.ANOSINO, 'Партнёр', 'Партнёры', 'Покупатель Д.', 'Предложение', ['f_qual', 'f_pres', 'f_show', 'f_neg', 'f_offer'], { next_contact: d(M, 3) }),
-    L(d(P, 1), ids.ANOSINO, 'Брокер', 'Брокеры', 'Клиент брокера Е.', 'Показ', ['f_qual', 'f_show'], { next_contact: d(M, 1) }),
-    L(d(P, -30), ids.ANOSINO, 'Рекомендация', 'Рекомендация', 'Ж.', 'Отложен', [], { next_contact: d(M, 14) }),
-    L(d(P, -20), ids.ANOSINO, 'Партнёр', 'Партнёры', 'З.', 'Бронь', ['f_qual', 'f_pres', 'f_show', 'f_neg', 'f_offer', 'f_book'], { next_contact: d(M, 5) }),
-    L(d(M, -21), ids.PAVLOVY, 'Авито', 'Авито', 'И.', 'Потерян', [], { refusal: 'Локация', loss: 'Выбрал другой объект' }),
-    L(d(M, -20), ids.PAVLOVY, 'Авито', 'Авито', 'К.', 'Потерян', [], { refusal: 'Цена', loss: 'Не согласовали цену' }),
-    L(d(M, -19), ids.PAVLOVY, 'Авито', 'Авито', 'Л.', 'Потерян', [], { refusal: 'Цена', loss: 'Пропал / нет связи' }),
+    A(d(M, -20), ids.PAVLOVY, 'Звонок', 'Авито', 'Обработка откликов с Авито', { contacts: 2, responses: 2, refusal: 'Локация', feedback: 'Далеко от Москвы для постоянного проживания' }),
+    A(d(M, -19), ids.PAVLOVY, 'WhatsApp', 'Авито', 'Ответ на запрос по объявлению', { contacts: 1, responses: 1, refusal: 'Цена' }),
+    A(d(M, -19), ids.PAVLOVY, 'Звонок', 'Авито', 'Повторный звонок откликнувшимся', { repeat_contacts: 1, refusal: 'Цена' }),
   ]);
 
   // ── план-факт
