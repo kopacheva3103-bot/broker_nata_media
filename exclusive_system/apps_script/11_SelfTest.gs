@@ -194,6 +194,18 @@ function selfTest_(withDrive) {
   truthy('11: задача без ответственного — Остров', hasAlert(ALERT.NO_OWNER, ost.id));
   truthy('11: нет ложной тревоги «нет активности» — Остров', !hasAlert(ALERT.IDLE_HIGH, ost.id));
 
+  // 7b. Гипотезы: факт считается из 03 за период проверки
+  const hyps = readTable_('HYP').rows;
+  const hBr = hyps.find(h => h.obj_id === ost.id && h.channel === 'Брокеры');
+  const hPb = hyps.find(h => h.obj_id === ost.id && h.channel === 'Private Banking');
+  eq('14: гипотеза «брокеры» — факт лидов', hBr ? hBr.fact : '', 1);
+  eq('14: гипотеза «брокеры» — % от цели', hBr ? hBr.fact_pct : '', 0.5);
+  eq('14: гипотеза «Private Banking» — факт контактов', hPb ? hPb.fact : '', 10);
+  truthy('11: гипотеза с истёкшим сроком — Павловы', hasAlert(ALERT.HYP_DUE, pav.id));
+  has('07: что протестировали — гипотеза недели', v.TESTS, 'брокеров премиум-сегмента');
+  has('07: что протестировали — будущая гипотеза не попала', v.TESTS, 'Private Banking даст', true);
+  has('07: внутреннее решение по гипотезе скрыто', v.TESTS, 'перераспределить', true);
+
   // 8. Дэшборд
   const dashIds = dashIds_();
   truthy('09: все тестовые объекты в таблице дэшборда', [ost.id, ano.id, pav.id].every(id => dashIds.indexOf(id) >= 0), dashIds.join(', '));

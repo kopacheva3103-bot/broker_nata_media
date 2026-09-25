@@ -222,6 +222,8 @@ function ensureReportTemplate_() {
   b.appendParagraph('{{MARKET_FEEDBACK}}');
   sec('Возражения покупателей', H.HEADING3);
   b.appendParagraph('{{OBJECTIONS}}');
+  sec('Что протестировали на рынке', H.HEADING3);
+  b.appendParagraph('{{TESTS}}');
   sec('5. Выводы');
   b.appendParagraph('{{CONCLUSIONS}}');
   sec('Что изменили в стратегии', H.HEADING3);

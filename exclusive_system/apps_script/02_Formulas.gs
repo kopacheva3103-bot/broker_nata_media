@@ -103,7 +103,7 @@ function resolveToken_(tok, ctx) {
 /** Формула заголовка столбца: заголовок + ARRAYFORMULA на весь столбец. */
 function headerFormula_(spec, field) {
   const guardKey = field.guard || spec.guard;
-  const expr = field.f === '__KPI_FACT__' ? kpiFactExpr_() : field.f;
+  const expr = field.f === '__KPI_FACT__' ? kpiFactExpr_() : field.f === '__HYP_FACT__' ? hypFactExpr_() : field.f;
   const g = colRef_(spec.code, guardKey, true);
   return '={"' + field.title + '";ARRAYFORMULA(IF(LEN(' + g + ')=0,"",' + resolveF_(expr, { own: spec.code }) + '))}';
 }
@@ -121,6 +121,22 @@ function kpiFactExpr_() {
   return 'LET(k_ow,[[ACT.obj_id]]&"|"&[[ACT.week]],k_owt,[[ACT.obj_id]]&"|"&[[ACT.week]]&"|"&[[ACT.type]],' +
     'c_ow,[[@obj_id]]&"|"&[[@week]],c_owt,[[@obj_id]]&"|"&[[@week]]&"|"&[[@type]],' +
     'm_,[[@kpi_metric]],t_,[[@type]],' + expr + ')';
+}
+
+/** Факт гипотезы: метрика из 03 по объекту (+каналу) между датой начала и сроком (или сегодня). */
+function hypFactExpr_() {
+  const conds = ',[[ACT.obj_id]],h_o,[[ACT.date]],">="&h_s,[[ACT.date]],"<="&h_to';
+  const withCh = v => 'IF(h_c="",' + v('') + ',' + v(',[[ACT.channel]],h_c') + ')';
+  let expr = '""';
+  for (let i = KPI_SOURCES.length - 1; i >= 0; i--) {
+    const k = KPI_SOURCES[i];
+    const val = k.count
+      ? withCh(ch => 'COUNTIFS([[ACT.status_class]],"DONE"' + conds + ch + ')')
+      : withCh(ch => 'SUMIFS([[ACT.' + k.act + ']]' + conds + ch + ')');
+    expr = 'IF(h_m=[[D.kpi_metrics:' + (i + 1) + ']],' + val + ',' + expr + ')';
+  }
+  return 'MAP([[@obj_id]],[[@channel]],[[@metric]],[[@date_start]],[[@date_end]],LAMBDA(h_o,h_c,h_m,h_s,h_e,' +
+    'IF(OR(h_o="",h_m="",h_s=""),"",LET(h_to,IF(h_e="",TODAY(),h_e),' + expr + '))))';
 }
 
 const CURRENT_WEEK_F_ = 'YEAR(TODAY()-WEEKDAY(TODAY(),2)+4)&"-W"&TEXT(ISOWEEKNUM(TODAY()),"00")';
@@ -524,6 +540,11 @@ function reportRows_() {
       f: '=IFERROR(ARRAYFORMULA(TEXTJOIN(CHAR(10),TRUE,UNIQUE(FILTER([[ACT.feedback]],' + actCond + ',' + rep + ',[[ACT.feedback]]<>"")))),"Существенной обратной связи от рынка за неделю не получено.")',
     },
     {
+      ph: 'TESTS', label: 'Что протестировали на рынке', list: true,
+      f: '=IFERROR(ARRAYFORMULA(TEXTJOIN(CHAR(10),TRUE,FILTER([[HYP.hypothesis]]&" — "&IF([[HYP.channel]]="","",[[HYP.channel]]&", ")&LOWER([[HYP.metric]])&": "&[[HYP.fact]]&" при цели "&[[HYP.target]]&" ("&IF([[HYP.status]]="","в проверке",LOWER([[HYP.status]]))&")"&IF([[HYP.conclusion]]="","",". "&[[HYP.conclusion]]),' +
+        '[[HYP.obj_id]]=' + P.id + ',[[HYP.to_report]]=TRUE,[[HYP.hypothesis]]<>"",[[HYP.date_start]]<=' + P.end + ',([[HYP.date_end]]="")+([[HYP.date_end]]>=' + P.start + '),[[HYP.status_class]]<>"CANCEL"))),"На этой неделе новые гипотезы не проверялись.")',
+    },
+    {
       ph: 'OBJECTIONS', label: 'Какие возражения получили', list: true,
       f: '=IFERROR(ARRAYFORMULA(LET(r_nb,FILTER([[ACT.refusal]],' + actCond + ',' + rep + ',[[ACT.refusal]]<>""),' +
         'r_q,QUERY(r_nb,"select Col1, count(Col1) group by Col1 order by count(Col1) desc label count(Col1) \'\'",0),' +
@@ -696,6 +717,10 @@ function alertsFormula_(m) {
   blocks.push(monBlock(SEVERITY.MID, ALERT.STRATEGY_OLD, 'IF(' + m.review + '="","Дата пересмотра стратегии не указана","Пересмотр был "&TEXT(' + m.review + ',"dd.mm.yyyy"))', fmtD(m.review), SHEET_NAMES.STR, 'IF(' + m.review + '="",TRUE,TODAY()-' + m.review + '>CFG_STRATEGY_REVIEW_DAYS)'));
   blocks.push(monBlock(SEVERITY.MID, ALERT.STRATEGY_FLAG, '"Отмечено вручную в 02_СТРАТЕГИЯ"', on(K, ''), SHEET_NAMES.STR, m.need_change + '=TRUE'));
 
+  // гипотезы, по которым пора подвести итог
+  const HYo = '[[HYP.obj_id]]';
+  blocks.push('IFERROR(FILTER({' + on(HYo, SEVERITY.MID) + ',' + on(HYo, ALERT.HYP_DUE) + ',' + HYo + ',[[HYP.obj_name]],[[HYP.id]]&" «"&LEFT([[HYP.hypothesis]],80)&"» — факт "&[[HYP.fact]]&" из "&[[HYP.target]],' + on(HYo, '') + ',' + fmtD('[[HYP.date_end]]') + ',' + on(HYo, SHEET_NAMES.HYP) + '},[[HYP.due]]="ДА"),E_)');
+
   // объекты без ID / с повторяющимся ID
   const OBn = '[[OBJ.name]]';
   blocks.push('IFERROR(FILTER({' + on(OBn, SEVERITY.HIGH) + ',' + on(OBn, ALERT.ID_PROBLEM) + ',[[OBJ.id]],' + OBn + ',IF([[OBJ.id_check]]="ДУБЛЬ ID","ID "&[[OBJ.id]]&" повторяется — проверьте по CRM","ID не указан — объект не участвует в расчётах"),[[OBJ.manager]],' + on(OBn, '') + ',' + on(OBn, SHEET_NAMES.OBJ) + '},' + OBn + '<>"",[[OBJ.id_check]]<>""),E_)');
@@ -748,6 +773,7 @@ function dashLayout_() {
     ['Сделки / проданы', '=COUNTIF([[OBJ.status_class]],"DEAL")+COUNTIF([[OBJ.status_class]],"SOLD")', '0'],
     ['Стоимость активного портфеля', '=SUMIFS([[OBJ.price]],[[OBJ.in_work]],"ДА")', 'money_short'],
     ['Нужно изменить стратегию', '=IFERROR(ROWS(UNIQUE(FILTER(' + quoteSheet_(SHEET_NAMES.CTRL) + '!$C$' + CTRL_FIRST + ':$C,' + stratAlerts + '))),0)', '0'],
+    ['Гипотез в проверке', '=COUNTIFS([[HYP.status_class]],"OPEN",[[HYP.hypothesis]],"?*")', '0'],
   ];
   tiles.forEach((t, i) => {
     const L = colLetter_(1 + i);

@@ -231,6 +231,32 @@ function sheetSpecs_() {
     ],
   };
 
+  // ─────────────────────────────── 14_ГИПОТЕЗЫ ───────────────────────────────
+  S.HYP = {
+    code: 'HYP', guard: 'obj_id', frozenCols: 3, idField: 'id', idPrefix: 'HYP-', idPad: 3,
+    about: 'Журнал маркетинговых гипотез: что проверяем → в каком канале → какую цифру ждём → что получилось → вывод. Факт считается сам из 03_ДЕЙСТВИЯ.',
+    fields: [
+      F('id', 'ID гипотезы', 'id'),
+      F('obj_id', 'ID объекта', 'dd', { list: 'OBJ.id' }),
+      F('obj_name', 'Объект', 'f', { w: 150, f: OBJ_NAME_F_('obj_id') }),
+      F('hypothesis', 'Гипотеза', 'text', { w: 260, client: true, d: 'Формула: «Если сделать …, то получим …». Пишется так, чтобы можно было показать клиенту.' }),
+      F('channel', 'Канал', 'dd', { dict: 'channels', client: true, d: 'Пусто = все каналы объекта.' }),
+      F('metric', 'Метрика', 'dd', { dict: 'kpi_metrics', client: true, d: 'Что меряем: контакты, лиды, показы…' }),
+      F('target', 'Цель', 'num', { fmt: '0', client: true }),
+      F('date_start', 'Начало проверки', 'date', { d: 'Если не указать — сегодня.' }),
+      F('date_end', 'Срок проверки', 'date', { d: 'Пусто = проверка идёт до сегодняшнего дня.' }),
+      F('fact', 'Факт', 'f', { guard: 'metric', fmt: '0', f: '__HYP_FACT__', d: 'Сумма метрики из 03_ДЕЙСТВИЯ по объекту (и каналу) за период проверки.' }),
+      F('fact_pct', '% от цели', 'f', { guard: 'target', fmt: 'pct', f: 'IFERROR([[@fact]]/[[@target]],"")' }),
+      F('status', 'Статус', 'dd', { dict: 'hyp_status', track: true, d: 'Итог ставит руководитель: подтвердилась / не подтвердилась.' }),
+      F('conclusion', 'Вывод', 'text', { w: 220, client: true, d: 'Что узнали о рынке. Попадает в отчёт клиенту.' }),
+      F('decision', 'Решение', 'text', { w: 220, internal: true, d: 'Что меняем в стратегии. Внутреннее.' }),
+      F('to_report', 'В отчёт клиенту', 'cb'),
+      F('due', 'Пора подвести итог', 'f', { f: 'IF(([[@status_class]]="OPEN")*([[@date_end]]<>"")*([[@date_end]]<TODAY()),"ДА","")' }),
+      F('status_class', 'Класс статуса', 'f', { helper: true, f: 'IF([[@status]]="","OPEN",IFERROR(VLOOKUP([[@status]],[[D.hyp_status:tbl]],2,FALSE),"OPEN"))' }),
+      F('created_at', 'Создано', 'sys', { fmt: 'datetime', helper: true }),
+    ],
+  };
+
   // ─────────────────────────────── 12_ИСТОРИЯ ───────────────────────────────
   S.HIST = {
     code: 'HIST', guard: 'ts', frozenCols: 1, readonly: true,

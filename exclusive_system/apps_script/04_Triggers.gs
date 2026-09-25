@@ -124,6 +124,12 @@ function applyDefaults_(code, o, upd, isNew, user, editedKeys) {
     set('created_at', now);
     set('author', user);
   }
+  if (code === 'HYP' && isNew) {
+    if (!o.date_start) set('date_start', today);
+    if (!o.status) set('status', dictFirstByClass_('hyp_status', CLS.OPEN));
+    set('to_report', true);
+    set('created_at', now);
+  }
   if (code === 'PF' && isNew) {
     if (!o.week) set('week', isoWeekKey_(today));
     if (!o.status) set('status', dictFirstByClass_('task_status', CLS.OPEN));
@@ -159,7 +165,7 @@ function sameValue_(a, b) {
 
 /** Исправили ID объекта в 01 → заменить старый ID в связанных листах и в именах папок Drive. */
 function renameObjectId_(oldId, newId) {
-  ['STR', 'ACT', 'PF', 'ARCH'].forEach(code => {
+  ['STR', 'ACT', 'PF', 'ARCH', 'HYP'].forEach(code => {
     const sh = sheet_(code);
     const col = fieldIndex_(code, 'obj_id');
     sh.getRange(2, col, sh.getMaxRows() - 1, 1).createTextFinder(oldId).matchEntireCell(true).replaceAllWith(newId);

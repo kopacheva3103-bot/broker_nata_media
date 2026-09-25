@@ -54,7 +54,7 @@ function runSetup_(log) {
   SHEET_ORDER.forEach(code => ensureSheet_(code));
   buildSettings_(); log.push('10_НАСТРОЙКИ');
   buildDict_(); log.push('08_СПРАВОЧНИКИ');
-  ['OBJ', 'STR', 'ACT', 'PF', 'HIST', 'ARCH'].forEach(code => { buildDataSheet_(code); log.push(SHEET_NAMES[code]); });
+  ['OBJ', 'STR', 'ACT', 'PF', 'HIST', 'ARCH', 'HYP'].forEach(code => { buildDataSheet_(code); log.push(SHEET_NAMES[code]); });
   buildPfBlock_();
   SpreadsheetApp.flush();
   buildFunnel_(); log.push(SHEET_NAMES.FUN);
@@ -369,6 +369,12 @@ function applyDataCF_(code, sh) {
     add('=($' + col('status_class') + '2="OPEN")*($' + col('date') + '2<>"")*($' + col('date') + '2<TODAY())', row, red);
     add('=$' + col('status_class') + '2="DONE"', colRange('status'), grn);
     add('=($' + col('id') + '2<>"")*($' + col('to_report') + '2=FALSE)', colRange('to_report'), [null, COLORS.GREY_FG]);
+  }
+  if (code === 'HYP') {
+    add('=$' + col('due') + '2="ДА"', row, yel);
+    add('=$' + col('status_class') + '2="DONE"', colRange('status'), grn);
+    add('=$' + col('status_class') + '2="FAIL"', colRange('status'), red);
+    add('=($' + col('fact_pct') + '2<>"")*($' + col('fact_pct') + '2>=1)', colRange('fact_pct'), grn);
   }
   if (code === 'PF') {
     add('=$' + col('overdue') + '2="ПРОСРОЧЕНО"', row, red);

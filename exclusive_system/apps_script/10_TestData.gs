@@ -133,6 +133,18 @@ function loadTestData_() {
     T(wkM, ids.OSTROV, { week_goal: 'Повторный показ и переговоры', task: 'Рассылка по клиентам Private Banking', kpi_metric: 'Контакты', kpi_plan: 40, deadline: d(M, 4) }),
   ]);
 
+  // ── гипотезы
+  const hc = {};
+  const H = (obj, extra) => Object.assign({ id: nextId_('HYP', hc), obj_id: obj, to_report: true, created_at: now }, extra);
+  appendRows_('HYP', [
+    H(ids.OSTROV, { hypothesis: 'Если подключить брокеров премиум-сегмента, получим не меньше 2 новых лидов за 2 недели', channel: 'Брокеры', metric: 'Лиды', target: 2,
+      date_start: Q, date_end: d(P, 6), status: 'Не подтвердилась', conclusion: 'Брокерский канал даёт показы, но мало новых покупателей', decision: 'ВНУТР: перераспределить время на Private Banking' }),
+    H(ids.OSTROV, { hypothesis: 'Рассылка через Private Banking даст 30 контактов за неделю', channel: 'Private Banking', metric: 'Контакты', target: 30,
+      date_start: M, date_end: d(M, 6), status: 'В проверке' }),
+    H(ids.PAVLOVY, { hypothesis: 'Объявление на Авито с новыми фото даст 3 лида за месяц', channel: 'Авито', metric: 'Лиды', target: 3,
+      date_start: d(M, -40), date_end: d(M, -10), status: 'В проверке' }),
+  ]);
+
   // ── история: цена и стратегия (как будто менялись через таблицу)
   const priceTitle = fieldTitle_('OBJ', 'price');
   appendRows_('HIST', [

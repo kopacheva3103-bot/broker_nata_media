@@ -8,7 +8,7 @@
  */
 
 const SYS = {
-  VERSION: '1.2.0',
+  VERSION: '1.3.0',
   TITLE: 'СИСТЕМА УПРАВЛЕНИЯ ЭКСКЛЮЗИВАМИ',
   MENU: 'УПРАВЛЕНИЕ ЭКСКЛЮЗИВАМИ',
   ROOT_FOLDER: 'СИСТЕМА ЭКСКЛЮЗИВОВ',
@@ -46,14 +46,15 @@ const SHEET_NAMES = {
   CTRL: '11_КОНТРОЛЬ',
   HIST: '12_ИСТОРИЯ',
   ARCH: '13_АРХИВ_ОТЧЕТОВ',
+  HYP: '14_ГИПОТЕЗЫ',
 };
 
-const SHEET_ORDER = ['OBJ', 'STR', 'ACT', 'FUN', 'STAT', 'PF', 'REP', 'DICT', 'DASH', 'CFG', 'CTRL', 'HIST', 'ARCH'];
+const SHEET_ORDER = ['OBJ', 'STR', 'ACT', 'FUN', 'STAT', 'PF', 'REP', 'DICT', 'DASH', 'CFG', 'CTRL', 'HIST', 'ARCH', 'HYP'];
 
 const TAB_COLORS = {
   OBJ: '#37474F', STR: '#37474F', ACT: '#2E7D32', FUN: '#1565C0', STAT: '#1565C0',
   PF: '#2E7D32', REP: '#6A1B9A', DICT: '#9E9E9E', DASH: '#1565C0', CFG: '#9E9E9E',
-  CTRL: '#C62828', HIST: '#9E9E9E', ARCH: '#6A1B9A',
+  CTRL: '#C62828', HIST: '#9E9E9E', ARCH: '#6A1B9A', HYP: '#2E7D32',
 };
 
 /** Спокойная палитра: без кислотных цветов. */
@@ -99,6 +100,7 @@ const ALERT = {
   MANY_LOST: 'Много отказов',
   STRATEGY_OLD: 'Стратегия не пересматривалась',
   STRATEGY_FLAG: 'Требуется изменение стратегии',
+  HYP_DUE: 'Гипотеза: пора подвести итог',
   NO_OWNER: 'Задача без ответственного',
   EXCL_END: 'Эксклюзив заканчивается',
   ID_PROBLEM: 'Проблема с ID объекта',
@@ -222,6 +224,11 @@ function dictDefs_() {
     },
     { key: 'people', cols: ['Ответственный', 'Роль', 'Email'], values: [['Руководитель', 'Руководитель', ''], ['Ассистент', 'Ассистент', '']] },
     { key: 'kpi_metrics', cols: ['KPI-метрика'], values: KPI_SOURCES.map(k => [k.title]) },
+    {
+      key: 'hyp_status', cols: ['Статус гипотезы', 'Класс'], values: [
+        ['В проверке', 'OPEN'], ['Подтвердилась', 'DONE'], ['Не подтвердилась', 'FAIL'], ['Отменена', 'CANCEL'],
+      ],
+    },
     { key: 'strategy_status', cols: ['Статус стратегии'], values: [['Черновик'], ['На утверждении'], ['Утверждена'], ['Требует пересмотра']] },
     { key: 'strategy_client_fields', cols: ['Поля стратегии, видимые клиенту'], values: STRATEGY_CLIENT_FIELD_KEYS.map(k => [fieldTitle_('STR', k)]) },
     // Ниже — вычисляемые списки (формулы), руками не заполняются.
