@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #263238; margin: 0; padding: 4px 8px; }
+    label { display: block; font-weight: bold; margin: 8px 0 3px; }
+    input, select, textarea { width: 100%; box-sizing: border-box; padding: 5px; border: 1px solid #B0BEC5; border-radius: 3px; font-size: 13px; }
+    textarea { height: 46px; resize: vertical; }
+    .row { display: flex; gap: 10px; }
+    .row > div { flex: 1; min-width: 0; }
+    .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+    .grid label { font-weight: normal; font-size: 11px; margin: 2px 0; }
+    .hint { color: #80868B; font-size: 11px; }
+    h4 { margin: 14px 0 4px; border-bottom: 1px solid #ECEFF1; padding-bottom: 3px; }
+    .actions { margin-top: 14px; display: flex; gap: 8px; align-items: center; }
+    button { padding: 8px 16px; border: 0; border-radius: 3px; background: #263238; color: #fff; cursor: pointer; font-size: 13px; }
+    button.secondary { background: #ECEFF1; color: #263238; }
+    #msg { margin-left: 8px; }
+    .inline { display: flex; align-items: center; gap: 6px; font-weight: normal; }
+    .inline input { width: auto; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <div><label>Объект *</label><select id="obj_id"></select></div>
+    <div style="max-width:150px"><label>Дата</label><input type="date" id="date"></div>
+  </div>
+  <div class="row">
+    <div><label>Тип действия</label><select id="type"></select></div>
+    <div><label>Канал</label><select id="channel"></select></div>
+  </div>
+  <div class="row">
+    <div><label>Ответственный</label><select id="owner"></select></div>
+    <div><label>Статус</label><select id="status"></select></div>
+  </div>
+  <label>Цель действия</label><input id="goal">
+  <label>Факт — что сделано <span class="hint">(пишите так, чтобы можно было показать клиенту)</span></label><textarea id="fact"></textarea>
+
+  <h4>Результат в цифрах</h4>
+  <div class="grid" id="counters"></div>
+  <div class="row">
+    <div><label>Просмотры / охват</label><input id="views" inputmode="numeric"></div>
+    <div><label>Расходы, ₽ <span class="hint">(внутр.)</span></label><input id="cost" inputmode="numeric"></div>
+    <div><label>Причина отказа</label><select id="refusal"></select></div>
+  </div>
+
+  <h4>Вывод и следующий шаг</h4>
+  <label>Обратная связь от рынка</label><textarea id="feedback"></textarea>
+  <label>Вывод</label><input id="conclusion">
+  <div class="row">
+    <div><label>Следующий шаг</label><input id="next_step"></div>
+    <div style="max-width:150px"><label>Дата шага</label><input type="date" id="next_step_date"></div>
+  </div>
+  <label>Внутренний комментарий <span class="hint">(в отчёт не попадает)</span></label><input id="comment">
+  <label class="inline"><input type="checkbox" id="to_report" checked> Показывать в отчёте клиенту</label>
+
+  <div class="actions">
+    <button id="save" onclick="save(false)">Сохранить</button>
+    <button class="secondary" onclick="save(true)">Сохранить и добавить ещё</button>
+    <span id="msg" class="hint"></span>
+  </div>
+
+<script>
+  var DATA = null;
+  function fill(id, values, selected, empty) {
+    var el = document.getElementById(id);
+    el.innerHTML = '';
+    if (empty) { var o0 = document.createElement('option'); o0.value = ''; o0.text = '—'; el.appendChild(o0); }
+    values.forEach(function (v) {
+      var o = document.createElement('option');
+      if (typeof v === 'object') { o.value = v.id; o.text = v.label; } else { o.value = v; o.text = v; }
+      if (o.value === selected) o.selected = true;
+      el.appendChild(o);
+    });
+  }
+  function init(d) {
+    DATA = d;
+    fill('obj_id', d.objects, d.preselect, true);
+    fill('type', d.types, '', true);
+    fill('channel', d.channels, '', true);
+    fill('owner', d.people, d.defaultOwner, true);
+    fill('status', d.statuses, d.defaultStatus, false);
+    fill('refusal', d.refusals, '', true);
+    document.getElementById('date').value = d.today;
+    var grid = document.getElementById('counters');
+    grid.innerHTML = '';
+    d.counters.forEach(function (c) {
+      var w = document.createElement('div');
+      w.innerHTML = '<label>' + c.title + '</label><input id="c_' + c.key + '" inputmode="numeric">';
+      grid.appendChild(w);
+    });
+  }
+  function val(id) { return document.getElementById(id).value; }
+  function save(more) {
+    var d = {};
+    ['obj_id', 'date', 'type', 'channel', 'owner', 'status', 'goal', 'fact', 'views', 'cost', 'refusal', 'feedback',
+     'conclusion', 'next_step', 'next_step_date', 'comment'].forEach(function (k) { d[k] = val(k); });
+    d.to_report = document.getElementById('to_report').checked;
+    DATA.counters.forEach(function (c) { d[c.key] = val('c_' + c.key); });
+    if (!d.obj_id) { document.getElementById('msg').textContent = 'Выберите объект'; return; }
+    document.getElementById('save').disabled = true;
+    document.getElementById('msg').textContent = 'Сохраняю…';
+    google.script.run
+      .withSuccessHandler(function (res) {
+        document.getElementById('save').disabled = false;
+        if (more) {
+          document.getElementById('msg').textContent = 'Сохранено: ' + res.id + '. Можно вводить следующее.';
+          ['goal', 'fact', 'views', 'cost', 'feedback', 'conclusion', 'next_step', 'next_step_date', 'comment'].forEach(function (k) { document.getElementById(k).value = ''; });
+          DATA.counters.forEach(function (c) { document.getElementById('c_' + c.key).value = ''; });
+        } else {
+          google.script.host.close();
+        }
+      })
+      .withFailureHandler(function (err) {
+        document.getElementById('save').disabled = false;
+        document.getElementById('msg').textContent = 'Ошибка: ' + err.message;
+      })
+      .submitActionForm(d);
+  }
+  google.script.run.withSuccessHandler(init).withFailureHandler(function (e) {
+    document.getElementById('msg').textContent = 'Ошибка загрузки: ' + e.message;
+  }).getActionFormData();
+</script>
+</body>
+</html>
