@@ -115,6 +115,11 @@ def final(ctx: Ctx, files: list[Path], durations: list[float], transitions: list
         graph.append(f"[{vcur}][wm]overlay=x={pos[0]}:y={pos[1]}:shortest=1[vw]")
         vcur = "vw"
         n += 1
+    # overall playback speed (subtitles are already burned in, so they stay in sync)
+    speed = float(project.get("speed", 1.0))
+    if abs(speed - 1.0) > 1e-3:
+        graph.append(f"[{vcur}]setpts=PTS/{speed},fps={ctx.fps}[vsp]")
+        vcur = "vsp"
     graph.append(f"[{vcur}]format=yuv420p[vout]")
 
     # music: loop, trim, fades, ducking under the voice
@@ -129,6 +134,10 @@ def final(ctx: Ctx, files: list[Path], durations: list[float], transitions: list
         graph.append(f"[{acur}][vover]amix=inputs=2:duration=first:normalize=0[avo]")
         acur = "avo"
         n += 1
+    if abs(speed - 1.0) > 1e-3:  # tempo change keeps the voice pitch
+        graph.append(f"[{acur}]atempo={speed}[asp]")
+        acur = "asp"
+        length = length / speed
     if audio.get("music"):
         args += ["-stream_loop", "-1", "-i", audio["music"]]
         fi, fo = float(audio.get("fade_in", 1.0)), float(audio.get("fade_out", 2.0))
