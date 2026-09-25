@@ -58,6 +58,45 @@ def transcribe_cached(src: str, workdir: Path, model: str, language: str | None)
     return sanitize(words)
 
 
+def refine(src: str, words: list[Word], windows: list, workdir: Path, model: str,
+           language: str | None) -> list[Word]:
+    """Re-listen to short windows without voice detection and replace their words.
+
+    Useful where the first pass skipped quiet words or merged a stumble.
+    """
+    if not windows:
+        return words
+    from faster_whisper import WhisperModel
+    from .ffmpeg import run
+    key = hashlib.sha1(json.dumps([src, windows, model, language]).encode()).hexdigest()[:10]
+    cache = workdir / f"refine_{Path(src).stem}_{key}.json"
+    if cache.exists():
+        fresh = [tuple(w) for w in json.loads(cache.read_text(encoding="utf-8"))]
+    else:
+        wm = WhisperModel(model, device="auto", compute_type="auto")
+        fresh = []
+        for a, b in windows:
+            wav = workdir / f"refine_{key}.wav"
+            run(["-ss", str(a), "-t", str(float(b) - float(a)), "-i", src, "-vn", "-ac", "1", "-ar", "16000", str(wav)])
+            segs, _ = wm.transcribe(str(wav), language=language or None, word_timestamps=True,
+                                    vad_filter=False, condition_on_previous_text=False)
+            for sg in segs:
+                for w in sg.words or []:
+                    t = w.word.strip()
+                    if not t:
+                        continue
+                    if fresh and (not w.word.startswith(" ") or t.startswith("-")) and fresh[-1][1] >= a + w.start - 0.05:
+                        fresh[-1] = (fresh[-1][0], w.end + a, fresh[-1][2] + t)
+                    else:
+                        fresh.append((w.start + a, w.end + a, t))
+            wav.unlink(missing_ok=True)
+        cache.write_text(json.dumps(fresh, ensure_ascii=False), encoding="utf-8")
+    def overlaps(w: Word) -> bool:
+        mid = (w[0] + w[1]) / 2
+        return any(float(a) <= mid < float(b) for a, b in windows)
+    return sorted([w for w in words if not overlaps(w)] + sanitize(fresh), key=lambda w: w[0])
+
+
 def find_retakes(words: list[Word], max_back_words: int = 25, max_back_sec: float = 15.0) -> list[tuple[int, int]]:
     """Return (i, j) word index ranges [i, j) that are abandoned attempts."""
     n = [norm(w[2]) for w in words]
@@ -126,6 +165,17 @@ def plan_cuts(words: list[Word], duration: float, cfg: dict, fps: int) -> tuple[
             iv[-1][1] = max(iv[-1][1], e)
         else:
             iv.append([s, e])
+    # forced keeps (e.g. a word end that recognition thought was silence)
+    for a, b in cfg.get("keep") or []:
+        iv.append([float(a), float(b)])
+    iv.sort()
+    merged: list[list[float]] = []
+    for s0, e0 in iv:
+        if merged and s0 - merged[-1][1] <= 0:
+            merged[-1][1] = max(merged[-1][1], e0)
+        else:
+            merged.append([s0, e0])
+    iv = merged
     # manual removals punch holes into the keep intervals
     for a, b in manual:
         nxt = []
@@ -149,13 +199,26 @@ def plan_cuts(words: list[Word], duration: float, cfg: dict, fps: int) -> tuple[
 
 
 def remap(words: list[Word], keep: list[tuple[float, float]]) -> list[Word]:
-    """Move word timings from source time to the cut timeline."""
-    out, acc = [], 0.0
+    """Move word timings from source time to the cut timeline.
+
+    A word belongs to the keep interval it overlaps most (Whisper word edges are
+    approximate, so a word crossing a cut boundary is kept, clipped to the cut).
+    """
+    starts, acc = [], 0.0
     for s, e in keep:
-        for ws, we, t in words:
-            if ws >= s - 0.02 and we <= e + 0.05:
-                out.append((max(ws, s) - s + acc, min(we, e) - s + acc, t))
+        starts.append(acc)
         acc += e - s
+    out = []
+    for ws, we, t in words:
+        best, over = None, 0.0
+        for k, (s, e) in enumerate(keep):
+            o = min(we, e) - max(ws, s)
+            if o > over:
+                best, over = k, o
+        if best is None or over < min(0.08, (we - ws) * 0.3):
+            continue
+        s, e = keep[best]
+        out.append((max(ws, s) - s + starts[best], min(we, e) - s + starts[best], t))
     return out
 
 

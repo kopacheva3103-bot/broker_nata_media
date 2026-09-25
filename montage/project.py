@@ -193,6 +193,8 @@ def _clean_talk(p: dict, ctx: segments.Ctx, report: Path) -> None:
         print(f"  [{i}] распознаю речь и ищу паузы/дубли: {Path(seg['src']).name}")
         words = cleanup.transcribe_cached(seg["src"], ctx.workdir, subs.get("model", "small"),
                                           subs.get("language", "ru"))
+        words = cleanup.refine(seg["src"], words, cfg.get("relisten") or [], ctx.workdir,
+                               subs.get("model", "small"), subs.get("language", "ru"))
         a = float(seg.get("start", 0))
         b = float(seg["end"]) if seg.get("end") is not None else seg["_src_duration"]
         words = [w for w in words if w[0] >= a - 0.05 and w[1] <= b + 0.05]
