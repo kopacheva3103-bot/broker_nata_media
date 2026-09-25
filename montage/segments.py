@@ -176,8 +176,11 @@ def _video(ctx: Ctx, idx: int, seg: dict, out: Path) -> None:
         n_in = len([a for a in args if a == "-i"])
         args += ["-i", str(clip)]
         at, d, fd = br["_at"], br["_dur"], float(br.get("fade", 0.2))
+        fo = float(br.get("fade_out", fd))
+        fade_out = f",fade=t=out:st={max(d - fo, 0):.3f}:d={fo}:alpha=1" if fo > 0 else ""
+        fade_in = f"fade=t=in:st=0:d={fd}:alpha=1" if fd > 0 else "null"
         vchain += (f"[base{k}];[{n_in}:v]format=yuva420p,"
-                   f"fade=t=in:st=0:d={fd}:alpha=1,fade=t=out:st={max(d - fd, 0):.3f}:d={fd}:alpha=1,"
+                   f"{fade_in}{fade_out},"
                    f"setpts=PTS-STARTPTS+{at:.3f}/TB[br{k}];"
                    f"[base{k}][br{k}]overlay=eof_action=pass:enable='between(t,{at:.3f},{at + d:.3f})'")
     vchain += _overlay_ass(ctx, idx, seg, dur) + ",format=yuv420p[v]"

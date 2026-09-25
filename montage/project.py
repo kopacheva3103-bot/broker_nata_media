@@ -259,6 +259,19 @@ def _resolve_broll(p: dict) -> None:
                 t = words[hit][0] + float(br.get("offset", 0))
             else:
                 t = _out_time(seg, float(at))
+            br["_t"] = t
+            out.append(br)
+        # duration "auto": play until the next cutaway starts (slight overlap so
+        # the next one fades in over this one, never over the base picture)
+        out.sort(key=lambda b: b["_t"])
+        for k, br in enumerate(out):
+            if br.get("duration", 3.0) == "auto":
+                nxt = out[k + 1]["_t"] if k + 1 < len(out) else dur
+                br["duration"] = max(nxt - br["_t"], 0.1) + (float(br.get("fade", 0.2)) if k + 1 < len(out) else 0)
+                br.setdefault("fade_out", 0)
+        items, out = out, []
+        for br in items:
+            t = br["_t"]
             src = _abs(base, br["src"])
             _need(src, f"Сегмент #{i}, перебивка")
             d = min(float(br.get("duration", 3.0)), max(dur - t, 0.1))
