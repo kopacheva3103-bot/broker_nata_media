@@ -6,7 +6,7 @@
  * защита формул, onEdit-логика и документация (tools/gen_docs.js).
  *
  * Типы полей (kind):
- *   id    — уникальный ID, ставит скрипт (OBJ-001, ACT-0001, LEAD-0001, TASK-0001)
+ *   id    — уникальный ID, ставит скрипт (ACT-0001, LEAD-0001, TASK-0001). ID объекта — из CRM, вручную
  *   text  — ручной ввод текста
  *   dd    — ручной выбор из выпадающего списка (dict = справочник, list = другой лист)
  *   date  — ручной ввод даты (календарь)
@@ -38,10 +38,10 @@ function sheetSpecs_() {
 
   // ─────────────────────────────── 01_ОБЪЕКТЫ ───────────────────────────────
   S.OBJ = {
-    code: 'OBJ', guard: 'name', frozenCols: 2, idField: 'id', idPrefix: 'OBJ-', idPad: 3,
+    code: 'OBJ', guard: 'name', frozenCols: 2,
     about: 'Единый реестр эксклюзивов. Одна строка = один объект.',
     fields: [
-      F('id', 'ID объекта', 'id', { d: 'Ставится автоматически после ввода названия. Главный ключ всех связей.' }),
+      F('id', 'ID объекта', 'text', { w: 100, d: 'ID объекта из CRM — вводится вручную, должен быть уникальным. По нему связаны все листы и его удобно искать в CRM. Если исправить ID здесь, скрипт обновит его во всех связанных строках.' }),
       F('name', 'Название объекта', 'text', { w: 170, client: true, d: 'Как объект называется в отчётах клиенту.' }),
       F('address', 'Адрес', 'text', { w: 200, client: true }),
       F('complex', 'ЖК / поселок', 'text', { w: 130 }),
@@ -92,6 +92,7 @@ function sheetSpecs_() {
         d: 'RISK — нет действий дольше порога NO_ACTIVITY_DAYS; ВНИМАНИЕ — дольше WARN_ACTIVITY_DAYS; OK; «—» — объект не в работе.',
         f: 'IF([[@in_work]]<>"ДА","—",IF([[@days_idle]]="","",IF([[@days_idle]]>[[CFG.NO_ACTIVITY_DAYS]],"RISK",IF([[@days_idle]]>[[CFG.WARN_ACTIVITY_DAYS]],"ВНИМАНИЕ","OK"))))',
       }),
+      F('id_check', 'Проверка ID', 'f', { d: '«НЕТ ID» — объект не участвует в расчётах; «ДУБЛЬ ID» — такой ID уже есть.', f: 'IF([[@id]]="","НЕТ ID",IF(COUNTIF([[@id]],[[@id]])>1,"ДУБЛЬ ID",""))' }),
       F('status_class', 'Класс статуса', 'f', { helper: true, f: 'IFERROR(VLOOKUP([[@status]],[[D.obj_status:tbl]],2,FALSE),"")' }),
       F('in_work', 'В работе', 'f', { helper: true, f: 'IFERROR(VLOOKUP([[@status]],[[D.obj_status:tbl]],3,FALSE),"ДА")' }),
       F('last_action_date', 'Дата последнего действия', 'f', {

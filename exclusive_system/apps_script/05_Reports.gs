@@ -157,7 +157,7 @@ function replaceWithList_(container, key, lines) {
   }
 }
 
-/** Папка объекта внутри 01_STRATEGIES или 02_WEEKLY_REPORTS: «Название (OBJ-001)». */
+/** Папка объекта внутри 01_STRATEGIES или 02_WEEKLY_REPORTS: «Название (ID из CRM)». */
 function ensureObjectFolder_(id, kind) {
   const cfgKey = kind === 'STRATEGIES' ? 'FOLDER_STRATEGIES_ID' : 'FOLDER_REPORTS_ID';
   let parent = folderById_(cfgGet_(cfgKey));

@@ -2,7 +2,8 @@
  * 04_Triggers — автоматика при редактировании (устанавливаемый триггер onEdit).
  *
  * Что делает при вводе данных:
- *  - ставит ID (OBJ-001, ACT-0001, LEAD-0001, TASK-0001), дату, статус по умолчанию, автора;
+ *  - ставит ID действиям, лидам, задачам (ACT-0001, LEAD-0001, TASK-0001), дату, статус по умолчанию, автора;
+ *  - ID объекта вводится вручную (из CRM): скрипт проверяет его и при исправлении обновляет во всех листах;
  *  - пишет изменения цены, статусов, стратегии, дедлайнов в 12_ИСТОРИЯ (старое значение не теряется);
  *  - у лида по статусу отмечает этапы воронки (чекбоксы) и дату сделки;
  *  - задача со статусом «Перенесено» копируется на следующую неделю, исходная остаётся в истории;
@@ -39,6 +40,7 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
   const hist = [];
   const idCache = {};
   const newObjects = [];
+  const renamed = [];
   for (let i = 0; i < n; i++) {
     const row = r0 + i;
     const o = {};
@@ -47,6 +49,17 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
     if (!hasInput) continue;
     const upd = {};
     let isNew = false;
+    if (code === 'OBJ') {
+      if (typeof o.id === 'number') { o.id = String(o.id); upd.id = o.id; }
+      else if (typeof o.id === 'string' && o.id !== o.id.trim()) { o.id = o.id.trim(); upd.id = o.id; }
+      isNew = !!o.id && !o.created_at;
+      if (single && editedKeys[0] === 'id' && e.oldValue && o.id && String(e.oldValue).trim() !== o.id) renamed.push([String(e.oldValue).trim(), o.id]);
+      if (!o.id && o.name) toast_('Укажите ID объекта из CRM для «' + o.name + '» — без ID объект не попадает в расчёты.', 'Нет ID', 8);
+      if (o.id && editedKeys.indexOf('id') >= 0) {
+        const all = sh.getRange(2, 1, sh.getMaxRows() - 1, 1).getDisplayValues().filter(v => v[0].trim() === o.id).length;
+        if (all > 1) toast_('ID ' + o.id + ' уже есть в 01_ОБЪЕКТЫ. ID должен быть уникальным.', 'Дубль ID', 10);
+      }
+    }
     if (spec.idField && !o[spec.idField]) {
       upd[spec.idField] = nextId_(code, idCache);
       o[spec.idField] = upd[spec.idField];
@@ -75,6 +88,11 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
       if (newId) toast_('Задача ' + o.task_id + ' перенесена на следующую неделю как ' + newId + '. Исходная строка сохранена.');
     }
   }
+  renamed.forEach(p => {
+    renameObjectId_(p[0], p[1]);
+    hist.push({ sheet: spec.name, record_id: p[1], obj_id: p[1], field: fieldTitle_('OBJ', 'id'), old: p[0], new: p[1], kind: HIST_KIND.CHANGE, note: 'ID обновлён во всех листах' });
+    toast_('ID ' + p[0] + ' → ' + p[1] + ' обновлён во всех связанных листах.');
+  });
   if (newObjects.length) ensureStrategyRows_(newObjects);
   logHistory_(hist, user);
 }
@@ -131,6 +149,7 @@ function applyDefaults_(code, o, upd, isNew, user, editedKeys) {
 
 function recordId_(code, o) {
   const spec = sheetSpecs_()[code];
+  if (code === 'OBJ') return o.id;
   if (spec.idField) return o[spec.idField];
   return o.obj_id || '';
 }
@@ -150,6 +169,27 @@ function normalizeOld_(f, v) {
 function sameValue_(a, b) {
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
   return String(a) === String(b);
+}
+
+/** Исправили ID объекта в 01 → заменить старый ID в связанных листах и в именах папок Drive. */
+function renameObjectId_(oldId, newId) {
+  ['STR', 'ACT', 'LEAD', 'PF', 'ARCH'].forEach(code => {
+    const sh = sheet_(code);
+    const col = fieldIndex_(code, 'obj_id');
+    sh.getRange(2, col, sh.getMaxRows() - 1, 1).createTextFinder(oldId).matchEntireCell(true).replaceAllWith(newId);
+  });
+  ['FOLDER_STRATEGIES_ID', 'FOLDER_REPORTS_ID'].forEach(k => {
+    try {
+      const parent = folderById_(cfgGet_(k));
+      if (!parent) return;
+      const it = parent.getFolders();
+      const suffix = '(' + oldId + ')';
+      while (it.hasNext()) {
+        const f = it.next();
+        if (f.getName().slice(-suffix.length) === suffix) f.setName(f.getName().slice(0, -suffix.length) + '(' + newId + ')');
+      }
+    } catch (err) { /* папки переименуются вручную */ }
+  });
 }
 
 /** Строка в 02_СТРАТЕГИЯ для каждого нового объекта (если её ещё нет). */

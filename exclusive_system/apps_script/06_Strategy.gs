@@ -9,7 +9,7 @@ function openStrategy() {
   const ui = SpreadsheetApp.getUi();
   let id = selectedObjectId_();
   if (!id) {
-    const r = ui.prompt('Открыть стратегию', 'Введите ID объекта (например OBJ-001) или встаньте на строку объекта:', ui.ButtonSet.OK_CANCEL);
+    const r = ui.prompt('Открыть стратегию', 'Введите ID объекта (ID из CRM) или встаньте на строку объекта:', ui.ButtonSet.OK_CANCEL);
     if (r.getSelectedButton() !== ui.Button.OK) return;
     id = r.getResponseText().trim();
   }

@@ -98,6 +98,7 @@ const ALERT = {
   LEAD_OVERDUE: 'Просрочен контакт с лидом',
   NO_OWNER: 'Задача без ответственного',
   EXCL_END: 'Эксклюзив заканчивается',
+  ID_PROBLEM: 'Проблема с ID объекта',
 };
 /** Предупреждения, которые означают «пора менять стратегию». */
 const ALERTS_STRATEGY = [ALERT.CONV_DROP, ALERT.MANY_LOST, ALERT.STRATEGY_OLD, ALERT.STRATEGY_FLAG];

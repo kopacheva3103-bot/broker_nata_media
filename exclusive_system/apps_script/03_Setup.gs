@@ -347,6 +347,7 @@ function applyDataCF_(code, sh) {
   const red = [COLORS.RED_BG, COLORS.RED_FG], yel = [COLORS.YELLOW_BG, COLORS.YELLOW_FG], grn = [COLORS.GREEN_BG, COLORS.GREEN_FG];
   const add = (f, rng, c) => R.push(cfRule_(f, rng, c[0], c[1]));
   if (code === 'OBJ') {
+    add('=$' + col('id_check') + '2<>""', colRange('id'), red);
     add('=$' + col('risk_flag') + '2="RISK"', row, red);
     add('=$' + col('risk_flag') + '2="ВНИМАНИЕ"', row, yel);
     add('=($' + col('status_class') + '2="SOLD")+($' + col('status_class') + '2="DEAL")', colRange('status'), grn);

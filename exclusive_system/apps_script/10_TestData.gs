@@ -31,8 +31,8 @@ function loadTestData_() {
   const BOSS = 'Руководитель', ASSIST = 'Ассистент';
 
   // ── объекты
-  const oc = {};
-  const ids = { OSTROV: nextId_('OBJ', oc), ANOSINO: nextId_('OBJ', oc), PAVLOVY: nextId_('OBJ', oc) };
+  // ID объектов — как в CRM (вводятся вручную)
+  const ids = { OSTROV: '4501', ANOSINO: '4502', PAVLOVY: '4503' };
   appendRows_('OBJ', [
     {
       id: ids.OSTROV, name: TEST_NAMES.OSTROV, address: 'Московская обл., Одинцовский г.о., КП «Остров», уч. 12', complex: 'Остров',

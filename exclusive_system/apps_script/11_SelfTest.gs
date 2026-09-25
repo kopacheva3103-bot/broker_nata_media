@@ -44,6 +44,8 @@ function selfTest_(withDrive) {
   const days = (a, b) => Math.round((a - b) / 86400000);
 
   // 1. Реестр объектов: формулы строки
+  eq('01: ID из CRM сохранён как введён', ost.id, '4501');
+  eq('01: проверка ID — без замечаний', ost.id_check, '');
   eq('01: цена за м² (Остров)', ost.price_m2, Math.round(185000000 / 450));
   eq('01: дней в продаже (Остров)', ost.days_on_market, days(today_(), addDays_(M, -60)));
   eq('01: дней без активности (Павловы)', pav.days_idle, days(today_(), addDays_(M, -21)));
@@ -190,7 +192,7 @@ function selfTest_(withDrive) {
 
   // 9. Масштабирование: новый объект подхватывается без правки формул
   const objSh = sheet_('OBJ');
-  const newId = nextId_('OBJ');
+  const newId = 'TEST-9999';
   const row = appendRow_('OBJ', { id: newId, name: 'Тест масштабирования', price: 1000000, area: 50, status: 'Новый', date_sign: addDays_(today_(), -1) });
   SpreadsheetApp.flush();
   const nObj = readTable_('OBJ').rows.find(o => o.id === newId);

@@ -59,7 +59,7 @@ function refreshStats() {
 function fillMissing_() {
   let fixed = 0;
   const user = userEmail_();
-  ['OBJ', 'ACT', 'LEAD', 'PF'].forEach(code => {
+  ['ACT', 'LEAD', 'PF'].forEach(code => {
     const t = readTable_(code);
     const cache = {};
     t.rows.forEach(o => {

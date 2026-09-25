@@ -215,7 +215,7 @@ function statsLayout_(gid) {
   cells.push({ a1: 'A2', v: 'Фильтр по объекту:', style: 'label' });
   cells.push({ a1: 'B2', v: 'Все', style: 'select', validation: { list: 'D.obj_filter' } });
   cells.push({ a1: 'A3', v: 'критерий (служебное)', style: 'muted' });
-  cells.push({ a1: 'B3', f: '=IF(OR(B2="",B2="Все"),"*",REGEXEXTRACT(B2,"^[^ ]+"))', style: 'muted' });
+  cells.push({ a1: 'B3', f: '=IF(OR(B2="",B2="Все"),"*",REGEXEXTRACT(B2,"^(.*?) · "))', style: 'muted' });
   const nav = [['channel', 'C4'], ['object', 'D4'], ['month', 'E4'], ['week', 'F4']];
   cells.push({ a1: 'A4', v: 'Перейти:', style: 'label' });
   nav.forEach(n => {
@@ -314,7 +314,7 @@ function leadBlockLayout_() {
   cells.push({ a1: A + '3', v: 'Неделя первого контакта:', style: 'label' });
   cells.push({ a1: B + '3', v: 'Все время', style: 'select', validation: { list: 'D.week_filter' } });
   cells.push({ a1: A + '4', v: 'критерий объекта', style: 'muted' });
-  cells.push({ a1: B + '4', f: '=IF(OR(' + B + '2="",' + B + '2="Все"),"*",REGEXEXTRACT(' + B + '2,"^[^ ]+"))', style: 'muted' });
+  cells.push({ a1: B + '4', f: '=IF(OR(' + B + '2="",' + B + '2="Все"),"*",REGEXEXTRACT(' + B + '2,"^(.*?) · "))', style: 'muted' });
   cells.push({ a1: A + '5', v: 'критерий недели', style: 'muted' });
   cells.push({ a1: B + '5', f: '=IF(OR(' + B + '3="",' + B + '3="Все время"),"*",REGEXEXTRACT(' + B + '3,"^[^ ]+"))', style: 'muted' });
   const oc = '$' + B + '$4', wc = '$' + B + '$5';
@@ -389,7 +389,7 @@ function pfBlockLayout_() {
   cells.push({ a1: A + '4', v: 'ключ недели', style: 'muted' });
   cells.push({ a1: B + '4', f: '=IF(' + B + '2="",' + CURRENT_WEEK_F_ + ',REGEXEXTRACT(' + B + '2,"^[^ ]+"))', style: 'muted' });
   cells.push({ a1: A + '5', v: 'критерий объекта', style: 'muted' });
-  cells.push({ a1: B + '5', f: '=IF(OR(' + B + '3="",' + B + '3="Все"),"*",REGEXEXTRACT(' + B + '3,"^[^ ]+"))', style: 'muted' });
+  cells.push({ a1: B + '5', f: '=IF(OR(' + B + '3="",' + B + '3="Все"),"*",REGEXEXTRACT(' + B + '3,"^(.*?) · "))', style: 'muted' });
   const wk = '$' + B + '$4', oc = '$' + B + '$5';
   const pfc = extra => '=COUNTIFS([[PF.week]],' + wk + ',[[PF.obj_id]],' + oc + ',' + extra + ')';
   cells.push({ a1: A + '7', v: 'Задачи недели', style: 'header' });
@@ -545,7 +545,7 @@ function reportLayout_() {
   cells.push({ a1: 'B5', v: '', style: 'select', note: 'Вводится вручную перед созданием отчёта. Сохраняется в 13_АРХИВ_ОТЧЕТОВ.' });
   cells.push({ a1: 'D2', v: 'Служебное', style: 'muted' });
   const params = [
-    ['D3', 'ID объекта', 'E3', '=IFERROR(REGEXEXTRACT(B3,"^[^ ]+"),"")'],
+    ['D3', 'ID объекта', 'E3', '=IFERROR(REGEXEXTRACT(B3,"^(.*?) · "),"")'],
     ['D4', 'Ключ недели', 'E4', '=IFERROR(REGEXEXTRACT(B4,"^[^ ]+"),"")'],
     ['D5', 'Начало', 'E5', '=IFERROR(VLOOKUP(E4,[[D.weeks:tbl]],2,FALSE),"")'],
     ['D6', 'Конец', 'E6', '=IF(E5="","",E5+6)'],
@@ -660,6 +660,10 @@ function alertsFormula_(m) {
   blocks.push(monBlock(SEVERITY.MID, ALERT.MANY_LOST, '"Потеряно "&' + m.lost + '&" из "&' + m.leads + '&" лидов"', on(K, ''), SHEET_NAMES.LEAD, '(' + m.leads + '>=CFG_MIN_LEADS)*(' + m.lost_share + '>=CFG_LOST_SHARE)'));
   blocks.push(monBlock(SEVERITY.MID, ALERT.STRATEGY_OLD, 'IF(' + m.review + '="","Дата пересмотра стратегии не указана","Пересмотр был "&TEXT(' + m.review + ',"dd.mm.yyyy"))', fmtD(m.review), SHEET_NAMES.STR, 'IF(' + m.review + '="",TRUE,TODAY()-' + m.review + '>CFG_STRATEGY_REVIEW_DAYS)'));
   blocks.push(monBlock(SEVERITY.MID, ALERT.STRATEGY_FLAG, '"Отмечено вручную в 02_СТРАТЕГИЯ"', on(K, ''), SHEET_NAMES.STR, m.need_change + '=TRUE'));
+
+  // объекты без ID / с повторяющимся ID
+  const OBn = '[[OBJ.name]]';
+  blocks.push('IFERROR(FILTER({' + on(OBn, SEVERITY.HIGH) + ',' + on(OBn, ALERT.ID_PROBLEM) + ',[[OBJ.id]],' + OBn + ',IF([[OBJ.id_check]]="ДУБЛЬ ID","ID "&[[OBJ.id]]&" повторяется — проверьте по CRM","ID не указан — объект не участвует в расчётах"),[[OBJ.manager]],' + on(OBn, '') + ',' + on(OBn, SHEET_NAMES.OBJ) + '},' + OBn + '<>"",[[OBJ.id_check]]<>""),E_)');
 
   // задачи и действия
   const PFo = '[[PF.obj_id]]';
