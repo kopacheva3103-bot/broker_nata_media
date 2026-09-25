@@ -106,8 +106,7 @@ function createFoldersForAll() {
   const objs = readTable_('OBJ').rows.filter(o => o.id);
   let n = 0;
   objs.forEach(o => {
-    const f = ensureObjectFolder_(o.id, 'REPORTS');
-    if (!o.folder_link) writeFields_(sheet_('OBJ'), 'OBJ', o._row, { folder_link: f.getUrl() });
+    ensureObjectFolder_(o.id, 'ROOT');
     if (ensureStrategyDoc_(o.id).created) n++;
   });
   SpreadsheetApp.getUi().alert('Готово: папки проверены для ' + objs.length + ' объектов, создано документов стратегии: ' + n + '.');

@@ -56,7 +56,7 @@ function generateReport_(id, wk, opts) {
     doc_link: copy.getUrl(), pdf_link: pdf.getUrl(), author: userEmail_(), status: REPORT_STATUS.ACTUAL,
     manager_comment: values.MANAGER_COMMENT === '—' ? '' : values.MANAGER_COMMENT,
   });
-  writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { last_report_link: pdf.getUrl(), last_report_date: today_(), folder_link: folder.getUrl() });
+  writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { last_report_link: pdf.getUrl(), last_report_date: today_() });
   return { name: name, docId: copy.getId(), docUrl: copy.getUrl(), pdfId: pdf.getId(), pdfUrl: pdf.getUrl(), folderUrl: folder.getUrl() };
 }
 
@@ -157,19 +157,29 @@ function replaceWithList_(container, key, lines) {
   }
 }
 
-/** Папка объекта внутри 01_STRATEGIES или 02_WEEKLY_REPORTS: «Название (ID из CRM)». */
+/**
+ * Одна папка на объект: 01_OBJECTS/«Название (ID из CRM)»/{Стратегия, Отчёты, Материалы}.
+ * kind: 'ROOT' — сама папка объекта, 'STRATEGIES' / 'REPORTS' / 'MATERIALS' — подпапка.
+ * Ссылка на папку объекта записывается в 01_ОБЪЕКТЫ.
+ */
 function ensureObjectFolder_(id, kind) {
-  const cfgKey = kind === 'STRATEGIES' ? 'FOLDER_STRATEGIES_ID' : 'FOLDER_REPORTS_ID';
-  let parent = folderById_(cfgGet_(cfgKey));
-  if (!parent) { ensureDrive_(); parent = folderById_(cfgGet_(cfgKey)); }
+  let parent = folderById_(cfgGet_('FOLDER_OBJECTS_ID'));
+  if (!parent) { ensureDrive_(); parent = folderById_(cfgGet_('FOLDER_OBJECTS_ID')); }
   const obj = objectById_(id);
   const suffix = '(' + id + ')';
+  let root = null;
   const it = parent.getFolders();
-  while (it.hasNext()) {
+  while (it.hasNext() && !root) {
     const f = it.next();
-    if (f.getName().slice(-suffix.length) === suffix) return f;
+    if (f.getName().slice(-suffix.length) === suffix) root = f;
   }
-  return parent.createFolder((obj ? obj.name : id) + ' ' + suffix);
+  if (!root) {
+    root = parent.createFolder((obj ? obj.name : id) + ' ' + suffix);
+    Object.keys(SYS.OBJECT_SUBFOLDERS).forEach(k => childFolder_(root, SYS.OBJECT_SUBFOLDERS[k]));
+  }
+  if (obj && obj.folder_link !== root.getUrl()) writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { folder_link: root.getUrl() });
+  if (!kind || kind === 'ROOT') return root;
+  return childFolder_(root, SYS.OBJECT_SUBFOLDERS[kind]);
 }
 
 /** Шаблон «Еженедельный отчёт по продаже объекта» (создаётся один раз, дальше можно менять вёрстку в Google Docs). */

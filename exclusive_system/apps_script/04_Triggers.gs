@@ -104,6 +104,13 @@ function applyDefaults_(code, o, upd, isNew, user, editedKeys) {
     set('created_at', today);
     if (!o.status) set('status', dictValues_('obj_status')[0] || '');
   }
+  if (code === 'OBJ' && editedKeys.indexOf('status') >= 0 && o.status) {
+    // «Дата закрытия»: ставится при продаже / снятии, снимается, если объект вернули в работу
+    const cls = dictClassOf_('obj_status', o.status);
+    const closed = cls === 'SOLD' || cls === 'REMOVED';
+    if (closed && !o.close_date) set('close_date', today);
+    if (!closed && o.close_date) set('close_date', '');
+  }
   if (code === 'STR') {
     const content = editedKeys.some(k => ['obj_id', 'obj_name', 'changed_at', 'changed_by', 'strategy_doc'].indexOf(k) < 0);
     if (content) { set('changed_at', now); set('changed_by', user); }
@@ -157,7 +164,7 @@ function renameObjectId_(oldId, newId) {
     const col = fieldIndex_(code, 'obj_id');
     sh.getRange(2, col, sh.getMaxRows() - 1, 1).createTextFinder(oldId).matchEntireCell(true).replaceAllWith(newId);
   });
-  ['FOLDER_STRATEGIES_ID', 'FOLDER_REPORTS_ID'].forEach(k => {
+  ['FOLDER_OBJECTS_ID'].forEach(k => {
     try {
       const parent = folderById_(cfgGet_(k));
       if (!parent) return;

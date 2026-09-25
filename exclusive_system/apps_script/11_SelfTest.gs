@@ -213,6 +213,15 @@ function selfTest_(withDrive) {
   objSh.deleteRow(row);
   SpreadsheetApp.flush();
 
+  // 9b. Дата закрытия: у проданного объекта дни в продаже перестают расти
+  const clRow = appendRow_('OBJ', { id: 'TEST-9998', name: 'Тест закрытия', price: 1000000, area: 50, status: 'Продан', date_sign: addDays_(today_(), -30), close_date: addDays_(today_(), -10) });
+  SpreadsheetApp.flush();
+  const clObj = readTable_('OBJ').rows.find(o => o.id === 'TEST-9998');
+  eq('Закрытие: дни в продаже считаются до даты закрытия', clObj ? clObj.days_on_market : '', 20);
+  truthy('Закрытие: проданный объект не на дэшборде «в работе»', dashIds_().indexOf('TEST-9998') < 0);
+  objSh.deleteRow(clRow);
+  SpreadsheetApp.flush();
+
   // 10. Отчёт в Google Docs + PDF + ссылка (по желанию)
   if (withDrive) {
     try {
@@ -227,6 +236,11 @@ function selfTest_(withDrive) {
       eq('Drive: ссылка на отчёт записана в 01', ostNow.last_report_link, res.pdfUrl);
       const arch = readTable_('ARCH').rows;
       truthy('Drive: запись в архиве отчётов', arch.some(a => a.obj_id === ost.id && a.week === wkP && a.pdf_link === res.pdfUrl && a.status === REPORT_STATUS.ACTUAL));
+      const objFolder = ensureObjectFolder_(ost.id, 'ROOT');
+      const subs = []; const it = objFolder.getFolders(); while (it.hasNext()) subs.push(it.next().getName());
+      truthy('Drive: одна папка объекта с подпапками Стратегия / Отчёты / Материалы',
+        ['STRATEGIES', 'REPORTS', 'MATERIALS'].every(k => subs.indexOf(SYS.OBJECT_SUBFOLDERS[k]) >= 0), subs.join(', '));
+      eq('Drive: ссылка на папку объекта в 01', readTable_('OBJ').rows.find(o => o.id === ost.id).folder_link, objFolder.getUrl());
       const sd = ensureStrategyDoc_(ost.id);
       truthy('Drive: документ стратегии создан и связан', !!sd.url && readTable_('OBJ').rows.find(o => o.id === ost.id).strategy_link === sd.url, sd.url);
     } catch (err) {

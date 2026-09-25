@@ -489,7 +489,7 @@ function reportRows_() {
     { ph: 'ADDRESS', label: 'Адрес', f: '=IFERROR(VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.address]]},2,FALSE),"")' },
     { ph: 'PERIOD', label: 'Период отчёта', f: '=IF(' + P.start + '="","",TEXT(' + P.start + ',"dd.mm")&"–"&TEXT(' + P.end + ',"dd.mm.yyyy"))' },
     { ph: 'PRICE', label: 'Цена', f: '=IFERROR(TEXT(VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.price]]},2,FALSE),"#,##0")&" ₽","")' },
-    { ph: 'DAYS_ON_MARKET', label: 'Дней в экспозиции', f: '=IFERROR(MIN(TODAY(),' + P.end + ')-VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.date_sign]]},2,FALSE),"")' },
+    { ph: 'DAYS_ON_MARKET', label: 'Дней в экспозиции', f: '=IFERROR(MIN(TODAY(),' + P.end + ',IFERROR(1/(1/VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.close_date]]},2,FALSE)),TODAY()))-VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.date_sign]]},2,FALSE),"")' },
     { ph: 'ACTIONS', label: 'Количество действий', f: '=IF(' + P.id + '="","",COUNTIFS([[ACT.obj_id]],' + P.id + ',[[ACT.week]],' + P.wk + ',[[ACT.status_class]],"DONE",[[ACT.to_report]],TRUE))' },
     { ph: 'CHANNELS', label: 'Основные каналы', f: '=IFERROR(ARRAYFORMULA(TEXTJOIN(", ",TRUE,UNIQUE(FILTER([[ACT.channel]],' + actCond + ',[[ACT.status_class]]="DONE",' + rep + ',[[ACT.channel]]<>"")))),"—")' },
     {
