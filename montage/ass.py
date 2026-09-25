@@ -100,7 +100,7 @@ class AssDoc:
             "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
             "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
             "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-            *(self._style_line(n) for n in DEFAULT_STYLES),
+            *(self._style_line(n) for n in dict.fromkeys([*DEFAULT_STYLES, *self.styles])),
             "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
         ]
         path.write_text("\n".join(head + self.events) + "\n", encoding="utf-8")
@@ -165,7 +165,8 @@ def caption_events(doc: AssDoc, seg: dict, duration: float) -> None:
         pos = item.get("position", seg.get("text_position", "top"))
         anim = item.get("animation", seg.get("text_animation", "pop"))
         tags = r"{\an5" + intro_tags(anim, doc.width // 2, doc.y_for(pos), doc.k) + "}"
-        doc.add(start, min(end, duration), "caption", tags + clean(item["text"]))
+        doc.add(start, min(end, duration), item.get("style", seg.get("text_style", "caption")),
+                tags + clean(item["text"]))
 
 
 # --- subtitles --------------------------------------------------------------
