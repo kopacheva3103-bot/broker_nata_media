@@ -166,7 +166,17 @@ def _cues(p: dict, ctx: segments.Ctx, files: list[Path], joins: list) -> list[as
             if c.words:
                 c.words = [(a, b, fix(w)) for a, b, w in c.words]
             c.text = " ".join(fix(w) for w in c.text.split())
-    return sorted(cues, key=lambda c: c.start)
+    cues = sorted(cues, key=lambda c: c.start)
+    # a sentence that starts after a cut still starts with a capital letter
+    prev_end = True
+    for c in cues:
+        if c.words:
+            ws = []
+            for a, b, w in c.words:
+                ws.append((a, b, w[:1].upper() + w[1:] if prev_end else w))
+                prev_end = w[-1:] in ".!?…"
+            c.words = ws
+    return cues
 
 
 def _sentences(words: list) -> list[ass.Cue]:
