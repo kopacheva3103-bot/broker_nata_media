@@ -13,9 +13,9 @@ const SYS = {
   MENU: 'УПРАВЛЕНИЕ ЭКСКЛЮЗИВАМИ',
   ROOT_FOLDER: 'СИСТЕМА ЭКСКЛЮЗИВОВ',
   FOLDERS: {
-    MASTER: '00_MASTER',
-    OBJECTS: '01_OBJECTS',
-    TEMPLATES: '02_TEMPLATES',
+    MASTER: '00_ТАБЛИЦА',
+    OBJECTS: '01_ОБЪЕКТЫ',
+    TEMPLATES: '02_ШАБЛОНЫ',
   },
   /** Подпапки внутри папки объекта «Название (ID)». */
   OBJECT_SUBFOLDERS: {
@@ -141,9 +141,9 @@ function cfgDefs_() {
     { key: 'DAILY_EMAIL', label: 'Email для ежедневной сводки предупреждений', value: '' },
     { group: 'Служебное — заполняет скрипт, не менять вручную' },
     { key: 'FOLDER_ROOT_ID', label: 'ID папки «СИСТЕМА ЭКСКЛЮЗИВОВ»', value: '', sys: true },
-    { key: 'FOLDER_MASTER_ID', label: 'ID папки 00_MASTER', value: '', sys: true },
-    { key: 'FOLDER_OBJECTS_ID', label: 'ID папки 01_OBJECTS', value: '', sys: true },
-    { key: 'FOLDER_TEMPLATES_ID', label: 'ID папки 02_TEMPLATES', value: '', sys: true },
+    { key: 'FOLDER_MASTER_ID', label: 'ID папки 00_ТАБЛИЦА', value: '', sys: true },
+    { key: 'FOLDER_OBJECTS_ID', label: 'ID папки 01_ОБЪЕКТЫ', value: '', sys: true },
+    { key: 'FOLDER_TEMPLATES_ID', label: 'ID папки 02_ШАБЛОНЫ', value: '', sys: true },
     { key: 'TEMPLATE_REPORT_ID', label: 'ID шаблона отчёта (Google Doc)', value: '', sys: true },
     { key: 'TEMPLATE_STRATEGY_ID', label: 'ID шаблона стратегии (Google Doc)', value: '', sys: true },
     { key: 'SYSTEM_VERSION', label: 'Версия системы', value: SYS.VERSION, sys: true },

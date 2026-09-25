@@ -16,9 +16,9 @@ const SYS = {
   MENU: 'УПРАВЛЕНИЕ ЭКСКЛЮЗИВАМИ',
   ROOT_FOLDER: 'СИСТЕМА ЭКСКЛЮЗИВОВ',
   FOLDERS: {
-    MASTER: '00_MASTER',
-    OBJECTS: '01_OBJECTS',
-    TEMPLATES: '02_TEMPLATES',
+    MASTER: '00_ТАБЛИЦА',
+    OBJECTS: '01_ОБЪЕКТЫ',
+    TEMPLATES: '02_ШАБЛОНЫ',
   },
   /** Подпапки внутри папки объекта «Название (ID)». */
   OBJECT_SUBFOLDERS: {
@@ -144,9 +144,9 @@ function cfgDefs_() {
     { key: 'DAILY_EMAIL', label: 'Email для ежедневной сводки предупреждений', value: '' },
     { group: 'Служебное — заполняет скрипт, не менять вручную' },
     { key: 'FOLDER_ROOT_ID', label: 'ID папки «СИСТЕМА ЭКСКЛЮЗИВОВ»', value: '', sys: true },
-    { key: 'FOLDER_MASTER_ID', label: 'ID папки 00_MASTER', value: '', sys: true },
-    { key: 'FOLDER_OBJECTS_ID', label: 'ID папки 01_OBJECTS', value: '', sys: true },
-    { key: 'FOLDER_TEMPLATES_ID', label: 'ID папки 02_TEMPLATES', value: '', sys: true },
+    { key: 'FOLDER_MASTER_ID', label: 'ID папки 00_ТАБЛИЦА', value: '', sys: true },
+    { key: 'FOLDER_OBJECTS_ID', label: 'ID папки 01_ОБЪЕКТЫ', value: '', sys: true },
+    { key: 'FOLDER_TEMPLATES_ID', label: 'ID папки 02_ШАБЛОНЫ', value: '', sys: true },
     { key: 'TEMPLATE_REPORT_ID', label: 'ID шаблона отчёта (Google Doc)', value: '', sys: true },
     { key: 'TEMPLATE_STRATEGY_ID', label: 'ID шаблона стратегии (Google Doc)', value: '', sys: true },
     { key: 'SYSTEM_VERSION', label: 'Версия системы', value: SYS.VERSION, sys: true },
@@ -306,7 +306,7 @@ function sheetSpecs_() {
       F('assistant', 'Ассистент', 'dd', { dict: 'people' }),
       F('crm_link', 'Ссылка на CRM', 'link', { w: 120 }),
       F('strategy_link', 'Ссылка на стратегию', 'sys', { w: 120, d: 'Google Doc стратегии. Создаётся меню «Открыть стратегию».' }),
-      F('folder_link', 'Ссылка на папку объекта', 'sys', { w: 120, d: 'Папка объекта в 01_OBJECTS: внутри «Стратегия», «Отчёты», «Материалы».' }),
+      F('folder_link', 'Ссылка на папку объекта', 'sys', { w: 120, d: 'Папка объекта в 01_ОБЪЕКТЫ: внутри «Стратегия», «Отчёты», «Материалы».' }),
       F('last_report_link', 'Ссылка на последний отчёт', 'sys', { w: 120, d: 'PDF последнего отчёта клиенту.' }),
       F('last_report_date', 'Дата последнего отчёта', 'sys', { fmt: 'date' }),
       F('next_report', 'Следующий отчёт', 'f', {
@@ -2504,7 +2504,7 @@ function replaceWithList_(container, key, lines) {
 }
 
 /**
- * Одна папка на объект: 01_OBJECTS/«Название (ID из CRM)»/{Стратегия, Отчёты, Материалы}.
+ * Одна папка на объект: 01_ОБЪЕКТЫ/«Название (ID из CRM)»/{Стратегия, Отчёты, Материалы}.
  * kind: 'ROOT' — сама папка объекта, 'STRATEGIES' / 'REPORTS' / 'MATERIALS' — подпапка.
  * Ссылка на папку объекта записывается в 01_ОБЪЕКТЫ.
  */
