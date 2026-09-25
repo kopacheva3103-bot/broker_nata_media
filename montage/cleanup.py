@@ -114,7 +114,9 @@ def find_retakes(words: list[Word], max_back_words: int = 25, max_back_sec: floa
                 k += 1
             chars = sum(len(x) for x in n[j:j + k])
             immediate_stutter = k >= 1 and i + k == j and len(n[j]) >= 3  # "квартиру квартиру"
-            if k >= 3 or (k == 2 and chars >= 10) or immediate_stutter:
+            # a real restart comes after a pause or a broken-off word, not mid-flow
+            restart = j > 0 and (words[j][0] - words[j - 1][1] >= 0.25 or words[j - 1][2][-1:] in ".,!?…-—")
+            if (k >= 3 or (k == 2 and chars >= 10)) and restart or immediate_stutter:
                 found, run = i, k  # keep searching back for the start of the failed attempt
         if found is not None:
             out.append((found, j))

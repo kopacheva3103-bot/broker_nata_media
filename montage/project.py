@@ -162,9 +162,9 @@ def _cues(p: dict, ctx: segments.Ctx, files: list[Path], joins: list) -> list[as
             tail = w[len(w.rstrip(".,!?:;…")):]
             new = fixes[key]
             return (new[:1].upper() + new[1:] if w[:1].isupper() else new) + tail
-        for c in cues:
+        for c in cues:  # an empty replacement drops the word ("холл": "" after "баскет": "баскет-холл")
             if c.words:
-                c.words = [(a, b, fix(w)) for a, b, w in c.words]
+                c.words = [(a, b, fix(w)) for a, b, w in c.words if fix(w).strip(".,!?…")]
             c.text = " ".join(fix(w) for w in c.text.split())
     cues = sorted(cues, key=lambda c: c.start)
     # a sentence that starts after a cut still starts with a capital letter
