@@ -33,6 +33,7 @@ function onOpen() {
       .addItem('Показать все вкладки объектов (в т.ч. закрытых)', 'showAllObjectTabs')
       .addItem('Подключить Instagram / Threads', 'connectSocial')
       .addItem('Подключить CRM TopenLab', 'connectCrm')
+      .addItem('Тест: комментарий в карточку CRM', 'crmTestNote')
       .addItem('Включить автообновление (входящие, календарь, соцсети)', 'enableDailyJobs')
       .addItem('Выключить автообновление', 'disableDailyJobs')
       .addSeparator()

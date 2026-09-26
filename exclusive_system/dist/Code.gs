@@ -3797,6 +3797,7 @@ function onOpen() {
       .addItem('Показать все вкладки объектов (в т.ч. закрытых)', 'showAllObjectTabs')
       .addItem('Подключить Instagram / Threads', 'connectSocial')
       .addItem('Подключить CRM TopenLab', 'connectCrm')
+      .addItem('Тест: комментарий в карточку CRM', 'crmTestNote')
       .addItem('Включить автообновление (входящие, календарь, соцсети)', 'enableDailyJobs')
       .addItem('Выключить автообновление', 'disableDailyJobs')
       .addSeparator()
@@ -4580,6 +4581,24 @@ function crmSendReport() {
   const st = sendReportToCrm_(obj, readReportValues_(), last ? last.pdf_link : '', rep.getRange('B6').getValue());
   if (last) writeFields_(arch.sh, 'ARCH', last._row, { crm: st });
   ui.alert('Отчёт → CRM', st || 'CRM не подключена', ui.ButtonSet.OK);
+}
+
+/** Меню: тестовый комментарий в карточку объекта — проверить ключ, автора и где комментарий виден в TopenLab. */
+function crmTestNote() {
+  const ui = SpreadsheetApp.getUi();
+  const cfg = crmConfig_();
+  if (!cfg.key || !cfg.user) { ui.alert('Сначала: Сервис → Подключить CRM TopenLab (ключ API и ID пользователя-автора).'); return; }
+  const r = ui.prompt('Тестовый комментарий в CRM', 'ID объекта (карточки в TopenLab), например 137073408:', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const id = String(r.getResponseText() || '').trim();
+  if (!isCrmId_(id)) { ui.alert('ID карточки — только цифры (как в CRM).'); return; }
+  const obj = objectById_(id);
+  const res = crmPostNote_(cfg, 'realty', id, 'Тестовый комментарий из системы маркетинга эксклюзивов' + (obj ? ' (' + obj.name + ')' : '') +
+    ', ' + fmtDate_(new Date(), 'dd.MM.yyyy HH:mm') + '. Можно удалить.');
+  logHistory_([{ sheet: 'CRM', record_id: id, obj_id: obj ? id : '', field: 'Тестовый комментарий', old: '', new: res.ok ? 'добавлен' : 'ошибка ' + res.code, kind: HIST_KIND.CHANGE }], userEmail_());
+  ui.alert('Тестовый комментарий', res.ok
+    ? '✓ Комментарий добавлен в карточку ' + id + '. Откройте её в TopenLab и посмотрите, где он виден.'
+    : '⚠ Не добавлен: ответ CRM ' + res.code + (res.msg ? ' — ' + res.msg : '') + '. Проверьте ID карточки, ключ API и ID пользователя.', ui.ButtonSet.OK);
 }
 
 /** API: поиск не чаще 1 раза в 6 секунд. */
