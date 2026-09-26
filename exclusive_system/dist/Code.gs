@@ -783,11 +783,13 @@ function reportLayout_() {
  */
 
 function setupSystem() {
+  const start = Date.now();
   let ui = null;
   try { ui = SpreadsheetApp.getUi(); } catch (e) { /* запуск из редактора Apps Script — без диалогов */ }
   if (!ui) {
     const log = [];
     runSetup_(log);
+    try { fixObjIdColumns_(); } catch (e) { /* не критично */ }
     try { ensureDrive_(); } catch (err) { log.push('Drive: ' + err.message); }
     installTriggers_();
     Logger.log('Установка завершена: ' + log.join(', '));
@@ -801,6 +803,7 @@ function setupSystem() {
   if (ok !== ui.Button.OK) return;
   const log = [];
   runSetup_(log);
+  try { fixObjIdColumns_(); } catch (e) { /* не критично */ }
   let warn = '';
   try {
     ensureDrive_();
@@ -816,7 +819,7 @@ function setupSystem() {
   }
   const tabs = objectTabs_().length;
   if (tabs) {
-    try { rebuildObjectTabs_(); applyTabVisibility_(); log.push('Вкладки объектов обновлены: ' + tabs); } catch (err) { warn += '\n\n⚠ Вкладки объектов: ' + err.message + '\nЗапустите «Сервис → Обновить все вкладки объектов».'; }
+    try { startTabRebuild_(); const r = tabsWork_(start); applyTabVisibility_(); log.push('Вкладки объектов: ' + tabsWorkText_(r)); } catch (err) { warn += '\n\n⚠ Вкладки объектов: ' + err.message + '\nЗапустите «Сервис → Обновить все вкладки объектов».'; }
   }
   ui.alert('Готово', log.join('\n') + warn +
     (tabs ? '' :
@@ -1032,7 +1035,7 @@ function buildDataSheet_(code) {
     sh.setColumnWidth(col, f.w || (f.kind === 'cb' ? 90 : 115));
     const fmt = f.fmt || ({ date: 'date', money: 'money' })[f.kind];
     if (fmt) body.setNumberFormat(nf_(fmt));
-    else if (f.kind === 'text' || f.kind === 'link') body.setNumberFormat('@');
+    else if (f.kind === 'text' || f.kind === 'link' || f.key === 'obj_id') body.setNumberFormat('@');
     body.clearDataValidations();
     const v = validationFor_(f);
     if (v) body.setDataValidation(v);
@@ -1708,6 +1711,7 @@ function buildObjectTab_(sh, objId, data) {
     }
   });
 
+  markers[0] = [tabToken_() || '#']; // A1: вкладка собрана до конца (при обрыве по лимиту времени метки не пишутся)
   sh.getRange(1, 1, markers.length, 1).setValues(markers).setFontColor('#B0BEC5').setFontSize(8);
   protectWarn_(sh.getRange(1, 1, sh.getMaxRows(), 1), 'Служебные метки разделов — не менять');
   sh.setConditionalFormatRules(cfRules);
@@ -1770,7 +1774,12 @@ function syncObjectTab_(obj, mode) {
   } else {
     if (sh.getName() !== name && !ss.getSheetByName(name)) sh.setName(name);
     if (String(sh.getRange(TAB.ID).getValue()) !== String(obj.id)) sh.getRange(TAB.ID).setNumberFormat('@').setValue(String(obj.id));
-    if (mode === 'rebuild') { buildObjectTab_(sh, obj.id, readObjectTab_(sh)); built = true; }
+    if (mode === 'rebuild') {
+      let data = null;
+      try { data = readObjectTab_(sh); } catch (e) { data = null; } // недособранная вкладка — данных в ней нет
+      buildObjectTab_(sh, obj.id, data);
+      built = true;
+    }
   }
   if (built || mode === 'files') {
     try { fillObjectFiles_(sh, obj); } catch (e) { /* Drive недоступен — список обновится позже */ }
@@ -1795,32 +1804,88 @@ function objTabInsertIndex_() {
   return idx;
 }
 
+// ───────────── создание / пересборка вкладок с учётом лимита Google (6 минут на запуск) ─────────────
+
+const TAB_BUDGET_MS = 4.5 * 60000;
+
+function tabToken_() { return PropertiesService.getDocumentProperties().getProperty('TAB_TOKEN') || ''; }
+
+/** Вкладка собрана до конца: служебные метки разделов записаны. */
+function tabIsComplete_(sh) {
+  const n = Math.min(sh.getMaxRows(), 80);
+  return sh.getRange(1, 1, n, 1).getValues().some(r => String(r[0]).indexOf('§') === 0);
+}
+
+/** Пометить все вкладки к пересборке (после обновления системы). */
+function startTabRebuild_() {
+  const p = PropertiesService.getDocumentProperties();
+  p.setProperty('TAB_TOKEN', '#' + Date.now());
+  p.setProperty('TAB_REBUILD', '1');
+}
+
+/**
+ * Создаёт недостающие вкладки, досоздаёт оборванные и (если запущена пересборка) пересобирает старые —
+ * пока хватает времени. Остальное доделывает сам через минуту (триггер tabsJob), пока всё не будет готово.
+ */
+function tabsWork_(start) {
+  start = start || Date.now();
+  const props = PropertiesService.getDocumentProperties();
+  const pending = props.getProperty('TAB_REBUILD') === '1';
+  const token = tabToken_();
+  const res = { created: 0, rebuilt: 0, left: 0 };
+  readTable_('OBJ').rows.forEach(o => {
+    if (!o.id || !o.name) return;
+    const sh = findObjectTab_(o);
+    const mode = !sh ? 'create' : (!tabIsComplete_(sh) || (pending && String(sh.getRange('A1').getValue()) !== token)) ? 'rebuild' : '';
+    if (!mode) return;
+    if (Date.now() - start > TAB_BUDGET_MS) { res.left++; return; }
+    syncObjectTab_(o, mode);
+    SpreadsheetApp.flush();
+    if (mode === 'create') res.created++; else res.rebuilt++;
+  });
+  if (!res.left) props.deleteProperty('TAB_REBUILD');
+  scheduleTabsJob_(res.left > 0);
+  return res;
+}
+
+function tabsWorkText_(r) {
+  return 'создано вкладок: ' + r.created + ', обновлено: ' + r.rebuilt +
+    (r.left ? '. Ещё ' + r.left + ' — доделаются автоматически в ближайшие минуты (лимит Google — 6 минут на запуск)' : '');
+}
+
+function scheduleTabsJob_(on) {
+  try {
+    ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'tabsJob') ScriptApp.deleteTrigger(t); });
+    if (on) ScriptApp.newTrigger('tabsJob').timeBased().after(60 * 1000).create();
+  } catch (e) { /* без триггера — доделается через «Обновить» */ }
+}
+
+/** Триггер: продолжить создание / пересборку вкладок. */
+function tabsJob() {
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(10000)) { scheduleTabsJob_(true); return; }
+  try {
+    tabsWork_();
+    orderSheets_();
+    applyTabVisibility_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /** Меню: создать вкладки для объектов, у которых их ещё нет. */
 function createObjectTabs() {
-  const t = readTable_('OBJ');
-  let created = 0;
-  const missing = [];
-  t.rows.forEach(o => {
-    if (!o.id || !o.name) { if (o.name || o.id) missing.push(o.name || o.id); return; }
-    const r = syncObjectTab_(o, 'create');
-    if (r && r.built) created++;
-  });
-  SpreadsheetApp.flush();
-  toast_('Создано вкладок: ' + created + (missing.length ? '. Без ID или названия: ' + missing.join(', ') : ''), 'Вкладки объектов', 8);
+  const r = tabsWork_();
+  orderSheets_();
+  toast_(tabsWorkText_(r), 'Вкладки объектов', 10);
 }
 
 /** Сервис: пересобрать все вкладки (после обновления системы). Данные команды сохраняются. */
 function rebuildObjectTabs() {
-  const n = rebuildObjectTabs_();
-  toast_('Обновлено вкладок: ' + n, 'Вкладки объектов', 6);
-}
-
-function rebuildObjectTabs_() {
-  const t = readTable_('OBJ');
-  let n = 0;
-  t.rows.forEach(o => { if (o.id && o.name && findObjectTab_(o)) { syncObjectTab_(o, 'rebuild'); n++; } });
-  SpreadsheetApp.flush();
-  return n;
+  startTabRebuild_();
+  const r = tabsWork_();
+  applyTabVisibility_();
+  toast_(tabsWorkText_(r), 'Вкладки объектов', 10);
 }
 
 /** Меню: перейти во вкладку выбранного объекта. */
@@ -2162,6 +2227,7 @@ function renameObjectId_(oldId, newId) {
     const col = fieldIndex_(code, 'obj_id');
     sh.getRange(2, col, sh.getMaxRows() - 1, 1).createTextFinder(oldId).matchEntireCell(true).replaceAllWith(newId);
   });
+  fixObjIdColumns_(); // «137073408» после замены Google превращает в число — возвращаем текст
   objectTabs_().forEach(t => {
     if (String(t.getRange(TAB.ID).getValue()) === oldId) t.getRange(TAB.ID).setNumberFormat('@').setValue(newId);
   });
@@ -2613,7 +2679,8 @@ function checkOverdue() {
 function refreshAll() {
   const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) { toast_('Система занята, повторите через минуту.'); return; }
-  let fixed = 0;
+  const start = Date.now();
+  let fixed = 0, note = '';
   try {
     ['TASK', 'BASE', 'CONT', 'LIB'].forEach(code => {
       fixed += removeOrphanRows_(code);
@@ -2631,17 +2698,17 @@ function refreshAll() {
       const last = lastDataRow_(t.sh, t.spec);
       if (t.sh.getMaxRows() - last < 200) extendSheet_(code, 1000);
     });
-    const objs = readTable_('OBJ');
-    objs.rows.forEach(o => {
-      if (o.id && o.name && !findObjectTab_(o)) { syncObjectTab_(o, 'create'); fixed++; }
-    });
+    fixObjIdColumns_();
+    const r = tabsWork_(start);
+    fixed += r.created + r.rebuilt;
+    if (r.left) note = '. ' + tabsWorkText_(r);
     orderSheets_();
     applyTabVisibility_();
   } finally {
     lock.releaseLock();
   }
   SpreadsheetApp.flush();
-  toast_('Готово. Исправлено / создано: ' + fixed, 'Обновление', 6);
+  toast_('Готово. Исправлено / создано: ' + fixed + note, 'Обновление', 10);
 }
 
 function openDashboard() { sheet_('DASH').activate(); }
@@ -3668,6 +3735,25 @@ function removeOrphanRows_(code) {
   return rows.length;
 }
 
+/**
+ * ID объекта в журналах — всегда текст: ID из CRM состоит из цифр, и Google Таблицы превращают его в число,
+ * а в 01_ОБЪЕКТЫ ID — текст; тогда формулы не находят объект («⚠ нет объекта»).
+ */
+function fixObjIdColumns_() {
+  ['TASK', 'BASE', 'CONT', 'ARCH', 'HIST'].forEach(code => {
+    let sh;
+    try { sh = sheet_(code); } catch (e) { return; }
+    if (!sh) return;
+    const col = fieldIndex_(code, 'obj_id');
+    const n = lastDataRow_(sh, sheetSpecs_()[code]) - 1;
+    const rng = sh.getRange(2, col, Math.max(n, 1), 1);
+    const vals = rng.getValues();
+    const bad = vals.some(r => typeof r[0] === 'number');
+    sh.getRange(2, col, sh.getMaxRows() - 1, 1).setNumberFormat('@');
+    if (bad && n > 0) rng.setValues(vals.map(r => [typeof r[0] === 'number' ? String(r[0]) : r[0]]));
+  });
+}
+
 // ═════════════ 13_Menu.gs ═════════════
 /**
  * 13_Menu — меню «МАРКЕТИНГ ОБЪЕКТОВ».
@@ -4537,7 +4623,8 @@ function runObjectsImport(text) {
   const r = parseObjectsImport_(text);
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
-  let tabs = 0;
+  const start = Date.now();
+  let tabRes = { created: 0, rebuilt: 0, left: 0 };
   try {
     const now = today_();
     const firstStatus = dictValues_('obj_status')[0] || '';
@@ -4559,16 +4646,14 @@ function runObjectsImport(text) {
     SpreadsheetApp.flush();
     hist.push.apply(hist, r.add.map(o => ({ sheet: SHEET_NAMES.OBJ, record_id: o.id, obj_id: o.id, field: 'Объект', old: '', new: o.name, kind: HIST_KIND.CREATE, note: 'Загрузка списком' })));
     logHistory_(hist, userEmail_());
-    readTable_('OBJ').rows.forEach(o => {
-      if (!o.id || !o.name || findObjectTab_(o)) return;
-      syncObjectTab_(o, 'create');
-      tabs++;
-    });
+    fixObjIdColumns_();
+    r.upd.filter(o => o._from).forEach(o => { const obj = objectById_(o.id); if (obj) syncObjectTab_(obj, 'rename'); });
+    tabRes = tabsWork_(start);
     orderSheets_();
   } finally {
     lock.releaseLock();
   }
-  return 'Добавлено объектов: ' + r.add.length + ', дополнено: ' + r.upd.length + ', создано вкладок: ' + tabs +
+  return 'Добавлено объектов: ' + r.add.length + ', дополнено: ' + r.upd.length + ', ' + tabsWorkText_(tabRes) +
     (r.errors.length ? '. Замечаний: ' + r.errors.length + ' (см. «Проверить»)' : '') + '. Проверьте 01_ОБЪЕКТЫ.';
 }
 

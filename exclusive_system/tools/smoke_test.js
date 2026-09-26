@@ -256,3 +256,17 @@ X.runObjectsImport(['137073408\tЖК Время · Лермонтовская 1'
 const o137 = X.objectById_('137073408'), o129 = X.objectById_('129866881');
 console.log('renamed:', !!o137, !X.objectById_('ВРЕМЯ-1'), o129 && [o129.name, o129.area, o129.price, o129.address].join('/'),
   'tasks moved:', X.readTable_('TASK').rows.filter(t => t.obj_id === '137073408').length, 'left old:', X.readTable_('TASK').rows.filter(t => t.obj_id === 'ВРЕМЯ-1').length);
+// лимит времени: вкладки создаются частями; недособранная вкладка пересобирается; ID-числа → текст
+X.appendRow_('OBJ', { id: '555000111', name: 'Тест лимита', status: 'В работе' });
+const late = X.tabsWork_(Date.now() - 10 * 60000);
+console.log('budget: left', late.left, 'created', late.created);
+const now = X.tabsWork_();
+console.log('continue: created', now.created, 'left', now.left, 'tab:', !!X.findObjectTab_(X.objectById_('555000111')));
+const tb = X.findObjectTab_(X.objectById_('555000111'));
+tb.getRange(1, 1, 80, 1).setValues(Array.from({ length: 80 }, () => ['']));
+console.log('incomplete detected:', !X.tabIsComplete_(tb), '→ rebuilt:', X.tabsWork_().rebuilt, X.tabIsComplete_(tb));
+const tsh = X.sheet_('TASK'); const idc = X.fieldIndex_('TASK', 'obj_id');
+tsh.getRange(2, idc).setValue(137073408);
+X.fixObjIdColumns_();
+console.log('obj_id text:', typeof tsh.getRange(2, idc).getValue(), tsh.getRange(2, idc).getValue());
+X.startTabRebuild_(); const rb = X.tabsWork_(); console.log('rebuild all:', rb.rebuilt, 'again:', X.tabsWork_().rebuilt);

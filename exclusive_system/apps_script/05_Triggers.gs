@@ -177,6 +177,7 @@ function renameObjectId_(oldId, newId) {
     const col = fieldIndex_(code, 'obj_id');
     sh.getRange(2, col, sh.getMaxRows() - 1, 1).createTextFinder(oldId).matchEntireCell(true).replaceAllWith(newId);
   });
+  fixObjIdColumns_(); // «137073408» после замены Google превращает в число — возвращаем текст
   objectTabs_().forEach(t => {
     if (String(t.getRange(TAB.ID).getValue()) === oldId) t.getRange(TAB.ID).setNumberFormat('@').setValue(newId);
   });

@@ -360,3 +360,22 @@ function removeOrphanRows_(code) {
   rows.reverse().forEach(o => t.sh.deleteRow(o._row));
   return rows.length;
 }
+
+/**
+ * ID объекта в журналах — всегда текст: ID из CRM состоит из цифр, и Google Таблицы превращают его в число,
+ * а в 01_ОБЪЕКТЫ ID — текст; тогда формулы не находят объект («⚠ нет объекта»).
+ */
+function fixObjIdColumns_() {
+  ['TASK', 'BASE', 'CONT', 'ARCH', 'HIST'].forEach(code => {
+    let sh;
+    try { sh = sheet_(code); } catch (e) { return; }
+    if (!sh) return;
+    const col = fieldIndex_(code, 'obj_id');
+    const n = lastDataRow_(sh, sheetSpecs_()[code]) - 1;
+    const rng = sh.getRange(2, col, Math.max(n, 1), 1);
+    const vals = rng.getValues();
+    const bad = vals.some(r => typeof r[0] === 'number');
+    sh.getRange(2, col, sh.getMaxRows() - 1, 1).setNumberFormat('@');
+    if (bad && n > 0) rng.setValues(vals.map(r => [typeof r[0] === 'number' ? String(r[0]) : r[0]]));
+  });
+}

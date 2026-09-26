@@ -23,7 +23,8 @@ function checkOverdue() {
 function refreshAll() {
   const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) { toast_('Система занята, повторите через минуту.'); return; }
-  let fixed = 0;
+  const start = Date.now();
+  let fixed = 0, note = '';
   try {
     ['TASK', 'BASE', 'CONT', 'LIB'].forEach(code => {
       fixed += removeOrphanRows_(code);
@@ -41,17 +42,17 @@ function refreshAll() {
       const last = lastDataRow_(t.sh, t.spec);
       if (t.sh.getMaxRows() - last < 200) extendSheet_(code, 1000);
     });
-    const objs = readTable_('OBJ');
-    objs.rows.forEach(o => {
-      if (o.id && o.name && !findObjectTab_(o)) { syncObjectTab_(o, 'create'); fixed++; }
-    });
+    fixObjIdColumns_();
+    const r = tabsWork_(start);
+    fixed += r.created + r.rebuilt;
+    if (r.left) note = '. ' + tabsWorkText_(r);
     orderSheets_();
     applyTabVisibility_();
   } finally {
     lock.releaseLock();
   }
   SpreadsheetApp.flush();
-  toast_('Готово. Исправлено / создано: ' + fixed, 'Обновление', 6);
+  toast_('Готово. Исправлено / создано: ' + fixed + note, 'Обновление', 10);
 }
 
 function openDashboard() { sheet_('DASH').activate(); }

@@ -366,6 +366,7 @@ function buildObjectTab_(sh, objId, data) {
     }
   });
 
+  markers[0] = [tabToken_() || '#']; // A1: вкладка собрана до конца (при обрыве по лимиту времени метки не пишутся)
   sh.getRange(1, 1, markers.length, 1).setValues(markers).setFontColor('#B0BEC5').setFontSize(8);
   protectWarn_(sh.getRange(1, 1, sh.getMaxRows(), 1), 'Служебные метки разделов — не менять');
   sh.setConditionalFormatRules(cfRules);
@@ -428,7 +429,12 @@ function syncObjectTab_(obj, mode) {
   } else {
     if (sh.getName() !== name && !ss.getSheetByName(name)) sh.setName(name);
     if (String(sh.getRange(TAB.ID).getValue()) !== String(obj.id)) sh.getRange(TAB.ID).setNumberFormat('@').setValue(String(obj.id));
-    if (mode === 'rebuild') { buildObjectTab_(sh, obj.id, readObjectTab_(sh)); built = true; }
+    if (mode === 'rebuild') {
+      let data = null;
+      try { data = readObjectTab_(sh); } catch (e) { data = null; } // недособранная вкладка — данных в ней нет
+      buildObjectTab_(sh, obj.id, data);
+      built = true;
+    }
   }
   if (built || mode === 'files') {
     try { fillObjectFiles_(sh, obj); } catch (e) { /* Drive недоступен — список обновится позже */ }
@@ -453,32 +459,88 @@ function objTabInsertIndex_() {
   return idx;
 }
 
+// ───────────── создание / пересборка вкладок с учётом лимита Google (6 минут на запуск) ─────────────
+
+const TAB_BUDGET_MS = 4.5 * 60000;
+
+function tabToken_() { return PropertiesService.getDocumentProperties().getProperty('TAB_TOKEN') || ''; }
+
+/** Вкладка собрана до конца: служебные метки разделов записаны. */
+function tabIsComplete_(sh) {
+  const n = Math.min(sh.getMaxRows(), 80);
+  return sh.getRange(1, 1, n, 1).getValues().some(r => String(r[0]).indexOf('§') === 0);
+}
+
+/** Пометить все вкладки к пересборке (после обновления системы). */
+function startTabRebuild_() {
+  const p = PropertiesService.getDocumentProperties();
+  p.setProperty('TAB_TOKEN', '#' + Date.now());
+  p.setProperty('TAB_REBUILD', '1');
+}
+
+/**
+ * Создаёт недостающие вкладки, досоздаёт оборванные и (если запущена пересборка) пересобирает старые —
+ * пока хватает времени. Остальное доделывает сам через минуту (триггер tabsJob), пока всё не будет готово.
+ */
+function tabsWork_(start) {
+  start = start || Date.now();
+  const props = PropertiesService.getDocumentProperties();
+  const pending = props.getProperty('TAB_REBUILD') === '1';
+  const token = tabToken_();
+  const res = { created: 0, rebuilt: 0, left: 0 };
+  readTable_('OBJ').rows.forEach(o => {
+    if (!o.id || !o.name) return;
+    const sh = findObjectTab_(o);
+    const mode = !sh ? 'create' : (!tabIsComplete_(sh) || (pending && String(sh.getRange('A1').getValue()) !== token)) ? 'rebuild' : '';
+    if (!mode) return;
+    if (Date.now() - start > TAB_BUDGET_MS) { res.left++; return; }
+    syncObjectTab_(o, mode);
+    SpreadsheetApp.flush();
+    if (mode === 'create') res.created++; else res.rebuilt++;
+  });
+  if (!res.left) props.deleteProperty('TAB_REBUILD');
+  scheduleTabsJob_(res.left > 0);
+  return res;
+}
+
+function tabsWorkText_(r) {
+  return 'создано вкладок: ' + r.created + ', обновлено: ' + r.rebuilt +
+    (r.left ? '. Ещё ' + r.left + ' — доделаются автоматически в ближайшие минуты (лимит Google — 6 минут на запуск)' : '');
+}
+
+function scheduleTabsJob_(on) {
+  try {
+    ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'tabsJob') ScriptApp.deleteTrigger(t); });
+    if (on) ScriptApp.newTrigger('tabsJob').timeBased().after(60 * 1000).create();
+  } catch (e) { /* без триггера — доделается через «Обновить» */ }
+}
+
+/** Триггер: продолжить создание / пересборку вкладок. */
+function tabsJob() {
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(10000)) { scheduleTabsJob_(true); return; }
+  try {
+    tabsWork_();
+    orderSheets_();
+    applyTabVisibility_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /** Меню: создать вкладки для объектов, у которых их ещё нет. */
 function createObjectTabs() {
-  const t = readTable_('OBJ');
-  let created = 0;
-  const missing = [];
-  t.rows.forEach(o => {
-    if (!o.id || !o.name) { if (o.name || o.id) missing.push(o.name || o.id); return; }
-    const r = syncObjectTab_(o, 'create');
-    if (r && r.built) created++;
-  });
-  SpreadsheetApp.flush();
-  toast_('Создано вкладок: ' + created + (missing.length ? '. Без ID или названия: ' + missing.join(', ') : ''), 'Вкладки объектов', 8);
+  const r = tabsWork_();
+  orderSheets_();
+  toast_(tabsWorkText_(r), 'Вкладки объектов', 10);
 }
 
 /** Сервис: пересобрать все вкладки (после обновления системы). Данные команды сохраняются. */
 function rebuildObjectTabs() {
-  const n = rebuildObjectTabs_();
-  toast_('Обновлено вкладок: ' + n, 'Вкладки объектов', 6);
-}
-
-function rebuildObjectTabs_() {
-  const t = readTable_('OBJ');
-  let n = 0;
-  t.rows.forEach(o => { if (o.id && o.name && findObjectTab_(o)) { syncObjectTab_(o, 'rebuild'); n++; } });
-  SpreadsheetApp.flush();
-  return n;
+  startTabRebuild_();
+  const r = tabsWork_();
+  applyTabVisibility_();
+  toast_(tabsWorkText_(r), 'Вкладки объектов', 10);
 }
 
 /** Меню: перейти во вкладку выбранного объекта. */

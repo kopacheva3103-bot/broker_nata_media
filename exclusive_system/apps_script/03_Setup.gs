@@ -8,11 +8,13 @@
  */
 
 function setupSystem() {
+  const start = Date.now();
   let ui = null;
   try { ui = SpreadsheetApp.getUi(); } catch (e) { /* запуск из редактора Apps Script — без диалогов */ }
   if (!ui) {
     const log = [];
     runSetup_(log);
+    try { fixObjIdColumns_(); } catch (e) { /* не критично */ }
     try { ensureDrive_(); } catch (err) { log.push('Drive: ' + err.message); }
     installTriggers_();
     Logger.log('Установка завершена: ' + log.join(', '));
@@ -26,6 +28,7 @@ function setupSystem() {
   if (ok !== ui.Button.OK) return;
   const log = [];
   runSetup_(log);
+  try { fixObjIdColumns_(); } catch (e) { /* не критично */ }
   let warn = '';
   try {
     ensureDrive_();
@@ -41,7 +44,7 @@ function setupSystem() {
   }
   const tabs = objectTabs_().length;
   if (tabs) {
-    try { rebuildObjectTabs_(); applyTabVisibility_(); log.push('Вкладки объектов обновлены: ' + tabs); } catch (err) { warn += '\n\n⚠ Вкладки объектов: ' + err.message + '\nЗапустите «Сервис → Обновить все вкладки объектов».'; }
+    try { startTabRebuild_(); const r = tabsWork_(start); applyTabVisibility_(); log.push('Вкладки объектов: ' + tabsWorkText_(r)); } catch (err) { warn += '\n\n⚠ Вкладки объектов: ' + err.message + '\nЗапустите «Сервис → Обновить все вкладки объектов».'; }
   }
   ui.alert('Готово', log.join('\n') + warn +
     (tabs ? '' :
@@ -257,7 +260,7 @@ function buildDataSheet_(code) {
     sh.setColumnWidth(col, f.w || (f.kind === 'cb' ? 90 : 115));
     const fmt = f.fmt || ({ date: 'date', money: 'money' })[f.kind];
     if (fmt) body.setNumberFormat(nf_(fmt));
-    else if (f.kind === 'text' || f.kind === 'link') body.setNumberFormat('@');
+    else if (f.kind === 'text' || f.kind === 'link' || f.key === 'obj_id') body.setNumberFormat('@');
     body.clearDataValidations();
     const v = validationFor_(f);
     if (v) body.setDataValidation(v);

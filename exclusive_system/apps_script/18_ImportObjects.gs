@@ -41,7 +41,8 @@ function runObjectsImport(text) {
   const r = parseObjectsImport_(text);
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
-  let tabs = 0;
+  const start = Date.now();
+  let tabRes = { created: 0, rebuilt: 0, left: 0 };
   try {
     const now = today_();
     const firstStatus = dictValues_('obj_status')[0] || '';
@@ -63,16 +64,14 @@ function runObjectsImport(text) {
     SpreadsheetApp.flush();
     hist.push.apply(hist, r.add.map(o => ({ sheet: SHEET_NAMES.OBJ, record_id: o.id, obj_id: o.id, field: 'Объект', old: '', new: o.name, kind: HIST_KIND.CREATE, note: 'Загрузка списком' })));
     logHistory_(hist, userEmail_());
-    readTable_('OBJ').rows.forEach(o => {
-      if (!o.id || !o.name || findObjectTab_(o)) return;
-      syncObjectTab_(o, 'create');
-      tabs++;
-    });
+    fixObjIdColumns_();
+    r.upd.filter(o => o._from).forEach(o => { const obj = objectById_(o.id); if (obj) syncObjectTab_(obj, 'rename'); });
+    tabRes = tabsWork_(start);
     orderSheets_();
   } finally {
     lock.releaseLock();
   }
-  return 'Добавлено объектов: ' + r.add.length + ', дополнено: ' + r.upd.length + ', создано вкладок: ' + tabs +
+  return 'Добавлено объектов: ' + r.add.length + ', дополнено: ' + r.upd.length + ', ' + tabsWorkText_(tabRes) +
     (r.errors.length ? '. Замечаний: ' + r.errors.length + ' (см. «Проверить»)' : '') + '. Проверьте 01_ОБЪЕКТЫ.';
 }
 
