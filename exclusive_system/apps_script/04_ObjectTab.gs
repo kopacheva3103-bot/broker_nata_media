@@ -424,7 +424,9 @@ function syncObjectTab_(obj, mode) {
   let built = false;
   if (!sh) {
     sh = ss.insertSheet(name, objTabInsertIndex_());
-    buildObjectTab_(sh, obj.id, null);
+    const saved = tabBackup_(obj.id); // вкладку удалили — восстанавливаем данные из 98_КОПИИ_ВКЛАДОК
+    buildObjectTab_(sh, obj.id, saved);
+    if (saved) logHistory_([{ sheet: name, record_id: obj.id, obj_id: obj.id, field: 'Вкладка', old: '', new: 'восстановлена из копии', kind: HIST_KIND.CREATE }], userEmail_());
     built = true;
   } else {
     if (sh.getName() !== name && !ss.getSheetByName(name)) sh.setName(name);
@@ -436,6 +438,7 @@ function syncObjectTab_(obj, mode) {
       built = true;
     }
   }
+  if (built) { try { protectObjectTab_(sh); } catch (e) { /* защиту поставит «Обновить» владельца */ } }
   if (built || mode === 'files') {
     try { fillObjectFiles_(sh, obj); } catch (e) { /* Drive недоступен — список обновится позже */ }
   }

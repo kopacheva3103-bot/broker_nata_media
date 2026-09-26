@@ -60,11 +60,13 @@ function syncCalendar_() {
 
 // ───────────────────────── ежедневное обновление ─────────────────────────
 
-/** Каждое утро: календарь, статистика соцсетей, списки документов объектов. */
+/** Каждое утро: календарь, статистика соцсетей, списки документов, копии вкладок, восстановление и защита объектов. */
 function dailyJobs() {
   try { syncCalendar_(); } catch (e) { Logger.log('Календарь: ' + e.message); }
   try { refreshSocialStats_(); } catch (e) { Logger.log('Статистика: ' + e.message); }
   try { refreshObjectFiles_(); } catch (e) { Logger.log('Документы: ' + e.message); }
+  try { backupObjectTabs_(); } catch (e) { Logger.log('Копии вкладок: ' + e.message); }
+  try { tabsWork_(); protectAll_(); } catch (e) { Logger.log('Вкладки / защита: ' + e.message); }
 }
 
 function enableDailyJobs() {

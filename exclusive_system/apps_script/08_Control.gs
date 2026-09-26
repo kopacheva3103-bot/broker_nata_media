@@ -49,6 +49,7 @@ function refreshAll() {
     if (r.left) note = '. ' + tabsWorkText_(r);
     orderSheets_();
     applyTabVisibility_();
+    try { protectAll_(); } catch (e) { /* не критично */ }
   } finally {
     lock.releaseLock();
   }

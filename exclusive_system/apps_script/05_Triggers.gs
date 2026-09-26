@@ -30,6 +30,7 @@ function onEditHandler(e) {
   if (!lock.tryLock(20000)) return;
   try {
     processEditedRows_(sh, spec, Math.max(2, e.range.getRow()), rLast, c0, Math.min(e.range.getLastColumn(), spec.fields.length), e);
+    if (spec.code === 'OBJ') { try { protectObjectRows_(); } catch (err) { /* не критично */ } }
   } catch (err) {
     toast_('Ошибка автоматики: ' + err.message, 'Внимание', 10);
   } finally {

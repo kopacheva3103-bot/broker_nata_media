@@ -301,3 +301,23 @@ console.log('rename person:', beforeT, '→', X.readTable_('TASK').rows.filter(t
 // команда по умолчанию: ассистент ведёт все объекты
 X.writeFields_(X.sheet_('OBJ'), 'OBJ', X.objectById_('129866881')._row, { assistant: '', manager: '' });
 console.log('team:', JSON.stringify(X.teamDefaults_()), '| filled:', X.fillTeamDefaults_(), '|', X.objectById_('129866881').assistant, X.objectById_('129866881').manager);
+// защита и восстановление удалённой вкладки из копии
+const oT = X.objectById_('129866881'); const tT = X.findObjectTab_(oT);
+console.log('owner?', X.isOwner_(), '| backup rows:', X.backupObjectTabs_());
+const bk = X.tabBackup_('129866881'); console.log('backup has data:', !!bk, bk && Object.keys(bk.tables || {}).length >= 0);
+{
+  const t0 = X.findObjectTab_(X.objectById_('129866881'));
+  const data0 = X.readObjectTab_(t0);
+  const k = Object.keys(data0.tables)[0] || 'ANALOG';
+  const bsh = X.ss_().getSheetByName(X.BACKUP_SHEET);
+  const rowsB = bsh.getRange(2, 1, bsh.getLastRow() - 1, 3).getValues();
+  const idx = rowsB.findIndex(r => String(r[0]) === '129866881');
+  const sec = X.objTabSections_().find(s => s.type === 'table');
+  const fake = { tables: {}, kv: {} }; fake.tables[sec.key] = [sec.cols.map((c, i) => i === 0 ? 'Аналог-проверка' : '')];
+  bsh.getRange(2 + idx, 3).setValue(JSON.stringify(fake));
+  X.ss_().deleteSheet(t0);
+  const r = X.tabsWork_();
+  const t1 = X.findObjectTab_(X.objectById_('129866881'));
+  const back = t1 && X.readObjectTab_(t1);
+  console.log('restore deleted tab:', r.created, !!t1, back && JSON.stringify(back.tables[sec.key] || []).indexOf('Аналог-проверка') >= 0);
+}

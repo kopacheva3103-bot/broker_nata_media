@@ -42,6 +42,11 @@ function setupSystem() {
   } catch (err) {
     warn += '\n\n⚠ Триггер: ' + err.message;
   }
+  try {
+    const nt = protectAll_();
+    if (isOwner_()) log.push('Защита: ID и названия объектов, служебная часть вкладок (' + nt + ') — удалять объекты может только руководитель');
+    backupObjectTabs_();
+  } catch (err) { warn += '\n\n⚠ Защита: ' + err.message; }
   const tabs = objectTabs_().length;
   if (tabs) {
     try { startTabRebuild_(); const r = tabsWork_(start); applyTabVisibility_(); log.push('Вкладки объектов: ' + tabsWorkText_(r)); } catch (err) { warn += '\n\n⚠ Вкладки объектов: ' + err.message + '\nЗапустите «Сервис → Обновить все вкладки объектов».'; }

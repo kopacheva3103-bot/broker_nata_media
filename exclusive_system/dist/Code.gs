@@ -820,6 +820,11 @@ function setupSystem() {
   } catch (err) {
     warn += '\n\n⚠ Триггер: ' + err.message;
   }
+  try {
+    const nt = protectAll_();
+    if (isOwner_()) log.push('Защита: ID и названия объектов, служебная часть вкладок (' + nt + ') — удалять объекты может только руководитель');
+    backupObjectTabs_();
+  } catch (err) { warn += '\n\n⚠ Защита: ' + err.message; }
   const tabs = objectTabs_().length;
   if (tabs) {
     try { startTabRebuild_(); const r = tabsWork_(start); applyTabVisibility_(); log.push('Вкладки объектов: ' + tabsWorkText_(r)); } catch (err) { warn += '\n\n⚠ Вкладки объектов: ' + err.message + '\nЗапустите «Сервис → Обновить все вкладки объектов».'; }
@@ -1773,7 +1778,9 @@ function syncObjectTab_(obj, mode) {
   let built = false;
   if (!sh) {
     sh = ss.insertSheet(name, objTabInsertIndex_());
-    buildObjectTab_(sh, obj.id, null);
+    const saved = tabBackup_(obj.id); // вкладку удалили — восстанавливаем данные из 98_КОПИИ_ВКЛАДОК
+    buildObjectTab_(sh, obj.id, saved);
+    if (saved) logHistory_([{ sheet: name, record_id: obj.id, obj_id: obj.id, field: 'Вкладка', old: '', new: 'восстановлена из копии', kind: HIST_KIND.CREATE }], userEmail_());
     built = true;
   } else {
     if (sh.getName() !== name && !ss.getSheetByName(name)) sh.setName(name);
@@ -1785,6 +1792,7 @@ function syncObjectTab_(obj, mode) {
       built = true;
     }
   }
+  if (built) { try { protectObjectTab_(sh); } catch (e) { /* защиту поставит «Обновить» владельца */ } }
   if (built || mode === 'files') {
     try { fillObjectFiles_(sh, obj); } catch (e) { /* Drive недоступен — список обновится позже */ }
   }
@@ -2084,6 +2092,7 @@ function onEditHandler(e) {
   if (!lock.tryLock(20000)) return;
   try {
     processEditedRows_(sh, spec, Math.max(2, e.range.getRow()), rLast, c0, Math.min(e.range.getLastColumn(), spec.fields.length), e);
+    if (spec.code === 'OBJ') { try { protectObjectRows_(); } catch (err) { /* не критично */ } }
   } catch (err) {
     toast_('Ошибка автоматики: ' + err.message, 'Внимание', 10);
   } finally {
@@ -2771,6 +2780,7 @@ function refreshAll() {
     if (r.left) note = '. ' + tabsWorkText_(r);
     orderSheets_();
     applyTabVisibility_();
+    try { protectAll_(); } catch (e) { /* не критично */ }
   } finally {
     lock.releaseLock();
   }
@@ -4144,11 +4154,13 @@ function syncCalendar_() {
 
 // ───────────────────────── ежедневное обновление ─────────────────────────
 
-/** Каждое утро: календарь, статистика соцсетей, списки документов объектов. */
+/** Каждое утро: календарь, статистика соцсетей, списки документов, копии вкладок, восстановление и защита объектов. */
 function dailyJobs() {
   try { syncCalendar_(); } catch (e) { Logger.log('Календарь: ' + e.message); }
   try { refreshSocialStats_(); } catch (e) { Logger.log('Статистика: ' + e.message); }
   try { refreshObjectFiles_(); } catch (e) { Logger.log('Документы: ' + e.message); }
+  try { backupObjectTabs_(); } catch (e) { Logger.log('Копии вкладок: ' + e.message); }
+  try { tabsWork_(); protectAll_(); } catch (e) { Logger.log('Вкладки / защита: ' + e.message); }
 }
 
 function enableDailyJobs() {
@@ -5283,4 +5295,103 @@ function autoReportsMail_(state) {
     '</ol><p>Поправить: откройте Google Doc отчёта (папка объекта → Отчёты), затем «Обновить PDF отчёта» и при необходимости «Отправить отчёт клиенту в CRM».</p>' +
     '<p><a href="' + ss_().getUrl() + '">Открыть систему</a></p>';
   try { MailApp.sendEmail({ to: to, subject: 'Отчёты клиентам за ' + state.wk + ' готовы (' + rows.length + ')', htmlBody: html }); } catch (e) { Logger.log('Письмо: ' + e.message); }
+}
+
+// ═════════════ 21_Protect.gs ═════════════
+/**
+ * 21_Protect — команда дополняет и редактирует, но не удаляет объекты.
+ *
+ *  - 01_ОБЪЕКТЫ: ID и название заведённых объектов закрыты для всех, кроме владельца таблицы —
+ *    строку объекта нельзя удалить (в ней защищённые ячейки), ID и название меняет только руководитель.
+ *    Новые объекты команда добавляет в пустые строки как обычно — защита расширяется автоматически.
+ *  - Вкладки объектов: служебные метки (столбец A) и шапка закрыты; поля стратегии команда заполняет свободно.
+ *  - Страховка: раз в сутки данные каждой вкладки сохраняются в скрытый лист 98_КОПИИ_ВКЛАДОК; если вкладку
+ *    удалят, «Обновить» / автообновление пересоздаст её с последними сохранёнными данными.
+ * Защиту ставит только владелец таблицы (установка, «Обновить», автоматические задания владельца).
+ */
+
+const PROTECT = { OBJ: 'SYS: Объекты — ID и название (удалять и переименовывать может только руководитель)', TAB: 'SYS: Служебная часть вкладки объекта' };
+const BACKUP_SHEET = '98_КОПИИ_ВКЛАДОК';
+
+function isOwner_() {
+  try {
+    const owner = ss_().getOwner();
+    return !!owner && owner.getEmail() === Session.getEffectiveUser().getEmail();
+  } catch (e) { return false; }
+}
+
+function ownerOnly_(p) {
+  const me = Session.getEffectiveUser();
+  p.addEditor(me);
+  p.removeEditors(p.getEditors().filter(u => u.getEmail() !== me.getEmail()));
+  if (p.canDomainEdit()) p.setDomainEdit(false);
+  return p;
+}
+
+/** ID и название заведённых объектов — только владелец. */
+function protectObjectRows_() {
+  if (!isOwner_()) return false;
+  const sh = sheet_('OBJ');
+  sh.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(p => { if (p.getDescription() === PROTECT.OBJ) p.remove(); });
+  const last = lastDataRow_(sh, sheetSpecs_().OBJ);
+  if (last < 2) return true;
+  const cols = [fieldIndex_('OBJ', 'id'), fieldIndex_('OBJ', 'name')].sort((a, b) => a - b);
+  ownerOnly_(sh.getRange(2, cols[0], last - 1, cols[1] - cols[0] + 1).protect().setDescription(PROTECT.OBJ));
+  return true;
+}
+
+/** Служебная часть вкладки: столбец меток и шапка (ID объекта). */
+function protectObjectTab_(sh) {
+  if (!isOwner_()) return;
+  sh.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(p => { if (p.getDescription() === PROTECT.TAB) p.remove(); });
+  ownerOnly_(sh.getRange(1, 1, sh.getMaxRows(), 1).protect().setDescription(PROTECT.TAB));
+  ownerOnly_(sh.getRange(1, 8, 1, 2).protect().setDescription(PROTECT.TAB));
+}
+
+function protectAll_() {
+  if (!isOwner_()) return 0;
+  protectObjectRows_();
+  const tabs = objectTabs_();
+  tabs.forEach(protectObjectTab_);
+  return tabs.length;
+}
+
+// ───────────────────────── копии вкладок ─────────────────────────
+
+function backupSheet_() {
+  const ss = ss_();
+  let sh = ss.getSheetByName(BACKUP_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(BACKUP_SHEET, ss.getSheets().length);
+    sh.getRange(1, 1, 1, 3).setValues([['ID объекта', 'Сохранено', 'Данные вкладки (для восстановления)']]).setFontWeight('bold');
+    sh.hideSheet();
+    if (isOwner_()) ownerOnly_(sh.protect().setDescription('SYS: Копии вкладок объектов'));
+  }
+  return sh;
+}
+
+/** Раз в сутки: данные всех вкладок объектов → 98_КОПИИ_ВКЛАДОК (одна строка на объект). */
+function backupObjectTabs_() {
+  const sh = backupSheet_();
+  const now = new Date();
+  const rows = [];
+  objectTabs_().forEach(t => {
+    const id = String(t.getRange(TAB.ID).getValue() || '');
+    if (!id || !tabIsComplete_(t)) return;
+    const json = JSON.stringify(readObjectTab_(t));
+    if (json.length < 49000) rows.push([id, now, json]);
+  });
+  const last = sh.getLastRow();
+  if (last > 1) sh.getRange(2, 1, last - 1, 3).clearContent();
+  if (rows.length) sh.getRange(2, 1, rows.length, 3).setNumberFormat('@').setValues(rows.map(r => [r[0], fmtDate_(r[1], 'dd.MM.yyyy HH:mm'), r[2]]));
+  return rows.length;
+}
+
+/** Сохранённые данные вкладки объекта (или null). */
+function tabBackup_(id) {
+  const sh = ss_().getSheetByName(BACKUP_SHEET);
+  if (!sh || sh.getLastRow() < 2) return null;
+  const row = sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues().find(r => String(r[0]) === String(id));
+  if (!row) return null;
+  try { return JSON.parse(row[2]); } catch (e) { return null; }
 }
