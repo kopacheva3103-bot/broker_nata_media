@@ -8,6 +8,10 @@
  * потом ставим галочку. Результат пишется в столбец «CRM».
  * Ключ API и ID пользователя-автора заметок хранятся в свойствах скрипта («Сервис → Подключить CRM TopenLab»).
  * Ограничение API: поиск не чаще 1 раза в 6 секунд — при массовой отметке используйте «Отправить отмеченные в CRM».
+ *
+ * Отчёт клиенту: при «Создать отчёт клиенту» в карточку объекта (ID объекта = ID карточки в CRM) добавляются
+ * комментарий с текстом отчёта и ссылкой на PDF и — если есть — комментарий «для себя» (05_ОТЧЁТ_КЛИЕНТУ, B6)
+ * и список просроченных задач. Клиенту в PDF «для себя» не попадает.
  */
 
 const CRM_BASE_DEFAULT = 'https://agencies-p.topnlab.ru/public';
@@ -57,15 +61,90 @@ function crmSendRow_(o, cfg) {
     const ent = data && typeof data === 'object' ? data[Object.keys(data)[0]] : null;
     if (!ent || !ent.id) continue;
     if (!cfg.user) return '✓ найдена ' + CRM_TYPES[i][1] + ' ' + ent.id + ' (заметки выключены: нет ID автора)';
-    const w = UrlFetchApp.fetch(cfg.base + '/set-note', {
-      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-      payload: JSON.stringify({ key: cfg.key, id: ent.id, type: type, note: crmNoteText_(o), user_id: Number(cfg.user) || cfg.user }),
-    });
-    let ok = false;
-    try { const j = JSON.parse(w.getContentText()); ok = w.getResponseCode() < 400 && (j.status === 'success' || j.status === 'ok'); } catch (e) { ok = false; }
-    return ok ? '✓ заметка ' + fmtDate_(new Date()) + ' · ' + CRM_TYPES[i][1] + ' ' + ent.id : '⚠ заметка не добавлена (' + w.getResponseCode() + ')';
+    const w = crmPostNote_(cfg, type, ent.id, crmNoteText_(o));
+    return w.ok ? '✓ заметка ' + fmtDate_(new Date()) + ' · ' + CRM_TYPES[i][1] + ' ' + ent.id : '⚠ заметка не добавлена (' + w.code + ')';
   }
   return '⚠ карточки с телефоном ' + phone + ' нет — заведите в CRM';
+}
+
+/**
+ * Заметка (комментарий) в карточку TopenLab. Дополнительные параметры заметки (например, признак
+ * «публичный комментарий» — имя параметра смотрите в документации API TopenLab) задаются в «Подключить CRM»
+ * и добавляются к каждому запросу.
+ */
+function crmPostNote_(cfg, type, id, note) {
+  let extra = {};
+  try { extra = JSON.parse(PropertiesService.getScriptProperties().getProperty('TOPNLAB_NOTE_EXTRA') || '{}') || {}; } catch (e) { extra = {}; }
+  const payload = Object.assign({}, extra, {
+    key: cfg.key, id: /^\d+$/.test(String(id)) ? Number(id) : id, type: type,
+    note: String(note).slice(0, 8000), user_id: Number(cfg.user) || cfg.user,
+  });
+  const w = UrlFetchApp.fetch(cfg.base + '/set-note', { method: 'post', contentType: 'application/json', muteHttpExceptions: true, payload: JSON.stringify(payload) });
+  let ok = false, msg = '';
+  try { const j = JSON.parse(w.getContentText()); ok = w.getResponseCode() < 400 && (j.status === 'success' || j.status === 'ok'); msg = j.message || j.error || ''; } catch (e) { ok = false; }
+  return { ok: ok, code: w.getResponseCode(), msg: msg };
+}
+
+// ───────────────────────── отчёт клиенту → карточка объекта ─────────────────────────
+
+/** Текст комментария «отчёт клиенту» и внутреннего комментария для руководителя. */
+function reportCrmNotes_(obj, values, pdfUrl, internal) {
+  const kv = values.kv, t = values.tables;
+  const rows = (ph, empty) => {
+    const r = (t[ph] || []).filter(x => x[1] && x[0] !== '—');
+    return r.length ? r.map(x => x[0] + '. ' + x[1] + (x[2] ? ' — ' + x[2] : '')).join('\n') : empty;
+  };
+  const client = [
+    'ОТЧЁТ КЛИЕНТУ №' + (kv.REPORT_NO || '') + ' за ' + (kv.PERIOD || '') + ' — ' + obj.name,
+    kv.SUMMARY ? '\nИтоги недели:\n' + kv.SUMMARY : '',
+    '\nВыполнение плана:\n' + rows('PLAN_ROWS', 'задачи на неделю не внесены'),
+    '\nПолученные заявки:\n' + rows('LEADS_ROWS', 'новых заявок нет'),
+    '\nПлан работы на следующую неделю:\n' + rows('NEXT_ROWS', 'план не внесён'),
+    kv.COMMENT ? '\nКомментарий для клиента:\n' + kv.COMMENT : '',
+    pdfUrl ? '\nPDF отчёта: ' + pdfUrl : '',
+  ].filter(Boolean).join('\n');
+  const overdue = readTable_('TASK').rows.filter(x => String(x.obj_id) === String(obj.id) && x.overdue === 'ПРОСРОЧЕНО');
+  const own = String(internal || '').trim();
+  const inner = own || overdue.length ? [
+    'ДЛЯ РУКОВОДИТЕЛЯ (клиенту не отправляется) — отчёт №' + (kv.REPORT_NO || '') + ' за ' + (kv.PERIOD || ''),
+    own ? '\n' + own : '',
+    overdue.length ? '\nПросрочено задач: ' + overdue.length + '\n' + overdue.slice(0, 10).map(x => '• ' + x.task + ' (' + (x.owner || '—') + ', срок ' + fmtDate_(x.deadline) + ')').join('\n') : '',
+  ].filter(Boolean).join('\n') : '';
+  return { client: client, inner: inner };
+}
+
+/** Отправляет отчёт в карточку объекта (ID объекта = ID карточки в CRM). Возвращает текст статуса. */
+function sendReportToCrm_(obj, values, pdfUrl, internal) {
+  const cfg = crmConfig_();
+  if (!cfg.key) return '';
+  if (!cfg.user) return '⚠ не задан ID автора заметок (Сервис → Подключить CRM TopenLab)';
+  if (!isCrmId_(obj.id)) return '⚠ у объекта нет ID из CRM (сейчас «' + obj.id + '»)';
+  const n = reportCrmNotes_(obj, values, pdfUrl, internal);
+  const a = crmPostNote_(cfg, 'realty', obj.id, n.client);
+  if (!a.ok) return '⚠ CRM: отчёт не добавлен (' + a.code + (a.msg ? ', ' + a.msg : '') + ')';
+  let st = '✓ в CRM ' + fmtDate_(new Date()) + ': отчёт';
+  if (n.inner) {
+    const b = crmPostNote_(cfg, 'realty', obj.id, n.inner);
+    st += b.ok ? ' + комментарий для себя' : ', ⚠ комментарий для себя не добавлен (' + b.code + ')';
+  }
+  return st;
+}
+
+/** Меню: отправить в CRM отчёт, выбранный в 05_ОТЧЁТ_КЛИЕНТУ (например, после правок или если CRM подключили позже). */
+function crmSendReport() {
+  const ui = SpreadsheetApp.getUi();
+  if (!crmConfig_().key) { ui.alert('CRM не подключена: Сервис → Подключить CRM TopenLab.'); return; }
+  SpreadsheetApp.flush();
+  const rep = sheet_('REP');
+  const id = String(rep.getRange('E3').getValue() || ''), wk = String(rep.getRange('E4').getValue() || '');
+  const obj = objectById_(id);
+  if (!obj || !wk) { ui.alert('Выберите объект и неделю в ' + SHEET_NAMES.REP + '.'); return; }
+  const arch = readTable_('ARCH');
+  const rows = arch.rows.filter(r => String(r.obj_id) === id && r.week === wk && r.status === REPORT_STATUS.ACTUAL);
+  const last = rows[rows.length - 1];
+  const st = sendReportToCrm_(obj, readReportValues_(), last ? last.pdf_link : '', rep.getRange('B6').getValue());
+  if (last) writeFields_(arch.sh, 'ARCH', last._row, { crm: st });
+  ui.alert('Отчёт → CRM', st || 'CRM не подключена', ui.ButtonSet.OK);
 }
 
 /** API: поиск не чаще 1 раза в 6 секунд. */
@@ -113,17 +192,23 @@ function connectCrm() {
     '<p>Статус: <b id="s">' + (c.key ? 'подключена' + (c.user ? ', автор заметок ' + htmlEscape_(c.user) : ', без автора заметок') : 'не подключена') + '</b></p>' +
     '<p>Ключ API:<br><input id="k" style="width:100%"></p>' +
     '<p>ID пользователя-автора заметок:<br><input id="u" style="width:100%" value="' + htmlEscape_(c.user) + '"></p>' +
+    '<p>Доп. параметры заметки (JSON, необязательно) — например признак «публичный комментарий» из документации API TopenLab (Настройки → API):<br><input id="x" style="width:100%" placeholder=\'{"is_public": 1}\' value="' + htmlEscape_(PropertiesService.getScriptProperties().getProperty('TOPNLAB_NOTE_EXTRA') || '') + '"></p>' +
     '<p>Телефон существующей карточки для проверки (необязательно):<br><input id="p" style="width:100%" placeholder="+7 925 …"></p>' +
     '<button onclick="save()">Сохранить и проверить</button> <button onclick="off()">Отключить</button><div id="r" style="margin-top:10px"></div></div><script>' +
     'function done(x){document.getElementById("r").textContent=x.msg;document.getElementById("s").textContent=x.status;}' +
-    'function save(){document.getElementById("r").textContent="Проверяю… (до 15 секунд)";google.script.run.withSuccessHandler(done).withFailureHandler(function(e){document.getElementById("r").textContent="Ошибка: "+e.message;}).saveCrmSettings(document.getElementById("k").value,document.getElementById("u").value,document.getElementById("p").value);}' +
+    'function save(){document.getElementById("r").textContent="Проверяю… (до 15 секунд)";google.script.run.withSuccessHandler(done).withFailureHandler(function(e){document.getElementById("r").textContent="Ошибка: "+e.message;}).saveCrmSettings(document.getElementById("k").value,document.getElementById("u").value,document.getElementById("p").value,document.getElementById("x").value);}' +
     'function off(){google.script.run.withSuccessHandler(done).removeCrmSettings();}' +
-    '</script>').setWidth(520).setHeight(430);
+    '</script>').setWidth(540).setHeight(520);
   SpreadsheetApp.getUi().showModalDialog(html, 'Подключить CRM TopenLab');
 }
 
-function saveCrmSettings(key, user, testPhone) {
+function saveCrmSettings(key, user, testPhone, extra) {
   const p = PropertiesService.getScriptProperties();
+  const ex = String(extra || '').trim();
+  if (ex) {
+    try { JSON.parse(ex); } catch (e) { return { status: 'не сохранено', msg: 'Доп. параметры — не JSON. Пример: {"is_public": 1}' }; }
+    p.setProperty('TOPNLAB_NOTE_EXTRA', ex);
+  } else p.deleteProperty('TOPNLAB_NOTE_EXTRA');
   if (String(key || '').trim()) p.setProperty('TOPNLAB_KEY', String(key).trim());
   if (String(user || '').trim()) p.setProperty('TOPNLAB_USER_ID', String(user).trim());
   const c = crmConfig_();
@@ -148,6 +233,6 @@ function saveCrmSettings(key, user, testPhone) {
 
 function removeCrmSettings() {
   const p = PropertiesService.getScriptProperties();
-  ['TOPNLAB_KEY', 'TOPNLAB_USER_ID', 'TOPNLAB_LAST'].forEach(k => p.deleteProperty(k));
+  ['TOPNLAB_KEY', 'TOPNLAB_USER_ID', 'TOPNLAB_LAST', 'TOPNLAB_NOTE_EXTRA'].forEach(k => p.deleteProperty(k));
   return { status: 'не подключена', msg: 'Отключено.' };
 }

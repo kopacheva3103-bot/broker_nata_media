@@ -196,6 +196,7 @@ function sheetSpecs_() {
       F('pdf_link', 'PDF', 'sys', { w: 130 }),
       F('author', 'Создал', 'sys', { w: 160 }),
       F('status', 'Статус', 'sys'),
+      F('crm', 'CRM', 'sys', { w: 220 }),
     ],
   };
 

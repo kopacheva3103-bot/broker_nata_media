@@ -23,7 +23,7 @@ const F3 = inFile('F_RENT', 'Тверская 15 — аренда.pdf', 'applica
 INBOX.files.push(F1, F2, F3);
 const PROPS = { getProperty: k => (k in PSTORE ? PSTORE[k] : null), setProperty: (k, v) => { PSTORE[k] = v; }, deleteProperty: k => { delete PSTORE[k]; } };
 const FETCHED = []; const NOTES = [];
-function FETCH(u) {
+function FETCH(u, o) {
   FETCHED.push(u);
   const J = o => ({ getContentText: () => JSON.stringify(o), getResponseCode: () => 200 });
   if (u.indexOf('t.me/') >= 0) return { getContentText: () => u.indexOf('/77?') > 0 ? '<span class="tgme_widget_message_views">1.2K</span>' : '<span class="tgme_widget_message_views">845</span>' };
@@ -43,7 +43,7 @@ function FETCH(u) {
   if (/googleapis\.com\/drive\/v3\/files\/TMP_F_OSTROV\/export/.test(u)) return { getResponseCode: () => 200, getContentText: () => 'КП «Остров»\nМосковская обл., Истринский р-н, КП Остров, уч. 12\nДом 450,5 м² на участке 25 соток\nСтоимость: 185 000 000 ₽\nЦена за м²: 410 000 ₽\nПродажа' };
   if (/googleapis\.com\/drive\/v3\/files\/TMP_F_RENT\/export/.test(u)) return { getResponseCode: () => 200, getContentText: () => 'Помещение ПСН 320 м2, аренда 1,2 млн руб. в месяц\nг. Москва, ул. Тверская, 15' };
   if (/topnlab\.ru\/public\/get-entities/.test(u)) return (u.indexOf('79251112233') >= 0 && u.indexOf('type=order') >= 0) ? J({ '123': { id: 123 } }) : { getContentText: () => '', getResponseCode: () => 404 };
-  if (/topnlab\.ru\/public\/set-note/.test(u)) { NOTES.push(u); return J({ status: 'success' }); }
+  if (/topnlab\.ru\/public\/set-note/.test(u)) { NOTES.push(o && o.payload || u); return J({ status: 'success' }); }
   if (/555\/insights/.test(u)) return J({ data: [{ name: 'views', values: [{ value: 777 }] }] });
   if (/refresh_access_token/.test(u)) return J({ access_token: 'REFRESHED', expires_in: 5184000 });
   return J({ error: { message: 'unknown ' + u } });
@@ -61,7 +61,7 @@ const X = loadGs({
   Utilities: { sleep: () => {}, formatDate: (d, tz, p) => p.replace('yyyy', d.getFullYear()).replace('MM', pad(d.getMonth() + 1)).replace('dd', pad(d.getDate())).replace('HH', pad(d.getHours())).replace('mm', pad(d.getMinutes())) },
   Session: { getActiveUser: () => ({ getEmail: () => 'test@example.com' }), getEffectiveUser: () => ({ getEmail: () => 'boss@example.com' }) },
   LockService: { getDocumentLock: () => ({ tryLock: () => true, waitLock: () => {}, releaseLock: () => {} }) },
-  UrlFetchApp: { fetch: (u) => FETCH(u) },
+  UrlFetchApp: { fetch: (u, o) => FETCH(u, o) },
   PropertiesService: { getScriptProperties: () => PROPS, getDocumentProperties: () => PROPS },
   CalendarApp: { getDefaultCalendar: () => CAL },
   DriveApp: { getFolderById: id => { if (!FOLDERS[id]) throw new Error('no folder'); return FOLDERS[id]; }, getFileById: id => ({ setTrashed: () => { TRASHED.push(id); } }) },
@@ -270,3 +270,12 @@ tsh.getRange(2, idc).setValue(137073408);
 X.fixObjIdColumns_();
 console.log('obj_id text:', typeof tsh.getRange(2, idc).getValue(), tsh.getRange(2, idc).getValue());
 X.startTabRebuild_(); const rb = X.tabsWork_(); console.log('rebuild all:', rb.rebuilt, 'again:', X.tabsWork_().rebuilt);
+
+// отчёт клиенту → комментарии в карточку объекта TopenLab
+PSTORE.TOPNLAB_KEY = 'k'; PSTORE.TOPNLAB_USER_ID = '77'; PSTORE.TOPNLAB_NOTE_EXTRA = '{"is_public":1}';
+NOTES.length = 0;
+const st = X.sendReportToCrm_(X.objectById_('137073408'), X.readReportValues_(), 'https://pdf', 'Собственник просит снизить темп показов');
+const n1 = JSON.parse(NOTES[0] || '{}'), n2 = JSON.parse(NOTES[1] || '{}');
+console.log('crm report:', st, '| notes', NOTES.length, '| id', n1.id, typeof n1.id, n1.type, 'public', n1.is_public, 'user', n1.user_id);
+console.log('client note:', (n1.note || '').split('\n').slice(0, 3).join(' / '), '| has pdf', /https:\/\/pdf/.test(n1.note), '| inner:', (n2.note || '').split('\n').slice(0, 3).join(' / '));
+console.log('no crm id:', X.sendReportToCrm_({ id: 'НОВ-002', name: 'x' }, X.readReportValues_(), '', ''));

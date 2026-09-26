@@ -324,6 +324,8 @@ function reportLayout_() {
   cells.push({ a1: 'B4', v: '', style: 'select', validation: { list: 'D.weeks:c4' } });
   cells.push({ a1: 'A5', v: 'Комментарий для клиента:', style: 'label' });
   cells.push({ a1: 'B5', v: '', style: 'select', note: 'Необязательно. Если пусто — раздела «Комментарий» в отчёте не будет.' });
+  cells.push({ a1: 'A6', v: 'Комментарий для себя (только в CRM):', style: 'label' });
+  cells.push({ a1: 'B6', v: '', style: 'select', note: 'Необязательно. Уходит в карточку объекта в TopenLab вместе с отчётом. В PDF для клиента не попадает.' });
   cells.push({ a1: 'D2', v: 'Служебное', style: 'muted' });
   [
     ['D3', 'ID объекта', 'E3', '=IFERROR(REGEXEXTRACT(B3,"^(.*?) · "),"")'],

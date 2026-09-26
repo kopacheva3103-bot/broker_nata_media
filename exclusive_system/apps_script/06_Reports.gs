@@ -25,7 +25,7 @@ function createReport() {
     { label: 'Google Doc: ' + res.name, url: res.docUrl },
     { label: 'PDF для клиента', url: res.pdfUrl },
     { label: 'Папка отчётов объекта', url: res.folderUrl },
-  ], 'Проверьте документ. Если поправите текст в Google Doc — нажмите «Обновить PDF отчёта».');
+  ], (res.crm ? res.crm + '. ' : '') + 'Проверьте документ. Если поправите текст в Google Doc — нажмите «Обновить PDF отчёта».');
 }
 
 /** Собирает отчёт. Лист 05_ОТЧЁТ_КЛИЕНТУ должен быть выставлен на этот объект и неделю. */
@@ -59,7 +59,10 @@ function generateReport_(id, wk, opts) {
     doc_link: copy.getUrl(), pdf_link: pdf.getUrl(), author: userEmail_(), status: REPORT_STATUS.ACTUAL,
   });
   writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { last_report_link: pdf.getUrl(), last_report_date: today_() });
-  return { name: name, docId: copy.getId(), docUrl: copy.getUrl(), pdfId: pdf.getId(), pdfUrl: pdf.getUrl(), folderUrl: folder.getUrl() };
+  let crm = '';
+  try { crm = sendReportToCrm_(obj, values, pdf.getUrl(), sheet_('REP').getRange('B6').getValue()); } catch (e) { crm = '⚠ CRM: ' + e.message; }
+  if (crm) { const a = readTable_('ARCH'); const last = a.rows[a.rows.length - 1]; if (last) writeFields_(a.sh, 'ARCH', last._row, { crm: crm }); }
+  return { crm: crm, name: name, docId: copy.getId(), docUrl: copy.getUrl(), pdfId: pdf.getId(), pdfUrl: pdf.getUrl(), folderUrl: folder.getUrl() };
 }
 
 /** Пересоздаёт PDF из (возможно отредактированного) Google Doc последнего отчёта. */

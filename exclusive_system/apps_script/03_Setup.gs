@@ -446,13 +446,13 @@ function resetSheet_(sh) {
 
 function buildReportSheet_() {
   const sh = sheet_('REP');
-  const keep = ['B3', 'B4', 'B5'].map(a => safeGet_(sh, a));
+  const keep = ['B3', 'B4', 'B5', 'B6'].map(a => safeGet_(sh, a));
   resetSheet_(sh);
   try { sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).breakApart(); } catch (e) { /* нечего разъединять */ }
   const L = reportLayout_();
   ensureSize_(sh, L.lastRow + 5, 6);
   applyCells_(sh, L.cells);
-  ['B3', 'B4', 'B5'].forEach((a, i) => restoreSel_(sh, a, keep[i]));
+  ['B3', 'B4', 'B5', 'B6'].forEach((a, i) => restoreSel_(sh, a, keep[i]));
   if (!keep[1]) {
     SpreadsheetApp.flush();
     const label = weekLabelByKey_(isoWeekKey_(addDays_(today_(), -7)));
@@ -466,7 +466,8 @@ function buildReportSheet_() {
   });
   sh.setColumnWidth(1, 210); sh.setColumnWidth(2, 520); sh.setColumnWidth(3, 190); sh.setColumnWidth(4, 130); sh.setColumnWidth(5, 110);
   sh.getRange('B5:C5').merge().setWrap(true);
-  sh.setRowHeight(5, 48);
+  sh.getRange('B6:C6').merge().setWrap(true);
+  sh.setRowHeight(5, 48); sh.setRowHeight(6, 48);
   protectWarn_(sh.getRange(REP_FIRST_ROW, 1, L.lastRow - REP_FIRST_ROW + 1, 5), 'Отчёт собирается автоматически');
   protectWarn_(sh.getRange('D2:E8'), 'Служебные параметры отчёта');
 }

@@ -19,6 +19,7 @@ function onOpen() {
     .addItem('➜ Промпт для Claude по объекту', 'promptForObject')
     .addItem('➜ Обновить статистику соцсетей', 'refreshSocialStats')
     .addItem('➜ Отправить отмеченные в CRM', 'crmSendPending')
+    .addItem('➜ Отправить отчёт клиенту в CRM', 'crmSendReport')
     .addSeparator()
     .addItem('➜ Создать отчёт клиенту', 'createReport')
     .addItem('➜ Обновить PDF отчёта', 'createPdf')
