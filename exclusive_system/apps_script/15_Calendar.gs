@@ -60,7 +60,7 @@ function syncCalendar_() {
 
 // ───────────────────────── ежедневное обновление ─────────────────────────
 
-/** Каждое утро: календарь + просмотры Telegram / YouTube. */
+/** Каждое утро: календарь + статистика Instagram / Threads / Telegram / YouTube. */
 function dailyJobs() {
   try { syncCalendar_(); } catch (e) { Logger.log('Календарь: ' + e.message); }
   try { refreshSocialStats_(); } catch (e) { Logger.log('Статистика: ' + e.message); }
@@ -69,7 +69,7 @@ function dailyJobs() {
 function enableDailyJobs() {
   disableDailyJobs_();
   ScriptApp.newTrigger('dailyJobs').timeBased().everyDays(1).atHour(7).create();
-  toast_('Каждое утро (около 7:00) задачи синхронизируются с календарём, просмотры Telegram / YouTube обновляются.', 'Ежедневное обновление', 8);
+  toast_('Каждое утро (около 7:00) задачи синхронизируются с календарём, статистика соцсетей обновляется.', 'Ежедневное обновление', 8);
 }
 
 function disableDailyJobs() {

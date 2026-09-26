@@ -3,6 +3,24 @@ const { loadGs } = require('./load_gs.js');
 const { makeSS } = require('./mock_ss.js');
 const M = makeSS();
 const EV = {}; let evN = 0;
+const PSTORE = {};
+const PROPS = { getProperty: k => (k in PSTORE ? PSTORE[k] : null), setProperty: (k, v) => { PSTORE[k] = v; }, deleteProperty: k => { delete PSTORE[k]; } };
+const FETCHED = [];
+function FETCH(u) {
+  FETCHED.push(u);
+  const J = o => ({ getContentText: () => JSON.stringify(o), getResponseCode: () => 200 });
+  if (u.indexOf('t.me/') >= 0) return { getContentText: () => u.indexOf('/77?') > 0 ? '<span class="tgme_widget_message_views">1.2K</span>' : '<span class="tgme_widget_message_views">845</span>' };
+  if (/graph\.instagram\.com\/v25\.0\/me\?/.test(u)) return u.indexOf('BAD') >= 0 ? J({ error: { message: 'Invalid OAuth access token' } }) : J({ username: 'sdelka77' });
+  if (/graph\.threads\.net\/v1\.0\/me\?/.test(u)) return J({ username: 'nata.broker' });
+  if (/instagram\.com\/v25\.0\/me\/media/.test(u)) return u.indexOf('after=') >= 0 ? J({ data: [{ id: '17900002', permalink: 'https://www.instagram.com/p/POST2/' }] }) :
+    J({ data: [{ id: '17900001', permalink: 'https://www.instagram.com/reel/REEL1abc/' }], paging: { next: 'https://graph.instagram.com/v25.0/me/media?after=x' } });
+  if (/17900001\/insights/.test(u)) return J({ data: [{ name: 'views', values: [{ value: 5400 }] }, { name: 'reach', values: [{ value: 3100 }] }, { name: 'saved', values: [{ value: 42 }] }] });
+  if (/17900002\/insights/.test(u)) return u.indexOf('views') >= 0 ? J({ error: { message: 'metric not supported' } }) : J({ data: [{ name: 'reach', total_value: { value: 900 } }, { name: 'saved', values: [{ value: 3 }] }] });
+  if (/threads\.net\/v1\.0\/me\/threads/.test(u)) return J({ data: [{ id: '555', permalink: 'https://www.threads.net/@nata.broker/post/THR1' }] });
+  if (/555\/insights/.test(u)) return J({ data: [{ name: 'views', values: [{ value: 777 }] }] });
+  if (/refresh_access_token/.test(u)) return J({ access_token: 'REFRESHED', expires_in: 5184000 });
+  return J({ error: { message: 'unknown ' + u } });
+}
 const CAL = {
   createAllDayEvent: (title, d, o) => { const id = 'ev' + (++evN); const e = { id, title, d, desc: o.description, guests: o.guests ? [o.guests] : [],
     getId: () => id, getTitle: () => e.title, setTitle: t => { e.title = t; }, getDescription: () => e.desc, setDescription: x => { e.desc = x; },
@@ -16,7 +34,8 @@ const X = loadGs({
   Utilities: { formatDate: (d, tz, p) => p.replace('yyyy', d.getFullYear()).replace('MM', pad(d.getMonth() + 1)).replace('dd', pad(d.getDate())).replace('HH', pad(d.getHours())).replace('mm', pad(d.getMinutes())) },
   Session: { getActiveUser: () => ({ getEmail: () => 'test@example.com' }), getEffectiveUser: () => ({ getEmail: () => 'boss@example.com' }) },
   LockService: { getDocumentLock: () => ({ tryLock: () => true, waitLock: () => {}, releaseLock: () => {} }) },
-  UrlFetchApp: { fetch: (u) => ({ getContentText: () => u.indexOf('/77?') > 0 ? '<span class="tgme_widget_message_views">1.2K</span>' : '<span class="tgme_widget_message_views">845</span>' }) },
+  UrlFetchApp: { fetch: (u) => FETCH(u) },
+  PropertiesService: { getScriptProperties: () => PROPS },
   CalendarApp: { getDefaultCalendar: () => CAL },
 });
 const log = [];
@@ -101,3 +120,19 @@ const tk2 = X.readTable_('TASK').rows.filter(r => r.cal_event)[1];
 tkSh.getRange(tk2._row, X.fieldIndex_('TASK', 'status')).setValue('Отменено');
 const c3 = X.syncCalendar_();
 console.log('calendar 3:', JSON.stringify(c3), EV[tk.cal_event].title.slice(0, 2), !EV[tk2.cal_event]);
+
+// Instagram / Threads
+console.log('not connected:', JSON.stringify(X.socialStatus()));
+console.log('bad token:', X.saveSocialTokens('IGBAD', '').msg);
+console.log('save:', X.saveSocialTokens('IGAAtoken', 'THAAtoken').msg);
+const r0 = X.lastDataRow_(cSh, X.sheetSpecs_().CONT) + 1;
+[['https://www.instagram.com/reel/REEL1abc/?igsh=xx'], ['https://instagram.com/p/POST2/'], ['https://www.instagram.com/reel/NOTMINE1/'], ['https://www.threads.com/@nata.broker/post/THR1']].forEach((l, i) => {
+  cSh.getRange(r0 + i, 2).setValue(X.EXAMPLE_ID); cSh.getRange(r0 + i, 11).setValue(l[0]);
+});
+const s2 = X.refreshSocialStats_();
+const last4 = X.readTable_('CONT').rows.slice(-4).map(r => [r.views, r.reach, r.saves].join('/'));
+console.log('social2:', JSON.stringify({ ig: s2.ig, th: s2.th, notFound: s2.notFound, failed: s2.failed }), last4.join(' | '));
+PSTORE.IG_TOKEN_TS = String(Date.now() - 8 * 86400000);
+X.refreshSocialStats_();
+console.log('token refreshed:', PSTORE.IG_TOKEN === 'REFRESHED', FETCHED.some(u => u.indexOf('ig_refresh_token') > 0));
+console.log('removed:', JSON.stringify(X.removeSocialTokens()));
