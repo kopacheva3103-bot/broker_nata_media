@@ -296,7 +296,7 @@ function reportTables_() {
     {
       ph: 'PLAN_ROWS', title: 'Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА', rows: 25,
       cols: ['№', 'Действие по плану на эту неделю', 'Статус (выполнено / нет)'],
-      f: numbered(25, 'FILTER({[[TASK.task]]&IF([[TASK.plan]]="",""," — "&' + factOf + '&" из "&[[TASK.plan]]&IF([[TASK.unit]]="",""," "&[[TASK.unit]]))&IF([[TASK.result]]="","",". "&[[TASK.result]]),' +
+      f: numbered(25, 'FILTER({[[TASK.task]]&IF([[TASK.plan]]="",""," — "&IF([[TASK.unit]]="","",[[TASK.unit]]&": ")&' + factOf + '&" из "&[[TASK.plan]])&IF([[TASK.result]]="","",". "&[[TASK.result]]),' +
         'IF([[TASK.status]]="","Запланировано",[[TASK.status]])},[[TASK.week]]=' + P.wk + ',' + tCond + ')', 'Задачи на неделю не внесены'),
     },
     {
@@ -308,7 +308,7 @@ function reportTables_() {
     {
       ph: 'NEXT_ROWS', title: 'Раздел 3. ПЛАН РАБОТЫ', rows: 20,
       cols: ['№', 'Действие', 'Дата выполнения'],
-      f: numbered(20, 'FILTER({[[TASK.task]]&IF([[TASK.plan]]="",""," — "&[[TASK.plan]]&IF([[TASK.unit]]="",""," "&[[TASK.unit]])),' +
+      f: numbered(20, 'FILTER({[[TASK.task]]&IF([[TASK.plan]]="",""," — "&IF([[TASK.unit]]="","",[[TASK.unit]]&": ")&[[TASK.plan]]),' +
         'IF(([[TASK.deadline]]="")+([[TASK.deadline]]=' + P.start + '+11),TEXT(' + P.start + '+7,"dd.mm.yyyy")&" – "&TEXT(' + P.start + '+11,"dd.mm.yyyy"),"до "&TEXT([[TASK.deadline]],"dd.mm.yyyy"))},' +
         '[[TASK.week]]=' + P.next + ',' + tCond + ')', 'План на следующую неделю формируется'),
     },
