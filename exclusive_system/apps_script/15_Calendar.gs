@@ -60,10 +60,11 @@ function syncCalendar_() {
 
 // ───────────────────────── ежедневное обновление ─────────────────────────
 
-/** Каждое утро: календарь + статистика Instagram / Threads / Telegram / YouTube. */
+/** Каждое утро: календарь, статистика соцсетей, списки документов объектов. */
 function dailyJobs() {
   try { syncCalendar_(); } catch (e) { Logger.log('Календарь: ' + e.message); }
   try { refreshSocialStats_(); } catch (e) { Logger.log('Статистика: ' + e.message); }
+  try { refreshObjectFiles_(); } catch (e) { Logger.log('Документы: ' + e.message); }
 }
 
 function enableDailyJobs() {

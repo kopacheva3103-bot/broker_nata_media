@@ -814,7 +814,7 @@ function setupSystem() {
   }
   const tabs = objectTabs_().length;
   if (tabs) {
-    try { rebuildObjectTabs_(); log.push('Вкладки объектов обновлены: ' + tabs); } catch (err) { warn += '\n\n⚠ Вкладки объектов: ' + err.message + '\nЗапустите «Сервис → Обновить все вкладки объектов».'; }
+    try { rebuildObjectTabs_(); applyTabVisibility_(); log.push('Вкладки объектов обновлены: ' + tabs); } catch (err) { warn += '\n\n⚠ Вкладки объектов: ' + err.message + '\nЗапустите «Сервис → Обновить все вкладки объектов».'; }
   }
   ui.alert('Готово', log.join('\n') + warn +
     (tabs ? '' :
@@ -1356,6 +1356,11 @@ function C_(title, kind, opts) { return Object.assign({ t: title, k: kind }, opt
 function objTabSections_() {
   return [
     {
+      key: 'FILES', type: 'files', rows: 12, title: 'ДОКУМЕНТЫ ОБЪЕКТА — из папки на Google Диске',
+      hint: 'Кладите файлы в папку объекта (Word, PDF, презентации, таблицы, фото) — список и ссылки появляются сами: каждое утро или меню «Обновить документы объектов». Вставлять ссылки вручную не нужно.',
+      cols: ['Документ (ссылка)', 'Раздел папки', 'Тип', 'Обновлён'],
+    },
+    {
       key: 'ANALOG', type: 'table', rows: 8, title: '1. АНАЛИТИКА: АНАЛОГИ',
       hint: 'Аналоги вносим вручную (ЦИАН, Авито, BestPlace). Цена за м² считается сама. Минимум 3 аналога.',
       cols: [
@@ -1671,6 +1676,12 @@ function buildObjectTab_(sh, objId, data) {
         });
       }
       for (let r = p.first; r <= p.last; r++) markers[r - 1] = [''];
+    } else if (s.type === 'files') {
+      hdr.setBackground(COLORS.HDR_AUTO_BG).setFontColor(COLORS.HDR_AUTO_FG);
+      sh.getRange(p.first, 2, n, titles.length).setBackground(COLORS.FORMULA_CELL_BG).setVerticalAlignment('top');
+      sh.getRange(p.first, 5, n, 1).setNumberFormat('dd.mm.yyyy');
+      sh.getRange(p.first, 2, 1, 1).setValue('Список появится после «Обновить документы объектов» (или завтра утром).').setFontColor(COLORS.GREY_FG);
+      protectWarn_(sh.getRange(p.header, 1, n + 1, TAB.LAST_COL), 'Список документов заполняет скрипт из папки объекта');
     } else {
       // auto / grid — только чтение
       hdr.setBackground(COLORS.HDR_FORMULA_BG).setFontColor(COLORS.HDR_FORMULA_FG);
@@ -1759,6 +1770,9 @@ function syncObjectTab_(obj, mode) {
     if (String(sh.getRange(TAB.ID).getValue()) !== String(obj.id)) sh.getRange(TAB.ID).setNumberFormat('@').setValue(String(obj.id));
     if (mode === 'rebuild') { buildObjectTab_(sh, obj.id, readObjectTab_(sh)); built = true; }
   }
+  if (built || mode === 'files') {
+    try { fillObjectFiles_(sh, obj); } catch (e) { /* Drive недоступен — список обновится позже */ }
+  }
   const url = '#gid=' + sh.getSheetId();
   const quoted = "'" + sh.getName().replace(/'/g, "''") + "'";
   writeFields_(sheet_('OBJ'), 'OBJ', obj._row, {
@@ -1816,7 +1830,7 @@ function openObjectTab() {
     return;
   }
   const r = syncObjectTab_(obj, 'create');
-  if (r) r.sheet.activate();
+  if (r) { if (r.sheet.isSheetHidden()) r.sheet.showSheet(); r.sheet.activate(); }
 }
 
 /** onEdit во вкладке объекта: история изменений (раздел · столбец, было → стало). */
@@ -1842,7 +1856,7 @@ function handleObjectTabEdit_(e, sh) {
   for (let i = 0; i < newVals.length && hist.length < 60; i++) {
     const row = rng.getRow() + i;
     const c = ctx[row - 1];
-    if (!c || !c.sec || c.sec.type === 'auto' || c.sec.type === 'grid') continue;
+    if (!c || !c.sec || c.sec.type === 'auto' || c.sec.type === 'grid' || c.sec.type === 'files') continue;
     if (c.marker === '§' + c.sec.key || c.marker === '~' || c.marker === 'H' || c.marker === '·') continue;
     for (let j = 0; j < newVals[i].length; j++) {
       const col = rng.getColumn() + j;
@@ -1860,6 +1874,110 @@ function handleObjectTabEdit_(e, sh) {
     }
   }
   logHistory_(hist, userEmail_(e));
+}
+
+// ───────────────────────── документы объекта (папка на Google Диске) ─────────────────────────
+
+const FILE_TYPES_ = [
+  [/wordprocessingml|msword|google-apps\.document/, 'Документ'], [/pdf/, 'PDF'],
+  [/presentation|powerpoint/, 'Презентация'], [/spreadsheet|excel|csv/, 'Таблица'],
+  [/^image\//, 'Фото'], [/^video\//, 'Видео'],
+];
+
+function fileTypeLabel_(mime) {
+  const t = FILE_TYPES_.find(x => x[0].test(String(mime)));
+  return t ? t[1] : 'Файл';
+}
+
+/** Все файлы папки объекта (с подпапками до 2 уровней), новые сверху. */
+function listObjectFiles_(folder) {
+  const out = [];
+  const walk = (f, path, depth) => {
+    const files = f.getFiles();
+    while (files.hasNext()) {
+      const x = files.next();
+      if (x.isTrashed()) continue;
+      out.push({ name: x.getName(), sub: path || '(корень папки)', type: fileTypeLabel_(x.getMimeType()), updated: x.getLastUpdated(), url: x.getUrl() });
+    }
+    if (depth >= 2) return;
+    const subs = f.getFolders();
+    while (subs.hasNext()) { const d = subs.next(); walk(d, path ? path + ' / ' + d.getName() : d.getName(), depth + 1); }
+  };
+  walk(folder, '', 0);
+  out.sort((a, b) => b.updated - a.updated);
+  return out;
+}
+
+/** Заполняет раздел «Документы объекта»; пустое «Полный анализ (ссылка)» — самым новым файлом с «анализ» в названии. */
+function fillObjectFiles_(sh, obj) {
+  const folder = ensureObjectFolder_(obj.id, 'ROOT');
+  const files = listObjectFiles_(folder);
+  const L = objTabLayout_({});
+  const p = L.pos.FILES;
+  const n = p.last - p.first + 1;
+  const rng = sh.getRange(p.first, 2, n, 4);
+  rng.clearContent();
+  const shown = files.slice(0, files.length > n ? n - 1 : n);
+  const rich = [], rest = [];
+  shown.forEach(f => {
+    rich.push([SpreadsheetApp.newRichTextValue().setText(f.name).setLinkUrl(f.url).build()]);
+    rest.push([f.sub, f.type, f.updated]);
+  });
+  if (files.length > shown.length) {
+    rich.push([SpreadsheetApp.newRichTextValue().setText('… ещё ' + (files.length - shown.length) + ' — открыть папку объекта').setLinkUrl(folder.getUrl()).build()]);
+    rest.push(['', '', '']);
+  }
+  if (!files.length) {
+    rich.push([SpreadsheetApp.newRichTextValue().setText('Папка пока пустая — открыть папку объекта').setLinkUrl(folder.getUrl()).build()]);
+    rest.push(['', '', '']);
+  }
+  sh.getRange(p.first, 2, rich.length, 1).setRichTextValues(rich);
+  sh.getRange(p.first, 3, rest.length, 3).setValues(rest);
+  // ссылка на анализ, если её не вставили вручную
+  const kvRow = L.pos.PRICE.items.analysis_link;
+  const cur = sh.getRange(kvRow, 3).getValue();
+  const an = files.find(f => /анализ|аналитик/i.test(f.name));
+  if (an && (cur === '' || String(cur).indexOf('Google Диск:') === 0)) sh.getRange(kvRow, 3).setValue(an.url);
+  return files.length;
+}
+
+/** Меню: обновить списки документов во всех вкладках объектов. */
+function refreshObjectFiles() {
+  const n = refreshObjectFiles_();
+  toast_('Обновлено вкладок: ' + n, 'Документы объектов', 6);
+}
+
+function refreshObjectFiles_() {
+  let n = 0;
+  readTable_('OBJ').rows.forEach(o => {
+    if (!o.id || !o.name) return;
+    const sh = findObjectTab_(o);
+    if (!sh) return;
+    try { fillObjectFiles_(sh, o); n++; } catch (e) { Logger.log('Документы ' + o.id + ': ' + e.message); }
+  });
+  return n;
+}
+
+// ───────────────────────── видимость вкладок ─────────────────────────
+
+/** Вкладки объектов не в работе (продан, сдан, пауза, договор расторгнут) скрываются; вернули в работу — показываются. */
+function applyTabVisibility_() {
+  const notWorking = {};
+  dictRows_('obj_status').forEach(r => { if (String(r[1]).toUpperCase() === 'НЕТ') notWorking[r[0]] = true; });
+  let hidden = 0;
+  readTable_('OBJ').rows.forEach(o => {
+    if (!o.id || !o.name) return;
+    const sh = findObjectTab_(o);
+    if (!sh) return;
+    if (notWorking[o.status]) { if (!sh.isSheetHidden()) { sh.hideSheet(); } hidden++; }
+    else if (sh.isSheetHidden()) sh.showSheet();
+  });
+  return hidden;
+}
+
+function showAllObjectTabs() {
+  objectTabs_().forEach(sh => { if (sh.isSheetHidden()) sh.showSheet(); });
+  toast_('Показаны все вкладки объектов. Вкладки закрытых объектов снова скроются при «Обновить».', 'Вкладки', 6);
 }
 
 // ═════════════ 05_Triggers.gs ═════════════
@@ -1966,6 +2084,9 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
     hist.push({ sheet: spec.name, record_id: p[1], obj_id: p[1], field: fieldTitle_('OBJ', 'id'), old: p[0], new: p[1], kind: HIST_KIND.CHANGE, note: 'ID обновлён во всех листах' });
     toast_('ID ' + p[0] + ' → ' + p[1] + ' обновлён во всех связанных листах.');
   });
+  if (code === 'OBJ' && editedKeys.indexOf('status') >= 0) {
+    try { applyTabVisibility_(); } catch (err) { /* не критично */ }
+  }
   tabSync.slice(0, 5).forEach(o => {
     const r = syncObjectTab_(o, 'create');
     if (r && r.built) toast_('Создана вкладка «' + r.sheet.getName() + '» — там стратегия объекта.', 'Новый объект', 8);
@@ -2288,14 +2409,25 @@ function ensureObjectFolder_(id, kind) {
   let root = null;
   const linked = obj ? idFromUrl_(obj.folder_link) : '';
   if (linked) root = folderById_(linked); // своя папка объекта, указанная вручную в 01_ОБЪЕКТЫ
-  const it = parent.getFolders();
-  while (it.hasNext() && !root) {
-    const f = it.next();
-    if (f.getName().slice(-suffix.length) === suffix) root = f;
+  if (!root) {
+    // папка «Название (ID)» или уже существующая папка объекта с похожим названием («ЖК Время» для «ЖК Время · Лермонтовская 1»)
+    const norm = x => String(x || '').toLowerCase().replace(/ё/g, 'е').replace(/\s*\([^)]*\)\s*$/, '').replace(/[«»"]/g, '').trim();
+    const oname = norm(obj ? obj.name : id);
+    let byName = null;
+    const it = parent.getFolders();
+    while (it.hasNext() && !root) {
+      const f = it.next();
+      if (f.getName().slice(-suffix.length) === suffix) { root = f; break; }
+      const fn = norm(f.getName());
+      if (!byName && fn.length >= 4 && (oname === fn || oname.indexOf(fn) === 0 || fn.indexOf(oname) === 0)) byName = f;
+    }
+    if (!root) root = byName;
   }
-  if (!root) root = parent.createFolder((obj ? obj.name : id) + ' ' + suffix);
-  Object.keys(SYS.OBJECT_SUBFOLDERS).forEach(k => childFolder_(root, SYS.OBJECT_SUBFOLDERS[k]));
-  if (obj && obj.folder_link !== root.getUrl()) writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { folder_link: root.getUrl() });
+  if (!root) {
+    root = parent.createFolder((obj ? obj.name : id) + ' ' + suffix);
+    Object.keys(SYS.OBJECT_SUBFOLDERS).forEach(k => childFolder_(root, SYS.OBJECT_SUBFOLDERS[k]));
+  }
+  if (obj && idFromUrl_(obj.folder_link) !== root.getId()) writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { folder_link: root.getUrl() });
   if (!kind || kind === 'ROOT') return root;
   return childFolder_(root, SYS.OBJECT_SUBFOLDERS[kind]);
 }
@@ -2490,6 +2622,7 @@ function refreshAll() {
       if (o.id && o.name && !findObjectTab_(o)) { syncObjectTab_(o, 'create'); fixed++; }
     });
     orderSheets_();
+    applyTabVisibility_();
   } finally {
     lock.releaseLock();
   }
@@ -3504,6 +3637,7 @@ function onOpen() {
   ui.createMenu(SYS.MENU)
     .addItem('➜ Открыть вкладку объекта', 'openObjectTab')
     .addItem('➜ Создать вкладки для новых объектов', 'createObjectTabs')
+    .addItem('➜ Обновить документы объектов', 'refreshObjectFiles')
     .addSeparator()
     .addItem('➜ Создать план недели', 'createWeekPlan')
     .addItem('➜ Внести задачи с оперативки', 'importMeetingTasks')
@@ -3523,6 +3657,7 @@ function onOpen() {
     .addSubMenu(ui.createMenu('Сервис')
       .addItem('⚙ Установить / обновить систему', 'setupSystem')
       .addItem('Обновить все вкладки объектов', 'rebuildObjectTabs')
+      .addItem('Показать все вкладки объектов (в т.ч. закрытых)', 'showAllObjectTabs')
       .addItem('Подключить Instagram / Threads', 'connectSocial')
       .addItem('Подключить CRM TopenLab', 'connectCrm')
       .addItem('Включить ежедневное обновление (календарь, соцсети)', 'enableDailyJobs')
@@ -3809,10 +3944,11 @@ function syncCalendar_() {
 
 // ───────────────────────── ежедневное обновление ─────────────────────────
 
-/** Каждое утро: календарь + статистика Instagram / Threads / Telegram / YouTube. */
+/** Каждое утро: календарь, статистика соцсетей, списки документов объектов. */
 function dailyJobs() {
   try { syncCalendar_(); } catch (e) { Logger.log('Календарь: ' + e.message); }
   try { refreshSocialStats_(); } catch (e) { Logger.log('Статистика: ' + e.message); }
+  try { refreshObjectFiles_(); } catch (e) { Logger.log('Документы: ' + e.message); }
 }
 
 function enableDailyJobs() {

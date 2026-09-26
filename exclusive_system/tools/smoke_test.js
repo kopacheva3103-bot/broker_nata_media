@@ -4,6 +4,17 @@ const { makeSS } = require('./mock_ss.js');
 const M = makeSS();
 const EV = {}; let evN = 0;
 const PSTORE = {};
+// Google Диск: 01_ОБЪЕКТЫ с уже существующей папкой «ЖК Время»
+const it = arr => { let i = 0; return { hasNext: () => i < arr.length, next: () => arr[i++] }; };
+const mkFile = (name, mime, d) => ({ getName: () => name, getMimeType: () => mime, getLastUpdated: () => new Date(d), getUrl: () => 'https://drive/' + encodeURIComponent(name), isTrashed: () => false });
+const mkFolder = (id, name, files, subs) => { const f = { id, name, files: files || [], subs: subs || [],
+  getId: () => id, getName: () => name, getUrl: () => 'https://drive.google.com/drive/folders/' + id, isTrashed: () => false,
+  getFiles: () => it(f.files), getFolders: () => it(f.subs), getFoldersByName: n => it(f.subs.filter(x => x.name === n)),
+  createFolder: n => { const c = mkFolder(id + '_' + f.subs.length, n); f.subs.push(c); FOLDERS[c.id] = c; return c; } }; FOLDERS[id] = f; return f; };
+const FOLDERS = {};
+const ANALYTICS = mkFolder('FAN', 'Аналитика', [mkFile('Маркетинговый_анализ_Лермонтовская_1.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '2026-09-10')]);
+const TIME = mkFolder('FTIME', 'ЖК Время', [mkFile('КП_ЖК_Время.pdf', 'application/pdf', '2026-09-20'), mkFile('Медцентры.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '2026-09-21')], [ANALYTICS]);
+const OBJROOT = mkFolder('FOBJ', '01_ОБЪЕКТЫ', [], [mkFolder('FOTHER', 'Остров'), TIME]);
 const PROPS = { getProperty: k => (k in PSTORE ? PSTORE[k] : null), setProperty: (k, v) => { PSTORE[k] = v; }, deleteProperty: k => { delete PSTORE[k]; } };
 const FETCHED = []; const NOTES = [];
 function FETCH(u) {
@@ -44,10 +55,12 @@ const X = loadGs({
   UrlFetchApp: { fetch: (u) => FETCH(u) },
   PropertiesService: { getScriptProperties: () => PROPS, getDocumentProperties: () => PROPS },
   CalendarApp: { getDefaultCalendar: () => CAL },
+  DriveApp: { getFolderById: id => { if (!FOLDERS[id]) throw new Error('no folder'); return FOLDERS[id]; } },
   Utilities2: null,
 });
 const log = [];
 X.runSetup_(log);
+X.cfgSet_('FOLDER_OBJECTS_ID', 'FOBJ');
 console.log('setup:', log.join(', '));
 const tab = X.loadExample_();
 console.log('tab:', tab.getName());
@@ -169,3 +182,14 @@ console.log('imported rows:', X.readTable_('CONT').rows.filter(r => r.author ===
 // пример дозагружается без дублей
 const cnt = () => ['TASK', 'BASE', 'CONT'].map(c => X.readTable_(c).rows.filter(r => r.obj_id === X.EXAMPLE_ID).length).join('/');
 const c0 = cnt(); X.loadExample_(); console.log('example resume no dups:', c0 === cnt(), c0);
+
+// документы объекта из папки на Диске
+const exObj = X.objectById_(X.EXAMPLE_ID);
+const nFiles = X.fillObjectFiles_(tab, exObj);
+const LL = X.objTabLayout_({});
+const fr = tab.getRange(LL.pos.FILES.first, 3, 3, 3).getValues().map(r => r.join(' | '));
+console.log('files:', nFiles, fr.join(' || '), '| folder:', X.objectById_(X.EXAMPLE_ID).folder_link, '| analysis:', tab.getRange(LL.pos.PRICE.items.analysis_link, 3).getValue());
+console.log('subfolders not added to existing folder:', TIME.subs.length === 1);
+// видимость: продан → скрыта
+X.sheet_('OBJ').getRange(exObj._row, X.fieldIndex_('OBJ', 'status')).setValue('Продан');
+console.log('hidden:', X.applyTabVisibility_());

@@ -21,6 +21,7 @@ function makeSS() {
         setValues: vals => { vals.forEach((row, i) => row.forEach((v, j) => { S.cells[k(r + i, c + j)] = (typeof v === 'string' && v[0] === '=') ? { f: v } : { v }; })); return p; },
         setValue: v => { S.cells[k(r, c)] = (typeof v === 'string' && v[0] === '=') ? { f: v } : { v }; return p; },
         setFormula: f => { S.cells[k(r, c)] = { f }; return p; },
+        setRichTextValues: vals => { vals.forEach((row, i) => row.forEach((v, j) => { S.cells[k(r + i, c + j)] = { v }; })); return p; },
         getRow: () => r, getColumn: () => c, getNumRows: () => nr, getNumColumns: () => nc, getLastRow: () => r + nr - 1, getLastColumn: () => c + nc - 1,
         getSheet: () => sh,
       };
@@ -32,6 +33,7 @@ function makeSS() {
       getSheetId: () => S.id, getMaxRows: () => S.maxRows, getMaxColumns: () => S.maxCols,
       insertRowsAfter: (_, n) => { S.maxRows += n; }, insertColumnsAfter: (_, n) => { S.maxCols += n; }, deleteColumns: (a, n) => { S.maxCols -= n; },
       getLastRow: () => Math.max(0, ...Object.keys(S.cells).map(a => +a.replace(/^[A-Z]+/, ''))),
+      isSheetHidden: () => !!S.hidden, hideSheet: () => { S.hidden = true; }, showSheet: () => { S.hidden = false; },
       getProtections: () => [], getCharts: () => [], getConditionalFormatRules: () => [], getFilter: () => null,
       getRange: (r, c, nr, nc) => {
         if (typeof r === 'string') {
@@ -58,7 +60,8 @@ function makeSS() {
     getSpreadsheetTimeZone: () => 'Europe/Moscow', getUrl: () => 'https://docs.google.com/x', toast: (m) => { if (/Ошибка/.test(m)) console.log('TOAST', m); }, getId: () => 'x', getSpreadsheetLocale: () => 'ru_RU',
   };
   const SpreadsheetApp = {
-    getActiveSpreadsheet: () => ss, flush: () => {}, newDataValidation: chain, newConditionalFormatRule: chain,
+    getActiveSpreadsheet: () => ss, flush: () => {}, newDataValidation: chain,
+    newRichTextValue: () => { const o = { t: '', u: '' }; const b = { setText: t => { o.t = t; return b; }, setLinkUrl: u => { o.u = u; return b; }, build: () => o.t + ' <' + o.u + '>' }; return b; }, newConditionalFormatRule: chain,
     BorderStyle: {}, ProtectionType: {}, getActiveSheet: () => null,
   };
   const store = {};

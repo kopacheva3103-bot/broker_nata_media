@@ -198,14 +198,25 @@ function ensureObjectFolder_(id, kind) {
   let root = null;
   const linked = obj ? idFromUrl_(obj.folder_link) : '';
   if (linked) root = folderById_(linked); // своя папка объекта, указанная вручную в 01_ОБЪЕКТЫ
-  const it = parent.getFolders();
-  while (it.hasNext() && !root) {
-    const f = it.next();
-    if (f.getName().slice(-suffix.length) === suffix) root = f;
+  if (!root) {
+    // папка «Название (ID)» или уже существующая папка объекта с похожим названием («ЖК Время» для «ЖК Время · Лермонтовская 1»)
+    const norm = x => String(x || '').toLowerCase().replace(/ё/g, 'е').replace(/\s*\([^)]*\)\s*$/, '').replace(/[«»"]/g, '').trim();
+    const oname = norm(obj ? obj.name : id);
+    let byName = null;
+    const it = parent.getFolders();
+    while (it.hasNext() && !root) {
+      const f = it.next();
+      if (f.getName().slice(-suffix.length) === suffix) { root = f; break; }
+      const fn = norm(f.getName());
+      if (!byName && fn.length >= 4 && (oname === fn || oname.indexOf(fn) === 0 || fn.indexOf(oname) === 0)) byName = f;
+    }
+    if (!root) root = byName;
   }
-  if (!root) root = parent.createFolder((obj ? obj.name : id) + ' ' + suffix);
-  Object.keys(SYS.OBJECT_SUBFOLDERS).forEach(k => childFolder_(root, SYS.OBJECT_SUBFOLDERS[k]));
-  if (obj && obj.folder_link !== root.getUrl()) writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { folder_link: root.getUrl() });
+  if (!root) {
+    root = parent.createFolder((obj ? obj.name : id) + ' ' + suffix);
+    Object.keys(SYS.OBJECT_SUBFOLDERS).forEach(k => childFolder_(root, SYS.OBJECT_SUBFOLDERS[k]));
+  }
+  if (obj && idFromUrl_(obj.folder_link) !== root.getId()) writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { folder_link: root.getUrl() });
   if (!kind || kind === 'ROOT') return root;
   return childFolder_(root, SYS.OBJECT_SUBFOLDERS[kind]);
 }

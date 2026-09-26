@@ -101,6 +101,9 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
     hist.push({ sheet: spec.name, record_id: p[1], obj_id: p[1], field: fieldTitle_('OBJ', 'id'), old: p[0], new: p[1], kind: HIST_KIND.CHANGE, note: 'ID обновлён во всех листах' });
     toast_('ID ' + p[0] + ' → ' + p[1] + ' обновлён во всех связанных листах.');
   });
+  if (code === 'OBJ' && editedKeys.indexOf('status') >= 0) {
+    try { applyTabVisibility_(); } catch (err) { /* не критично */ }
+  }
   tabSync.slice(0, 5).forEach(o => {
     const r = syncObjectTab_(o, 'create');
     if (r && r.built) toast_('Создана вкладка «' + r.sheet.getName() + '» — там стратегия объекта.', 'Новый объект', 8);

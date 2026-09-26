@@ -41,7 +41,7 @@ function setupSystem() {
   }
   const tabs = objectTabs_().length;
   if (tabs) {
-    try { rebuildObjectTabs_(); log.push('Вкладки объектов обновлены: ' + tabs); } catch (err) { warn += '\n\n⚠ Вкладки объектов: ' + err.message + '\nЗапустите «Сервис → Обновить все вкладки объектов».'; }
+    try { rebuildObjectTabs_(); applyTabVisibility_(); log.push('Вкладки объектов обновлены: ' + tabs); } catch (err) { warn += '\n\n⚠ Вкладки объектов: ' + err.message + '\nЗапустите «Сервис → Обновить все вкладки объектов».'; }
   }
   ui.alert('Готово', log.join('\n') + warn +
     (tabs ? '' :

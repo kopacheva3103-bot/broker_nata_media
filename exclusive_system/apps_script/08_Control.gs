@@ -45,6 +45,7 @@ function refreshAll() {
       if (o.id && o.name && !findObjectTab_(o)) { syncObjectTab_(o, 'create'); fixed++; }
     });
     orderSheets_();
+    applyTabVisibility_();
   } finally {
     lock.releaseLock();
   }
