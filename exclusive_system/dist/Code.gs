@@ -2442,6 +2442,20 @@ function ensureReportTemplate_() {
     try { if (!DriveApp.getFileById(id).isTrashed()) return id; } catch (e) { /* создадим заново */ }
   }
   const doc = DocumentApp.create(SYS.REPORT_TEMPLATE_NAME);
+  try {
+    buildReportTemplate_(doc);
+  } catch (e) {
+    try { DriveApp.getFileById(doc.getId()).setTrashed(true); } catch (err) { /* не удалось убрать черновик */ }
+    throw new Error('Шаблон отчёта не создан: ' + e.message);
+  }
+  const file = DriveApp.getFileById(doc.getId());
+  const tplFolder = folderById_(cfgGet_('FOLDER_TEMPLATES_ID'));
+  if (tplFolder) file.moveTo(tplFolder);
+  cfgSet_('TEMPLATE_REPORT_ID', doc.getId());
+  return doc.getId();
+}
+
+function buildReportTemplate_(doc) {
   const b = doc.getBody();
   b.setMarginTop(42).setMarginBottom(42).setMarginLeft(56).setMarginRight(42);
   const base = {};
@@ -2451,7 +2465,9 @@ function ensureReportTemplate_() {
   const H = DocumentApp.ParagraphHeading;
   const A = DocumentApp.HorizontalAlignment;
   const p0 = b.getParagraphs()[0];
-  p0.setText('{{EXEC_HEADER}}').setAlignment(A.RIGHT).editAsText().setFontSize(10);
+  p0.setText('{{EXEC_HEADER}}');
+  p0.setAlignment(A.RIGHT);
+  p0.editAsText().setFontSize(10);
   b.appendParagraph('');
   b.appendParagraph('Приложение №1 к Договору № {{CONTRACT_NO}} от {{CONTRACT_DATE}}').setAlignment(A.RIGHT).editAsText().setFontSize(11);
   b.appendParagraph('Еженедельный отчёт').setHeading(H.HEADING2).setAlignment(A.CENTER);
@@ -2473,11 +2489,6 @@ function ensureReportTemplate_() {
   b.appendParagraph('');
   b.appendParagraph('Исполнитель: ______________________ {{SIGNATURE}}');
   doc.saveAndClose();
-  const file = DriveApp.getFileById(doc.getId());
-  const tplFolder = folderById_(cfgGet_('FOLDER_TEMPLATES_ID'));
-  if (tplFolder) file.moveTo(tplFolder);
-  cfgSet_('TEMPLATE_REPORT_ID', doc.getId());
-  return doc.getId();
 }
 
 function styleReportTable_(t, widths) {
