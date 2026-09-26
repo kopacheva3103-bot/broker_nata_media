@@ -547,6 +547,8 @@ function ensureDrive_() {
     if (!email) return;
     try { root.addEditor(email); ss.addEditor(email); } catch (e) { /* email может быть недоступен для шаринга */ }
   });
+  // открывать доступ другим людям может только владелец (не редакторы)
+  try { if (isOwner_()) { file.setShareableByEditors(false); root.setShareableByEditors(false); } } catch (e) { /* не критично */ }
   return sub;
 }
 
