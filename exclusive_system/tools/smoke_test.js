@@ -321,3 +321,8 @@ const bk = X.tabBackup_('129866881'); console.log('backup has data:', !!bk, bk &
   const back = t1 && X.readObjectTab_(t1);
   console.log('restore deleted tab:', r.created, !!t1, back && JSON.stringify(back.tables[sec.key] || []).indexOf('Аналог-проверка') >= 0);
 }
+// автор заметки — сотрудник по его ID в TopenLab
+PSTORE.TOPNLAB_PEOPLE = JSON.stringify({ 'Мария': '300271' });
+console.log('author:', X.crmAuthorId_(X.crmConfig_(), 'Мария'), X.crmAuthorId_(X.crmConfig_(), 'Наталья'), X.crmAuthorId_(X.crmConfig_(), ''));
+X.saveCrmSettings('', '', '', '', JSON.stringify([['Ассистент', ' 300271 '], ['SMM', '']]));
+console.log('saved people:', PSTORE.TOPNLAB_PEOPLE);
