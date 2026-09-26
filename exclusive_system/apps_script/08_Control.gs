@@ -43,6 +43,7 @@ function refreshAll() {
       if (t.sh.getMaxRows() - last < 200) extendSheet_(code, 1000);
     });
     fixObjIdColumns_();
+    fixed += fillTeamDefaults_();
     const r = tabsWork_(start);
     fixed += r.created + r.rebuilt;
     if (r.left) note = '. ' + tabsWorkText_(r);

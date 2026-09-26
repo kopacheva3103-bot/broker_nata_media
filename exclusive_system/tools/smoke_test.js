@@ -298,3 +298,6 @@ const beforeT = X.readTable_('TASK').rows.filter(t => t.owner === 'Ассист�
 dsh.getRange(prow, pc).setValue('Мария');
 X.onEditHandler({ range: dsh.getRange(prow, pc), oldValue: 'Ассистент', value: 'Мария' });
 console.log('rename person:', beforeT, '→', X.readTable_('TASK').rows.filter(t => t.owner === 'Мария').length, 'left old:', X.readTable_('TASK').rows.filter(t => t.owner === 'Ассистент').length);
+// команда по умолчанию: ассистент ведёт все объекты
+X.writeFields_(X.sheet_('OBJ'), 'OBJ', X.objectById_('129866881')._row, { assistant: '', manager: '' });
+console.log('team:', JSON.stringify(X.teamDefaults_()), '| filled:', X.fillTeamDefaults_(), '|', X.objectById_('129866881').assistant, X.objectById_('129866881').manager);

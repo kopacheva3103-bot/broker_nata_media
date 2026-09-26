@@ -37,6 +37,36 @@ function onEditHandler(e) {
   }
 }
 
+/**
+ * Команда по умолчанию для каждого объекта: руководитель и ассистент (по роли в 07_СПРАВОЧНИКИ).
+ * Ассистент ведёт все объекты — ставится всем текущим и новым, если поле пустое.
+ */
+function teamDefaults_() {
+  const res = {};
+  dictRows_('people').forEach(p => {
+    const name = String(p[0] || '').trim(), role = String(p[1] || '').toLowerCase();
+    if (!name) return;
+    if (!res.manager && /руководит/.test(role)) res.manager = name;
+    if (!res.assistant && /ассистент/.test(role)) res.assistant = name;
+  });
+  return res;
+}
+
+/** Проставить команду по умолчанию объектам, у которых поля пустые. Возвращает число изменённых объектов. */
+function fillTeamDefaults_() {
+  const team = teamDefaults_();
+  if (!Object.keys(team).length) return 0;
+  const t = readTable_('OBJ');
+  let n = 0;
+  t.rows.forEach(o => {
+    if (!o.id || !o.name) return;
+    const upd = {};
+    Object.keys(team).forEach(k => { if (!o[k] && team[k]) upd[k] = team[k]; });
+    if (Object.keys(upd).length) { writeFields_(t.sh, 'OBJ', o._row, upd); n++; }
+  });
+  return n;
+}
+
 /** Переименовали сотрудника в 07_СПРАВОЧНИКИ («Ассистент» → «Мария») — имя меняется во всех журналах и объектах. */
 function handleDictEdit_(e) {
   const d = dictLayout_().people;
@@ -148,6 +178,8 @@ function applyDefaults_(code, o, upd, isNew, user, editedKeys) {
   if (code === 'OBJ' && isNew) {
     set('created_at', today);
     if (!o.status) set('status', dictValues_('obj_status')[0] || '');
+    const team = teamDefaults_();
+    Object.keys(team).forEach(k => { if (!o[k] && team[k]) set(k, team[k]); });
   }
   if (code === 'TASK' && isNew) {
     if (!o.week) set('week', isoWeekKey_(today));

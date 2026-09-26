@@ -46,7 +46,8 @@ function runObjectsImport(text) {
   try {
     const now = today_();
     const firstStatus = dictValues_('obj_status')[0] || '';
-    appendRows_('OBJ', r.add.map(o => Object.assign({}, o, { status: o.status || firstStatus, created_at: now })));
+    const team = teamDefaults_();
+    appendRows_('OBJ', r.add.map(o => Object.assign({}, team, o, { status: o.status || firstStatus, created_at: now })));
     const t = readTable_('OBJ');
     const hist = [];
     r.upd.forEach(o => {

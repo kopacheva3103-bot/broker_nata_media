@@ -28,7 +28,7 @@ function setupSystem() {
   if (ok !== ui.Button.OK) return;
   const log = [];
   runSetup_(log);
-  try { fixObjIdColumns_(); } catch (e) { /* не критично */ }
+  try { fixObjIdColumns_(); const nt = fillTeamDefaults_(); if (nt) log.push('Команда (руководитель, ассистент) проставлена объектам: ' + nt); } catch (e) { /* не критично */ }
   let warn = '';
   try {
     ensureDrive_();

@@ -71,7 +71,7 @@ function processInbox_() {
       if (!obj) {
         const id = parsed.id || nextTempObjectId_();
         const name = parsed.name || info.name || 'Новый объект ' + id;
-        const row = { id: id, name: name, status: dictValues_('obj_status').indexOf('Подготовка') >= 0 ? 'Подготовка' : (dictValues_('obj_status')[0] || ''), created_at: today_() };
+        const row = { ...teamDefaults_(), id: id, name: name, status: dictValues_('obj_status').indexOf('Подготовка') >= 0 ? 'Подготовка' : (dictValues_('obj_status')[0] || ''), created_at: today_() };
         ['kind', 'deal', 'address', 'area', 'price'].forEach(k => { if (info[k] !== undefined && info[k] !== '') row[k] = info[k]; });
         appendRow_('OBJ', row);
         SpreadsheetApp.flush();
