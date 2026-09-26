@@ -216,7 +216,7 @@ function sheetSpecs_() {
       F('manager', 'Ответственный', 'dd', { dict: 'people' }),
       F('assistant', 'Ассистент', 'dd', { dict: 'people' }),
       F('smm', 'SMM', 'dd', { dict: 'people' }),
-      F('customer', 'Заказчик', 'text', { w: 170, d: 'Как в договоре: например, ООО «Ромашка».' }),
+      F('customer', 'Заказчик', 'text', { was: ['Заказчик (для отчёта)'], w: 170, d: 'Как в договоре: например, ООО «Ромашка».' }),
       F('contract_no', '№ договора', 'text', { w: 110 }),
       F('contract_date', 'Дата договора', 'date'),
       F('date_sign', 'Начало работы', 'date', { d: 'Дата начала эксклюзива / работы по объекту.' }),
@@ -1066,7 +1066,7 @@ function checkHeaders_(sh, spec) {
   const bad = [];
   spec.fields.forEach((f, i) => {
     if (f.kind === 'f') return;
-    if (cur[i] !== '' && cur[i] !== f.title) bad.push(colLetter_(i + 1) + ': «' + cur[i] + '» вместо «' + f.title + '»');
+    if (cur[i] !== '' && cur[i] !== f.title && (f.was || []).indexOf(cur[i]) < 0) bad.push(colLetter_(i + 1) + ': «' + cur[i] + '» вместо «' + f.title + '»');
   });
   if (bad.length) {
     throw new Error('Лист ' + spec.name + ': столбцы переставлены или переименованы вручную. Верните порядок столбцов:\n' + bad.slice(0, 5).join('\n'));

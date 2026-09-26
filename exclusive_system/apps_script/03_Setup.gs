@@ -290,7 +290,7 @@ function checkHeaders_(sh, spec) {
   const bad = [];
   spec.fields.forEach((f, i) => {
     if (f.kind === 'f') return;
-    if (cur[i] !== '' && cur[i] !== f.title) bad.push(colLetter_(i + 1) + ': «' + cur[i] + '» вместо «' + f.title + '»');
+    if (cur[i] !== '' && cur[i] !== f.title && (f.was || []).indexOf(cur[i]) < 0) bad.push(colLetter_(i + 1) + ': «' + cur[i] + '» вместо «' + f.title + '»');
   });
   if (bad.length) {
     throw new Error('Лист ' + spec.name + ': столбцы переставлены или переименованы вручную. Верните порядок столбцов:\n' + bad.slice(0, 5).join('\n'));

@@ -333,3 +333,7 @@ console.log('saved people:', PSTORE.TOPNLAB_PEOPLE);
   X.deleteObject_(o);
   console.log('delete object:', hadTab, before, '→', X.readTable_('OBJ').rows.filter(o => o.id).length, '| gone:', !X.objectById_('129866881'), '| tab gone:', !X.objectTabs_().some(t => String(t.getRange('I1').getValue()) === '129866881'));
 }
+// старое название столбца «Заказчик (для отчёта)» не мешает обновлению
+{ const c = X.fieldIndex_('OBJ', 'customer'); X.sheet_('OBJ').getRange(1, c).setValue('Заказчик (для отчёта)');
+  let ok = true; try { X.buildDataSheet_('OBJ'); } catch (e) { ok = e.message; }
+  console.log('rename header:', ok, X.sheet_('OBJ').getRange(1, c).getValue()); }
