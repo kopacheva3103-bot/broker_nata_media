@@ -36,6 +36,8 @@ function onOpen() {
       .addItem('Тест: комментарий в карточку CRM', 'crmTestNote')
       .addItem('Включить автообновление (входящие, календарь, соцсети)', 'enableDailyJobs')
       .addItem('Выключить автообновление', 'disableDailyJobs')
+      .addItem('Включить автоотчёты (пятница 20:00 МСК)', 'enableAutoReports')
+      .addItem('Выключить автоотчёты', 'disableAutoReports')
       .addSeparator()
       .addItem('Загрузить пример (ЖК Время · Лермонтовская 1)', 'loadExampleData')
       .addItem('Запустить самопроверку', 'runSelfTest')

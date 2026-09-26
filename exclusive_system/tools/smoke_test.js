@@ -22,7 +22,7 @@ const F2 = inFile('F_TIME', 'ВРЕМЯ-1 Новая презентация по
 const F3 = inFile('F_RENT', 'Тверская 15 — аренда.pdf', 'application/pdf');
 INBOX.files.push(F1, F2, F3);
 const PROPS = { getProperty: k => (k in PSTORE ? PSTORE[k] : null), setProperty: (k, v) => { PSTORE[k] = v; }, deleteProperty: k => { delete PSTORE[k]; } };
-const FETCHED = []; const NOTES = [];
+const FETCHED = []; const NOTES = []; const MAILS = [];
 function FETCH(u, o) {
   FETCHED.push(u);
   const J = o => ({ getContentText: () => JSON.stringify(o), getResponseCode: () => 200 });
@@ -67,6 +67,8 @@ const X = loadGs({
   DriveApp: { getFolderById: id => { if (!FOLDERS[id]) throw new Error('no folder'); return FOLDERS[id]; }, getFileById: id => ({ setTrashed: () => { TRASHED.push(id); } }) },
   ScriptApp: { getOAuthToken: () => 'tok' },
   Utilities2: null,
+  Logger: { log: () => {} },
+  MailApp: { sendEmail: m => { MAILS.push(m); }, getRemainingDailyQuota: () => 100 },
 });
 const log = [];
 X.runSetup_(log);
@@ -279,3 +281,13 @@ const n1 = JSON.parse(NOTES[0] || '{}'), n2 = JSON.parse(NOTES[1] || '{}');
 console.log('crm report:', st, '| notes', NOTES.length, '| id', n1.id, typeof n1.id, n1.type, 'public', n1.is_public, 'user', n1.user_id);
 console.log('client note:', (n1.note || '').split('\n').slice(0, 3).join(' / '), '| has pdf', /https:\/\/pdf/.test(n1.note), '| inner:', (n2.note || '').split('\n').slice(0, 3).join(' / '));
 console.log('no crm id:', X.sendReportToCrm_({ id: 'НОВ-002', name: 'x' }, X.readReportValues_(), '', ''));
+// автоотчёты по пятницам: все объекты в работе, пропуск уже созданных, восстановление выбора в 05
+const GEN = [];
+X.autoReportsRun_.generate = (id, wk) => { GEN.push(id + '|' + wk + '|' + X.sheet_('REP').getRange('B3').getValue()); return { pdfUrl: 'https://pdf/' + id, crm: '✓ в CRM' }; };
+X.sheet_('REP').getRange('B5').setValue('мой коммент');
+X.autoReportsJob();
+const inWork = X.readTable_('OBJ').rows.filter(o => o.id && o.name).length;
+console.log('mail:', MAILS.length, MAILS[0] && MAILS[0].subject); console.log('auto reports:', GEN.length, 'of in-work', inWork, '| first:', GEN[0], '| B5 restored:', X.sheet_('REP').getRange('B5').getValue(), '| state cleared:', !PSTORE.AUTO_REP_STATE);
+X.sheet_('REP').getRange('B5').setValue('');
+GEN.length = 0; X.readTable_('ARCH'); X.appendRow_('ARCH', { ts: new Date(), obj_id: '137073408', week: X.isoWeekKey_(X.today_()), status: X.REPORT_STATUS.ACTUAL });
+X.autoReportsJob(); console.log('skip manual:', GEN.every(g => g.indexOf('137073408|') !== 0), GEN.length);
