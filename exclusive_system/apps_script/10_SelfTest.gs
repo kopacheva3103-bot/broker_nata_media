@@ -21,8 +21,9 @@ function selfTest_(opts) {
   const ss = ss_();
   SpreadsheetApp.flush();
 
+  try { inboxFolder_(); } catch (e) { /* проверится ниже */ }
   Object.keys(SHEET_NAMES).forEach(k => check('Лист ' + SHEET_NAMES[k], ss.getSheetByName(SHEET_NAMES[k])));
-  cfgDefs_().filter(d => d.key).forEach(d => check('Настройка CFG_' + d.key, ss.getRangeByName('CFG_' + d.key)));
+  cfgDefs_().filter(d => d.key).forEach(d => check('Настройка CFG_' + d.key, ss.getRangeByName('CFG_' + d.key), ss.getRangeByName('CFG_' + d.key) ? '' : 'если ✗ — «Установить / обновить систему»'));
   check('Задачи недели по умолчанию', ss.getRangeByName('CFG_DEFAULT_TASKS'));
   check('Триггер onEdit', ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'onEditHandler'), 'если ✗ — «Установить / обновить систему»');
 

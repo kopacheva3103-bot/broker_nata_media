@@ -16,8 +16,19 @@ function cfgGet_(key) {
 }
 
 function cfgSet_(key, v) {
-  const r = ss_().getRangeByName('CFG_' + key);
-  if (r) r.setValue(v);
+  let r = ss_().getRangeByName('CFG_' + key);
+  if (!r) { // настройка появилась в новой версии, а 08_НАСТРОЙКИ собраны старой — дописываем строку
+    const sh = ss_().getSheetByName(SHEET_NAMES.CFG);
+    if (!sh) return;
+    const colA = sh.getRange(1, 1, sh.getMaxRows(), 1).getValues();
+    let last = 0;
+    colA.forEach((x, i) => { if (x[0] !== '') last = i + 1; });
+    const d = cfgDefs_().find(x => x.key === key) || { label: key };
+    sh.getRange(last + 1, 1, 1, 4).setValues([[key, d.label, '', 'заполняет скрипт']]);
+    r = sh.getRange(last + 1, 3);
+    ss_().setNamedRange('CFG_' + key, r);
+  }
+  r.setValue(v);
 }
 
 function tz_() { return ss_().getSpreadsheetTimeZone() || SYS.TZ; }
