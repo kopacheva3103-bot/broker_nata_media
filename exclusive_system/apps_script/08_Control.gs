@@ -1,109 +1,55 @@
 /**
- * 08_Control — просрочки, обновление статистики, ежедневная сводка.
- * Сами предупреждения считаются формулами в 11_КОНТРОЛЬ; здесь — показ и обслуживание.
+ * 08_Control — контроль и обслуживание: просрочки, обновление, дэшборд.
  */
 
-function readAlerts_() {
+/** Просроченные задачи по исполнителям (то же, что внизу дэшборда, но списком). */
+function checkOverdue() {
   SpreadsheetApp.flush();
-  const sh = sheet_('CTRL');
-  const n = sh.getMaxRows() - CTRL_FIRST + 1;
-  return sh.getRange(CTRL_FIRST, 1, n, 8).getDisplayValues().filter(r => r[1] !== '');
+  const rows = readTable_('TASK').rows.filter(t => t.overdue === 'ПРОСРОЧЕНО');
+  const ui = SpreadsheetApp.getUi();
+  if (!rows.length) { ui.alert('Просрочек нет', 'Все задачи с прошедшим сроком закрыты.', ui.ButtonSet.OK); return; }
+  const by = {};
+  rows.forEach(t => { const k = t.owner || '(без исполнителя)'; (by[k] = by[k] || []).push(t); });
+  const text = Object.keys(by).map(k => k + ' — ' + by[k].length + ':\n' + by[k].slice(0, 12).map(t =>
+    '   • ' + t.obj_name + ': ' + t.task + ' (срок ' + fmtDate_(t.deadline) + ', ' + t.id + ')').join('\n') +
+    (by[k].length > 12 ? '\n   …' : '')).join('\n\n');
+  ui.alert('Просроченные задачи: ' + rows.length, text + '\n\nЗакройте, перенесите («Перенесено») или отмените задачу в 02_ЗАДАЧИ.', ui.ButtonSet.OK);
 }
 
-function checkOverdue() {
-  const alerts = readAlerts_();
-  sheet_('CTRL').activate();
-  if (!alerts.length) {
-    SpreadsheetApp.getUi().alert('Просрочек и предупреждений нет ✓');
-    return;
+/**
+ * «Обновить»: проставляет ID и значения по умолчанию строкам, вставленным без триггера (копипаст большого блока),
+ * создаёт недостающие вкладки объектов, добавляет строки в журналы, если они заканчиваются.
+ */
+function refreshAll() {
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30000)) { toast_('Система занята, повторите через минуту.'); return; }
+  let fixed = 0;
+  try {
+    ['TASK', 'BASE', 'CONT', 'LIB'].forEach(code => {
+      const t = readTable_(code);
+      const cache = {};
+      t.rows.forEach(o => {
+        const hasInput = t.spec.fields.some(f => isInputKind_(f.kind) && f.kind !== 'cb' && o[f.key] !== '');
+        if (!hasInput || o[t.spec.idField]) return;
+        const upd = {};
+        upd[t.spec.idField] = nextId_(code, cache);
+        applyDefaults_(code, o, upd, true, userEmail_(), []);
+        writeFields_(t.sh, code, o._row, upd);
+        fixed++;
+      });
+      const last = lastDataRow_(t.sh, t.spec);
+      if (t.sh.getMaxRows() - last < 200) extendSheet_(code, 1000);
+    });
+    const objs = readTable_('OBJ');
+    objs.rows.forEach(o => {
+      if (o.id && o.name && !findObjectTab_(o)) { syncObjectTab_(o, 'create'); fixed++; }
+    });
+    orderSheets_();
+  } finally {
+    lock.releaseLock();
   }
-  const byType = {};
-  alerts.forEach(a => { byType[a[1]] = (byType[a[1]] || 0) + 1; });
-  const high = alerts.filter(a => a[0].charAt(0) === '1').length;
-  const summary = Object.keys(byType).sort((a, b) => byType[b] - byType[a]).map(k => '<li>' + htmlEscape_(k) + ': <b>' + byType[k] + '</b></li>').join('');
-  const rows = alerts.slice(0, 40).map(a => {
-    const color = a[0].charAt(0) === '1' ? '#F4CCCC' : a[0].charAt(0) === '2' ? '#FFF2CC' : '#FFFFFF';
-    return '<tr style="background:' + color + '"><td>' + htmlEscape_(a[1]) + '</td><td>' + htmlEscape_(a[3]) + '</td><td>' +
-      htmlEscape_(a[4]) + '</td><td>' + htmlEscape_(a[5]) + '</td><td>' + htmlEscape_(a[6]) + '</td></tr>';
-  }).join('');
-  const html = HtmlService.createHtmlOutput(
-    '<div style="font-family:Arial,sans-serif;font-size:13px">' +
-    '<p>Всего предупреждений: <b>' + alerts.length + '</b>, из них высокой критичности: <b>' + high + '</b></p>' +
-    '<ul>' + summary + '</ul>' +
-    '<table style="border-collapse:collapse;width:100%" border="1" cellpadding="4">' +
-    '<tr style="background:#ECEFF1"><th>Тип</th><th>Объект</th><th>Что случилось</th><th>Ответственный</th><th>Срок</th></tr>' + rows + '</table>' +
-    (alerts.length > 40 ? '<p>… полный список — лист 11_КОНТРОЛЬ</p>' : '') + '</div>').setWidth(900).setHeight(560);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Проверка просрочек');
+  SpreadsheetApp.flush();
+  toast_('Готово. Исправлено / создано: ' + fixed, 'Обновление', 6);
 }
 
 function openDashboard() { sheet_('DASH').activate(); }
-
-/**
- * «Обновить статистику»: формулы пересчитываются сами, но эта команда
- * 1) проставляет недостающие ID/значения по умолчанию (если данные вставляли, а триггер не сработал);
- * 2) создаёт строки стратегии для новых объектов;
- * 3) добавляет строки в журналы, если они заканчиваются, и растягивает на них списки/чекбоксы;
- * 4) пересчитывает таблицу.
- */
-function refreshStats() {
-  const fixed = fillMissing_();
-  ['OBJ', 'STR', 'ACT', 'PF', 'HIST', 'ARCH', 'HYP'].forEach(code => {
-    const sh = sheet_(code);
-    const last = lastDataRow_(sh, sheetSpecs_()[code]);
-    if (sh.getMaxRows() - last < 200) extendSheet_(code, 1000);
-  });
-  SpreadsheetApp.flush();
-  toast_('Статистика пересчитана. Исправлено строк без ID/значений по умолчанию: ' + fixed + '.');
-}
-
-function fillMissing_() {
-  let fixed = 0;
-  const user = userEmail_();
-  ['ACT', 'PF', 'HYP'].forEach(code => {
-    const t = readTable_(code);
-    const cache = {};
-    t.rows.forEach(o => {
-      const hasInput = t.spec.fields.some(f => isInputKind_(f.kind) && f.kind !== 'cb' && o[f.key] !== '');
-      if (!hasInput || o[t.spec.idField]) return;
-      const upd = {};
-      upd[t.spec.idField] = nextId_(code, cache);
-      o[t.spec.idField] = upd[t.spec.idField];
-      applyDefaults_(code, o, upd, true, user, []);
-      writeFields_(t.sh, code, o._row, upd);
-      fixed++;
-    });
-  });
-  const ids = readTable_('OBJ').rows.map(o => o.id).filter(Boolean);
-  ensureStrategyRows_(ids);
-  return fixed;
-}
-
-// ───────────── ежедневная сводка на email ─────────────
-
-function installDailyCheck() {
-  const ui = SpreadsheetApp.getUi();
-  const email = String(cfgGet_('DAILY_EMAIL') || '').trim();
-  if (!email) { ui.alert('Укажите email в 10_НАСТРОЙКИ → «Email для ежедневной сводки предупреждений».'); return; }
-  removeDailyCheck_();
-  ScriptApp.newTrigger('dailyCheck').timeBased().everyDays(1).atHour(9).create();
-  ui.alert('Ежедневная сводка включена: около 9:00 на ' + email + '.');
-}
-
-function uninstallDailyCheck() {
-  removeDailyCheck_();
-  SpreadsheetApp.getUi().alert('Ежедневная сводка выключена.');
-}
-
-function removeDailyCheck_() {
-  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyCheck') ScriptApp.deleteTrigger(t); });
-}
-
-function dailyCheck() {
-  const email = String(cfgGet_('DAILY_EMAIL') || '').trim();
-  if (!email) return;
-  const alerts = readAlerts_();
-  if (!alerts.length) return;
-  const lines = alerts.slice(0, 60).map(a => '• [' + a[0] + '] ' + a[1] + ' — ' + a[3] + ': ' + a[4] + (a[5] ? ' (' + a[5] + ')' : ''));
-  MailApp.sendEmail(email, 'Эксклюзивы: ' + alerts.length + ' предупреждений на ' + fmtDate_(new Date()),
-    lines.join('\n') + '\n\nТаблица: ' + ss_().getUrl());
-}

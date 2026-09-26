@@ -1,19 +1,21 @@
-/** СИСТЕМА УПРАВЛЕНИЯ ЭКСКЛЮЗИВАМИ — весь код одним файлом. Собрано из apps_script/*.gs (tools/build_dist.sh). */
+/** СИСТЕМА МАРКЕТИНГА ЭКСКЛЮЗИВОВ — весь код одним файлом. Собрано из apps_script/*.gs (tools/build_dist.sh). */
 
 // ═════════════ 00_Config.gs ═════════════
 /**
- * СИСТЕМА УПРАВЛЕНИЯ ЭКСКЛЮЗИВАМИ
- * 00_Config — константы, настройки, справочники.
+ * СИСТЕМА МАРКЕТИНГА ЭКСКЛЮЗИВОВ — v2
+ * 00_Config — константы, справочники, настройки.
  *
- * Правило: значения, которые может захотеть поменять пользователь,
- * живут в листах 08_СПРАВОЧНИКИ и 10_НАСТРОЙКИ, а не в формулах.
- * Здесь — только начальные значения, которыми эти листы заполняются при установке.
+ * Идея: по каждому объекту — своя вкладка с маркетинговой стратегией
+ * (аналитика и цена → сценарии использования → аудитории → офферы и материалы → каналы и партнёры → выводы).
+ * Работа команды пишется в общие журналы (задачи, обзвон и КП, контент) и оттуда сама собирается
+ * во вкладку объекта, в дэшборд и в еженедельный отчёт клиенту.
+ * Клиентов, сделки и показы система не ведёт — это CRM.
  */
 
 const SYS = {
-  VERSION: '1.3.0',
-  TITLE: 'СИСТЕМА УПРАВЛЕНИЯ ЭКСКЛЮЗИВАМИ',
-  MENU: 'УПРАВЛЕНИЕ ЭКСКЛЮЗИВАМИ',
+  VERSION: '2.0.0',
+  TITLE: 'СИСТЕМА МАРКЕТИНГА ЭКСКЛЮЗИВОВ',
+  MENU: 'МАРКЕТИНГ ОБЪЕКТОВ',
   ROOT_FOLDER: 'СИСТЕМА ЭКСКЛЮЗИВОВ',
   FOLDERS: {
     MASTER: '00_ТАБЛИЦА',
@@ -22,53 +24,49 @@ const SYS = {
   },
   /** Подпапки внутри папки объекта «Название (ID)». */
   OBJECT_SUBFOLDERS: {
-    STRATEGIES: 'Стратегия',
+    ANALYTICS: 'Аналитика',
+    MATERIALS: 'КП и презентации',
     REPORTS: 'Отчёты',
-    MATERIALS: 'Материалы',
+    MEDIA: 'Фото и видео',
   },
-  REPORT_TEMPLATE_NAME: 'Еженедельный отчёт по продаже объекта',
-  STRATEGY_TEMPLATE_NAME: 'Шаблон стратегии продажи объекта',
-  DATA_ROWS: 2000,        // стартовое количество строк в листах-журналах
-  STAT_ROWS: 1000,
+  REPORT_TEMPLATE_NAME: 'Шаблон еженедельного отчёта',
+  DATA_ROWS: 2000,
   TZ: 'Europe/Moscow',
   LOCALE: 'ru_RU',
   PROTECT_PREFIX: 'SYS: ',
+  TAB_PREFIX: '▸ ',          // вкладки объектов: «▸ Лермонтовский 1 (4501)»
 };
 
 const SHEET_NAMES = {
+  DASH: '00_ДЭШБОРД',
   OBJ: '01_ОБЪЕКТЫ',
-  STR: '02_СТРАТЕГИЯ',
-  ACT: '03_ДЕЙСТВИЯ',
-  FUN: '04_ВОРОНКА',
-  STAT: '05_СТАТИСТИКА',
-  PF: '06_ПЛАН_ФАКТ',
-  REP: '07_ОТЧЕТ',
-  DICT: '08_СПРАВОЧНИКИ',
-  DASH: '09_ДЭШБОРД',
-  CFG: '10_НАСТРОЙКИ',
-  CTRL: '11_КОНТРОЛЬ',
-  HIST: '12_ИСТОРИЯ',
-  ARCH: '13_АРХИВ_ОТЧЕТОВ',
-  HYP: '14_ГИПОТЕЗЫ',
+  TASK: '02_ЗАДАЧИ',
+  BASE: '03_ОБЗВОН_И_КП',
+  CONT: '04_КОНТЕНТ',
+  REP: '05_ОТЧЁТ_КЛИЕНТУ',
+  LIB: '06_БИБЛИОТЕКА',
+  DICT: '07_СПРАВОЧНИКИ',
+  CFG: '08_НАСТРОЙКИ',
+  HIST: '09_ИСТОРИЯ',
+  ARCH: '10_АРХИВ_ОТЧЁТОВ',
 };
 
-const SHEET_ORDER = ['OBJ', 'STR', 'ACT', 'FUN', 'STAT', 'PF', 'REP', 'DICT', 'DASH', 'CFG', 'CTRL', 'HIST', 'ARCH', 'HYP'];
+const SHEET_ORDER = ['DASH', 'OBJ', 'TASK', 'BASE', 'CONT', 'REP', 'LIB', 'DICT', 'CFG', 'HIST', 'ARCH'];
 
 const TAB_COLORS = {
-  OBJ: '#37474F', STR: '#37474F', ACT: '#2E7D32', FUN: '#1565C0', STAT: '#1565C0',
-  PF: '#2E7D32', REP: '#6A1B9A', DICT: '#9E9E9E', DASH: '#1565C0', CFG: '#9E9E9E',
-  CTRL: '#C62828', HIST: '#9E9E9E', ARCH: '#6A1B9A', HYP: '#2E7D32',
+  DASH: '#1565C0', OBJ: '#37474F', TASK: '#2E7D32', BASE: '#2E7D32', CONT: '#2E7D32', REP: '#6A1B9A',
+  LIB: '#EF6C00', DICT: '#9E9E9E', CFG: '#9E9E9E', HIST: '#9E9E9E', ARCH: '#6A1B9A', OBJTAB: '#00897B',
 };
 
-/** Спокойная палитра: без кислотных цветов. */
 const COLORS = {
-  HDR_INPUT_BG: '#263238', HDR_INPUT_FG: '#FFFFFF',     // вводится вручную
-  HDR_FORMULA_BG: '#CFD8DC', HDR_FORMULA_FG: '#263238', // считается формулой
-  HDR_AUTO_BG: '#E3E7EA', HDR_AUTO_FG: '#37474F',       // заполняет скрипт
-  HDR_HELPER_BG: '#F1F3F4', HDR_HELPER_FG: '#80868B',   // служебное (скрыто)
+  HDR_INPUT_BG: '#263238', HDR_INPUT_FG: '#FFFFFF',
+  HDR_FORMULA_BG: '#CFD8DC', HDR_FORMULA_FG: '#263238',
+  HDR_AUTO_BG: '#E3E7EA', HDR_AUTO_FG: '#37474F',
+  HDR_HELPER_BG: '#F1F3F4', HDR_HELPER_FG: '#80868B',
   FORMULA_CELL_BG: '#F8F9FA',
   SECTION_BG: '#263238', SECTION_FG: '#FFFFFF',
   SUBHEADER_BG: '#ECEFF1',
+  INPUT_BG: '#FFFFFF', INPUT_BORDER: '#CFD8DC',
   RED_BG: '#F4CCCC', RED_FG: '#7F1D1D',
   YELLOW_BG: '#FFF2CC', YELLOW_FG: '#6B4E00',
   GREEN_BG: '#D9EAD3', GREEN_FG: '#1E4620',
@@ -76,197 +74,115 @@ const COLORS = {
   SELECT_BG: '#FFF8E1',
 };
 
-/** Системные классы статусов (коды, не показываются пользователю как значения выбора). */
-const CLS = {
-  OPEN: 'OPEN', DONE: 'DONE', MOVED: 'MOVED', FAIL: 'FAIL', CANCEL: 'CANCEL',
-  WON: 'WON', LOST: 'LOST', PAUSED: 'PAUSED',
-};
+/** Системные классы значений справочников (сами названия можно переименовывать). */
+const CLS = { OPEN: 'OPEN', DONE: 'DONE', MOVED: 'MOVED', FAIL: 'FAIL', CANCEL: 'CANCEL' };
 
-const HIST_KIND = {
-  INITIAL: 'Первичное значение',
-  CHANGE: 'Изменение',
-  MOVE: 'Перенос',
-  CREATE: 'Создание',
-};
-
+const HIST_KIND = { INITIAL: 'Первичное значение', CHANGE: 'Изменение', MOVE: 'Перенос', CREATE: 'Создание' };
 const REPORT_STATUS = { ACTUAL: 'Актуальный', REPLACED: 'Заменён' };
 
-/** Типы предупреждений (листы 11_КОНТРОЛЬ и 09_ДЭШБОРД). */
-const ALERT = {
-  IDLE_HIGH: 'Нет активности',
-  IDLE_WARN: 'Мало активности',
-  TASK_OVERDUE: 'Просроченная задача',
-  ACTION_OVERDUE: 'Просроченное действие',
-  REPORT_DUE: 'Пора подготовить отчёт',
-  NO_LEADS: 'Нет новых заинтересованных',
-  CONV_DROP: 'Падение конверсии',
-  MANY_LOST: 'Много отказов',
-  STRATEGY_OLD: 'Стратегия не пересматривалась',
-  STRATEGY_FLAG: 'Требуется изменение стратегии',
-  HYP_DUE: 'Гипотеза: пора подвести итог',
-  NO_OWNER: 'Задача без ответственного',
-  EXCL_END: 'Эксклюзив заканчивается',
-  ID_PROBLEM: 'Проблема с ID объекта',
-};
-/** Предупреждения, которые означают «пора менять стратегию». */
-const ALERTS_STRATEGY = [ALERT.CONV_DROP, ALERT.MANY_LOST, ALERT.STRATEGY_OLD, ALERT.STRATEGY_FLAG];
-
-const SEVERITY = { HIGH: '1 · Высокая', MID: '2 · Средняя', LOW: '3 · Низкая' };
-
 /**
- * Настройки (лист 10_НАСТРОЙКИ). Каждое значение получает именованный диапазон CFG_<KEY>,
- * поэтому пороги меняются в одной ячейке без правки формул.
+ * Единицы плана задач и откуда берётся факт автоматически:
+ *   CALLS — звонки из 03_ОБЗВОН_И_КП (дата звонка на неделе),
+ *   KP    — отправленные КП (дата КП на неделе),
+ *   RESP  — полученные ответы (дата ответа на неделе),
+ *   PUB   — опубликованный контент из 04_КОНТЕНТ,
+ *   ''    — факт вносится вручную.
  */
+function unitDefs_() {
+  return [
+    ['звонков', 'CALLS'], ['КП', 'KP'], ['ответов', 'RESP'], ['публикаций', 'PUB'],
+    ['писем', ''], ['встреч', ''], ['документов', ''], ['шт', ''],
+  ];
+}
+
+/** Настройки (лист 08_НАСТРОЙКИ) → именованные диапазоны CFG_<KEY>. */
 function cfgDefs_() {
   return [
-    { group: 'Пороги контроля' },
-    { key: 'NO_ACTIVITY_DAYS', label: 'Нет активности: объект без действий дольше, дней (красный)', value: 7 },
-    { key: 'WARN_ACTIVITY_DAYS', label: 'Мало активности: без действий дольше, дней (жёлтый)', value: 4 },
-    { key: 'NO_LEADS_DAYS', label: 'Нет новых заинтересованных (лидов) дольше, дней', value: 14 },
-    { key: 'STRATEGY_REVIEW_DAYS', label: 'Стратегия не пересматривалась дольше, дней', value: 30 },
-    { key: 'EXCL_END_WARN_DAYS', label: 'Предупредить об окончании эксклюзива за, дней', value: 14 },
-    { key: 'RECENT_DAYS', label: 'Окно «последний период» для сравнения конверсии, дней', value: 14 },
-    { key: 'COMPARE_DAYS', label: 'Окно «предыдущий период» для сравнения конверсии, дней', value: 28 },
-    { key: 'CONV_DROP', label: 'Падение конверсии контакт→интерес, считается значимым от (доля)', value: 0.3, fmt: '0%' },
-    { key: 'MIN_CONTACTS', label: 'Мин. контактов в каждом окне для оценки падения конверсии', value: 10 },
-    { key: 'MANY_REFUSALS', label: 'Много отказов: действий с причиной отказа за последние (окно посл. + пред.) дней, от', value: 3 },
-    { group: 'Отчёты и недели' },
-    { key: 'REPORT_WEEKDAY', label: 'День отчёта клиенту (1 = пн … 5 = пт)', value: 5 },
-    { key: 'REPORT_PERIOD_DAYS', label: 'Периодичность отчёта, дней', value: 7 },
-    { key: 'WEEKS_START', label: 'Начало учёта недель (любая дата)', value: '2026-01-05', fmt: 'dd.mm.yyyy', date: true },
-    { key: 'FUTURE_WEEKS', label: 'Сколько будущих недель показывать в списках', value: 12 },
-    { group: 'Подпись в отчёте клиенту' },
-    { key: 'AGENCY_NAME', label: 'Название агентства / бренд', value: '' },
-    { key: 'MANAGER_NAME', label: 'Имя руководителя (подпись отчёта)', value: '' },
-    { key: 'MANAGER_CONTACT', label: 'Контакт руководителя (телефон / Telegram)', value: '' },
-    { group: 'Команда и уведомления' },
-    { key: 'ASSISTANT_EMAIL', label: 'Email ассистента (доступ к папкам Drive)', value: '' },
-    { key: 'DAILY_EMAIL', label: 'Email для ежедневной сводки предупреждений', value: '' },
-    { group: 'Служебное — заполняет скрипт, не менять вручную' },
+    { group: 'Контроль' },
+    { key: 'IDLE_DAYS', label: 'Объект без активности дольше, дней — красный на дэшборде', value: 7 },
+    { key: 'WEEKS_START', label: 'Начало учёта недель (любая дата)', value: '2026-08-03', fmt: 'dd.mm.yyyy', date: true },
+    { key: 'FUTURE_WEEKS', label: 'Сколько будущих недель показывать в списках', value: 8 },
+    { group: 'Шапка отчёта клиенту (исполнитель)' },
+    { key: 'EXEC_NAME', label: 'Исполнитель (как в договоре)', value: 'ИП Копачева Н.А.' },
+    { key: 'EXEC_HEADER', label: 'Шапка отчёта (реквизиты, строки через « | »)', value: 'Индивидуальный предприниматель Копачева Наталья Анатольевна | Свидетельство № 312744805300028 | тел.: 8(925)5617004 | sdelka77.ru' },
+    { key: 'MANAGER_NAME', label: 'Подпись под отчётом', value: 'Наталья Копачева' },
+    { group: 'Служебное — заполняет скрипт' },
     { key: 'FOLDER_ROOT_ID', label: 'ID папки «СИСТЕМА ЭКСКЛЮЗИВОВ»', value: '', sys: true },
     { key: 'FOLDER_MASTER_ID', label: 'ID папки 00_ТАБЛИЦА', value: '', sys: true },
     { key: 'FOLDER_OBJECTS_ID', label: 'ID папки 01_ОБЪЕКТЫ', value: '', sys: true },
     { key: 'FOLDER_TEMPLATES_ID', label: 'ID папки 02_ШАБЛОНЫ', value: '', sys: true },
     { key: 'TEMPLATE_REPORT_ID', label: 'ID шаблона отчёта (Google Doc)', value: '', sys: true },
-    { key: 'TEMPLATE_STRATEGY_ID', label: 'ID шаблона стратегии (Google Doc)', value: '', sys: true },
     { key: 'SYSTEM_VERSION', label: 'Версия системы', value: SYS.VERSION, sys: true },
   ];
 }
 
-/** KPI-метрики плана недели и откуда берётся их факт. Порядок = порядок в справочнике. */
-const KPI_SOURCES = [
-  { title: 'Контакты', act: 'contacts' },
-  { title: 'Ответы', act: 'responses' },
-  { title: 'Лиды', act: 'interested' }, // лид = заинтересованный контакт (столбец «Количество заинтересованных» в 03)
-  { title: 'Презентации', act: 'presentations' },
-  { title: 'Показы', act: 'showings' },
-  { title: 'Переговоры', act: 'negotiations' },
-  { title: 'Предложения', act: 'offers' },
-  { title: 'Брони', act: 'bookings' },
-  { title: 'Сделки', act: 'deals' },
-  { title: 'Действия', count: true },
+/** Задачи, которые «Создать план недели» ставит каждому объекту в работе (меняются в 08_НАСТРОЙКИ). */
+const DEFAULT_WEEK_TASKS = [
+  ['База и рассылки', 'Обзвон компаний по базе', 'звонков', 10],
+  ['База и рассылки', 'Отправить КП', 'КП', 8],
+  ['Контент', 'Публикации об объекте', 'публикаций', 2],
 ];
 
-/** KPI, которые «Создать план недели» ставит каждому активному объекту (меняются в 10_НАСТРОЙКИ). */
-const DEFAULT_WEEK_KPI = [['Контакты', 30], ['Лиды', 2], ['Показы', 1]];
-
-/** Поля стратегии, изменения которых можно показывать клиенту (остальные — внутренние). */
-const STRATEGY_CLIENT_FIELD_KEYS = ['positioning', 'key_argument', 'channels', 'partner_channels', 'content_strategy', 'promo_plan', 'conclusion'];
-
-/**
- * Справочники (лист 08_СПРАВОЧНИКИ). Все выпадающие списки берут значения отсюда.
- * Колонка «Класс» — системный смысл значения: сами названия можно переименовывать,
- * формулы опираются на класс, а не на текст.
- */
+/** Справочники (лист 07_СПРАВОЧНИКИ). Колонка «Класс» — системный смысл значения. */
 function dictDefs_() {
   return [
+    { key: 'obj_kinds', cols: ['Тип объекта'], values: [['Коммерция'], ['Жильё'], ['Загородный дом'], ['Особняк'], ['Земля'], ['Другое']] },
+    { key: 'deal_types', cols: ['Сделка'], values: [['Продажа'], ['Аренда']] },
     {
-      key: 'obj_status', cols: ['Статус объекта', 'Класс', 'В работе'], values: [
-        ['Новый', 'ACTIVE', 'ДА'], ['Стратегия', 'ACTIVE', 'ДА'], ['Активная продажа', 'ACTIVE', 'ДА'],
-        ['Переговоры', 'NEGOTIATION', 'ДА'], ['Бронь', 'BOOKING', 'ДА'], ['Сделка', 'DEAL', 'ДА'],
-        ['Продан', 'SOLD', 'НЕТ'], ['Пауза', 'PAUSED', 'НЕТ'], ['Снят с продажи', 'REMOVED', 'НЕТ'],
+      key: 'obj_status', cols: ['Статус объекта', 'В работе'], values: [
+        ['В работе', 'ДА'], ['Подготовка', 'ДА'], ['Пауза', 'НЕТ'], ['Продан', 'НЕТ'], ['Сдан', 'НЕТ'], ['Договор расторгнут', 'НЕТ'],
       ],
     },
-    { key: 'temperature', cols: ['Температура'], values: [['HOT'], ['WARM'], ['COLD'], ['RISK']] },
-    { key: 'obj_types', cols: ['Тип объекта'], values: [['Квартира'], ['Апартаменты'], ['Пентхаус'], ['Дом'], ['Таунхаус'], ['Участок'], ['Коммерческая'], ['Другое']] },
-    { key: 'categories', cols: ['Категория'], values: [['Комфорт'], ['Бизнес'], ['Премиум'], ['Элит'], ['Инвестиционная']] },
-    { key: 'deal_types', cols: ['Тип сделки'], values: [['Продажа'], ['Переуступка'], ['Аренда']] },
-    { key: 'priorities', cols: ['Приоритет'], values: [['A — высокий'], ['B — средний'], ['C — низкий']] },
+    { key: 'people', cols: ['Сотрудник', 'Роль', 'Email'], values: [['Наталья', 'Руководитель', ''], ['Ассистент', 'Ассистент', ''], ['SMM', 'SMM-специалист', '']] },
     {
-      key: 'action_types', cols: ['Тип действия'], values: [
-        ['CRM'], ['Звонок'], ['WhatsApp'], ['Telegram'], ['Email'], ['Рассылка'], ['Партнёры'], ['Брокеры'], ['Показ'],
-        ['Переговоры'], ['Презентация'], ['ЦИАН'], ['Авито'], ['Яндекс'], ['Контент'], ['Reels'], ['Stories'], ['Threads'],
-        ['Реклама'], ['Outbound'], ['WLC'], ['Бизнес-клуб'], ['Юристы'], ['Банки'], ['Private Banking'], ['Дизайнеры'],
-        ['Архитекторы'], ['Другое'],
+      key: 'task_blocks', cols: ['Блок стратегии'], values: [
+        ['Аналитика и цена'], ['Сценарии использования'], ['Целевые аудитории'], ['КП и материалы'], ['База и рассылки'],
+        ['Каналы и партнёры'], ['Контент'], ['Фото и видео'], ['Объявления'], ['Отчётность'], ['Другое'],
       ],
     },
+    { key: 'units', cols: ['Единица', 'Факт из журнала'], values: unitDefs_() },
     {
-      key: 'channels', cols: ['Канал', 'Группа канала', 'Площадка объявлений'], values: [
-        ['CRM-база', 'Прямые', 'НЕТ'], ['Холодная база / Outbound', 'Прямые', 'НЕТ'], ['Личная сеть', 'Прямые', 'НЕТ'],
-        ['WhatsApp', 'Прямые', 'НЕТ'], ['Email', 'Прямые', 'НЕТ'], ['Входящий звонок', 'Входящие', 'НЕТ'],
-        ['Сайт / лендинг', 'Входящие', 'НЕТ'], ['Рекомендация', 'Входящие', 'НЕТ'],
-        ['ЦИАН', 'Объявления', 'ДА'], ['Авито', 'Объявления', 'ДА'], ['Яндекс Недвижимость', 'Объявления', 'ДА'],
-        ['Telegram', 'Контент', 'НЕТ'], ['Instagram', 'Контент', 'НЕТ'], ['Threads', 'Контент', 'НЕТ'],
-        ['Реклама', 'Реклама', 'НЕТ'], ['Брокеры', 'Партнёры', 'НЕТ'], ['Партнёры', 'Партнёры', 'НЕТ'],
-        ['Юристы', 'Партнёры', 'НЕТ'], ['Банки', 'Партнёры', 'НЕТ'], ['Private Banking', 'Партнёры', 'НЕТ'],
-        ['Дизайнеры', 'Партнёры', 'НЕТ'], ['Архитекторы', 'Партнёры', 'НЕТ'], ['WLC', 'Сообщества', 'НЕТ'],
-        ['Бизнес-клуб', 'Сообщества', 'НЕТ'], ['Другое', 'Прочее', 'НЕТ'],
+      key: 'task_status', cols: ['Статус задачи', 'Класс'], values: [
+        ['Запланировано', 'OPEN'], ['В работе', 'OPEN'], ['Выполнено', 'DONE'], ['Перенесено', 'MOVED'], ['Не выполнено', 'FAIL'], ['Отменено', 'CANCEL'],
       ],
     },
+    { key: 'task_sources', cols: ['Откуда задача'], values: [['План недели'], ['Оперативка'], ['Стратегия'], ['Claude'], ['Вручную']] },
+    { key: 'fit', cols: ['Соответствие'], values: [['Подходит'], ['Уточнить'], ['Не подходит']] },
+    { key: 'kp_types', cols: ['Какое КП'], values: [['КП клиенту'], ['КП партнёру'], ['Презентация под аудиторию'], ['Письмо без вложения']] },
     {
-      key: 'task_status', cols: ['Статус задачи / действия', 'Класс'], values: [
-        ['Запланировано', 'OPEN'], ['В работе', 'OPEN'], ['Выполнено', 'DONE'], ['Перенесено', 'MOVED'],
-        ['Не выполнено', 'FAIL'], ['Отменено', 'CANCEL'],
+      key: 'responses', cols: ['Ответ', 'Класс'], values: [
+        ['Нет ответа', 'NONE'], ['Интересно', 'YES'], ['Просят позже', 'LATER'], ['Не интересно', 'NO'], ['Переслали ЛПР', 'LATER'],
       ],
     },
+    { key: 'platforms', cols: ['Площадка'], values: [['Instagram'], ['Telegram'], ['Threads'], ['YouTube Shorts'], ['ЦИАН / Авито (видео)'], ['Другое']] },
+    { key: 'content_formats', cols: ['Формат'], values: [['Рилс'], ['Пост'], ['Сторис'], ['Шортс'], ['Карусель'], ['Статья']] },
+    { key: 'content_goals', cols: ['Цель контента'], values: [['Найти покупателя / арендатора'], ['Показать работу собственнику'], ['Бренд агентства'], ['Все три']] },
     {
-      key: 'refusal_reasons', cols: ['Причина отказа'], values: [
-        ['Цена'], ['Локация'], ['Планировка'], ['Площадь'], ['Состояние / ремонт'], ['Инфраструктура'],
-        ['Юридические вопросы'], ['Сроки'], ['Не подходит формат'], ['Нет бюджета'], ['Выбрал другой объект'], ['Другое'],
+      key: 'content_status', cols: ['Статус контента', 'Класс'], values: [
+        ['Идея', 'OPEN'], ['Сценарий', 'OPEN'], ['Снято', 'OPEN'], ['Опубликовано', 'DONE'], ['Отменено', 'CANCEL'],
       ],
     },
-    { key: 'people', cols: ['Ответственный', 'Роль', 'Email'], values: [['Руководитель', 'Руководитель', ''], ['Ассистент', 'Ассистент', '']] },
-    { key: 'kpi_metrics', cols: ['KPI-метрика'], values: KPI_SOURCES.map(k => [k.title]) },
-    {
-      key: 'hyp_status', cols: ['Статус гипотезы', 'Класс'], values: [
-        ['В проверке', 'OPEN'], ['Подтвердилась', 'DONE'], ['Не подтвердилась', 'FAIL'], ['Отменена', 'CANCEL'],
-      ],
-    },
-    { key: 'strategy_status', cols: ['Статус стратегии'], values: [['Черновик'], ['На утверждении'], ['Утверждена'], ['Требует пересмотра']] },
-    { key: 'strategy_client_fields', cols: ['Поля стратегии, видимые клиенту'], values: STRATEGY_CLIENT_FIELD_KEYS.map(k => [fieldTitle_('STR', k)]) },
-    // Ниже — вычисляемые списки (формулы), руками не заполняются.
+    { key: 'scenario_status', cols: ['Статус сценария'], values: [['Идея'], ['Проверяем'], ['Подтверждён'], ['Отклонён']] },
+    { key: 'audience_types', cols: ['Кто'], values: [['Компании'], ['Физлица'], ['Инвесторы'], ['Партнёры-посредники']] },
+    { key: 'priorities', cols: ['Приоритет'], values: [['★★★'], ['★★'], ['★']] },
+    { key: 'work_status', cols: ['Статус работы'], values: [['Не начато'], ['В работе'], ['Сделано'], ['Регулярно'], ['Отказались']] },
+    { key: 'lib_kinds', cols: ['Раздел библиотеки'], values: [['Чек-лист'], ['Промпт'], ['Регламент'], ['Скрипт'], ['Шаблон КП']] },
+    // вычисляемые списки
     { key: 'weeks', cols: ['Неделя', 'Понедельник', 'Воскресенье', 'Неделя (подпись)'], generated: true },
     { key: 'obj_labels', cols: ['Объект (выбор)'], generated: true },
-    { key: 'obj_filter', cols: ['Фильтр объектов'], generated: true },
-    { key: 'week_filter', cols: ['Фильтр недель'], generated: true },
+    { key: 'lib_checklists', cols: ['Чек-листы (выбор)'], generated: true },
   ];
 }
 
 // ═════════════ 01_Schema.gs ═════════════
 /**
- * 01_Schema — структура данных всех листов-журналов.
+ * 01_Schema — структура общих журналов.
  *
- * Каждое поле описано ОДИН раз: заголовок, тип ввода, справочник, формула.
- * Из этого описания строятся: заголовки, формулы, выпадающие списки, форматы,
- * защита формул, onEdit-логика и документация (tools/gen_docs.js).
- *
- * Типы полей (kind):
- *   id    — уникальный ID, ставит скрипт (ACT-0001, TASK-0001). ID объекта — из CRM, вручную
- *   text  — ручной ввод текста
- *   dd    — ручной выбор из выпадающего списка (dict = справочник, list = другой лист)
- *   date  — ручной ввод даты (календарь)
- *   num   — ручной ввод числа
- *   money — ручной ввод суммы
- *   cb    — чекбокс
- *   link  — ссылка, вводится вручную
- *   sys   — заполняет скрипт (ссылки на документы, даты создания, автор)
- *   f     — формула (ARRAYFORMULA в заголовке столбца; руками не трогать)
- *
- * Флаги: helper — служебный столбец (скрыт), track — изменения пишутся в 12_ИСТОРИЯ,
- *        client — может попасть в отчёт клиенту, internal — никогда не попадает к клиенту.
- *
- * Токены в формулах: [[@поле]] — столбец этого листа, [[ACT.поле]] — столбец другого листа,
- * [[D.справочник]] — справочник, [[CFG.КЛЮЧ]] — настройка. Разворачиваются в 02_Formulas.
+ * Каждое поле описано один раз; из описания строятся заголовки, формулы, списки, форматы,
+ * защита, onEdit-логика и документация.
+ * kind: id | text | dd | date | num | money | cb | link | sys (заполняет скрипт) | f (формула)
+ * Флаги: helper — служебный (скрыт), track — изменения в 09_ИСТОРИЯ, client — может попасть в отчёт клиенту.
+ * Токены в формулах: [[@поле]] — столбец этого листа, [[BASE.поле]] — другого, [[D.справочник]], [[CFG.КЛЮЧ]].
  */
 
 function F(key, title, kind, opts) {
@@ -274,267 +190,187 @@ function F(key, title, kind, opts) {
 }
 
 const WEEK_OF_ = d => `YEAR(${d}-WEEKDAY(${d},2)+4)&"-W"&TEXT(ISOWEEKNUM(${d}),"00")`;
-const MONTH_OF_ = d => `YEAR(${d})&"-"&TEXT(MONTH(${d}),"00")`;
 const OBJ_NAME_F_ = key => `IFERROR(VLOOKUP([[@${key}]],{[[OBJ.id]],[[OBJ.name]]},2,FALSE),"⚠ нет объекта")`;
 
 function sheetSpecs_() {
   if (sheetSpecs_.cache) return sheetSpecs_.cache;
   const S = {};
 
-  // ─────────────────────────────── 01_ОБЪЕКТЫ ───────────────────────────────
+  // ───────────────────────── 01_ОБЪЕКТЫ ─────────────────────────
   S.OBJ = {
     code: 'OBJ', guard: 'name', frozenCols: 2,
-    about: 'Единый реестр эксклюзивов. Одна строка = один объект.',
+    about: 'Реестр эксклюзивов. Одна строка = один объект. Из строки создаётся вкладка объекта со стратегией.',
     fields: [
-      F('id', 'ID объекта', 'text', { w: 100, d: 'ID объекта из CRM — вводится вручную, должен быть уникальным. По нему связаны все листы и его удобно искать в CRM. Если исправить ID здесь, скрипт обновит его во всех связанных строках.' }),
-      F('name', 'Название объекта', 'text', { w: 170, client: true, d: 'Как объект называется в отчётах клиенту.' }),
-      F('address', 'Адрес', 'text', { w: 200, client: true }),
-      F('complex', 'ЖК / поселок', 'text', { w: 130 }),
-      F('obj_type', 'Тип объекта', 'dd', { dict: 'obj_types' }),
-      F('category', 'Категория', 'dd', { dict: 'categories' }),
-      F('area', 'Площадь', 'num', { fmt: '#,##0.0', d: 'м²' }),
-      F('rooms', 'Количество комнат', 'num', { fmt: '0' }),
-      F('price', 'Цена', 'money', { track: true, client: true, d: 'Текущая цена. Каждое изменение сохраняется в 12_ИСТОРИЯ.' }),
+      F('id', 'ID объекта (CRM)', 'text', { w: 95, d: 'Номер объекта из CRM — вводится вручную, должен быть уникальным.' }),
+      F('name', 'Объект', 'text', { w: 180, client: true, d: 'Короткое название — так будет называться вкладка объекта.' }),
+      F('tab_link', 'Вкладка', 'sys', { w: 90, d: 'Ссылка на вкладку объекта. Создаётся меню «Создать вкладки объектов».' }),
+      F('kind', 'Тип', 'dd', { dict: 'obj_kinds' }),
+      F('deal', 'Сделка', 'dd', { dict: 'deal_types' }),
+      F('address', 'Адрес', 'text', { w: 220, client: true }),
+      F('area', 'Площадь, м²', 'num', { fmt: '#,##0.0' }),
+      F('price', 'Цена', 'money', { track: true, d: 'Цена продажи или аренды в месяц. Изменения сохраняются в истории.' }),
       F('price_m2', 'Цена за м²', 'f', { fmt: 'money', f: 'IFERROR(ROUND([[@price]]/[[@area]],0),"")' }),
-      F('deal_type', 'Тип сделки', 'dd', { dict: 'deal_types' }),
-      F('date_sign', 'Дата подписания эксклюзива', 'date'),
-      F('date_end', 'Дата окончания эксклюзива', 'date', { track: true }),
-      F('close_date', 'Дата закрытия', 'date', { track: true, d: 'Ставится автоматически при статусе «Продан» или «Снят с продажи» (можно поправить вручную). С этой даты «дни в продаже» перестают расти.' }),
-      F('days_on_market', 'Количество дней в продаже', 'f', { fmt: '0', f: 'IF([[@date_sign]]="","",IF([[@close_date]]="",TODAY(),[[@close_date]])-[[@date_sign]])' }),
-      F('status', 'Статус объекта', 'dd', { dict: 'obj_status', track: true }),
-      F('manager', 'Ответственный', 'dd', { dict: 'people', track: true }),
+      F('status', 'Статус', 'dd', { dict: 'obj_status', track: true }),
+      F('manager', 'Ответственный', 'dd', { dict: 'people' }),
       F('assistant', 'Ассистент', 'dd', { dict: 'people' }),
-      F('crm_link', 'Ссылка на CRM', 'link', { w: 120 }),
-      F('strategy_link', 'Ссылка на стратегию', 'sys', { w: 120, d: 'Google Doc стратегии. Создаётся меню «Открыть стратегию».' }),
-      F('folder_link', 'Ссылка на папку объекта', 'sys', { w: 120, d: 'Папка объекта в 01_ОБЪЕКТЫ: внутри «Стратегия», «Отчёты», «Материалы».' }),
-      F('last_report_link', 'Ссылка на последний отчёт', 'sys', { w: 120, d: 'PDF последнего отчёта клиенту.' }),
-      F('last_report_date', 'Дата последнего отчёта', 'sys', { fmt: 'date' }),
-      F('next_report', 'Следующий отчёт', 'f', {
-        fmt: 'date',
-        f: 'IF([[@last_report_date]]="",TODAY()-WEEKDAY(TODAY(),2)+[[CFG.REPORT_WEEKDAY]],[[@last_report_date]]+[[CFG.REPORT_PERIOD_DAYS]])',
-      }),
-      F('priority', 'Приоритет', 'dd', { dict: 'priorities' }),
-      F('temperature', 'Температура объекта', 'dd', { dict: 'temperature', track: true }),
-      F('target_buyer', 'Целевой покупатель', 'text', { w: 180 }),
-      F('main_channel', 'Основной канал продаж', 'dd', { dict: 'channels' }),
-      F('last_action', 'Последнее действие', 'f', {
-        w: 220,
-        f: 'IFERROR(VLOOKUP([[@id]],SORT(FILTER({[[ACT.obj_id]],[[ACT.date]],TEXT([[ACT.date]],"dd.mm")&" · "&[[ACT.type]]&IF([[ACT.fact]]="",""," — "&LEFT([[ACT.fact]],80))},[[ACT.status_class]]="DONE",[[ACT.date]]<=TODAY()),2,FALSE),3,FALSE),"—")',
-      }),
-      F('next_action', 'Следующее действие', 'f', {
-        w: 220, d: 'Ближайшая открытая задача из 06_ПЛАН_ФАКТ, иначе ближайший «Следующий шаг» из 03_ДЕЙСТВИЯ.',
-        f: 'IFERROR(VLOOKUP([[@id]],SORT(FILTER({[[PF.obj_id]],[[PF.deadline]],IF([[PF.task]]="",[[PF.week_goal]],[[PF.task]])},[[PF.status_class]]="OPEN",([[PF.task]]<>"")+([[PF.week_goal]]<>"")),2,TRUE),3,FALSE),IFERROR(VLOOKUP([[@id]],SORT(FILTER({[[ACT.obj_id]],[[ACT.next_step_date]],[[ACT.next_step]]},[[ACT.next_step]]<>"",[[ACT.next_step_date]]>=TODAY()),2,TRUE),3,FALSE),"—"))',
-      }),
-      F('next_action_deadline', 'Дедлайн следующего действия', 'f', {
-        fmt: 'date',
-        f: 'IFERROR(VLOOKUP([[@id]],SORT(FILTER({[[PF.obj_id]],[[PF.deadline]]},[[PF.status_class]]="OPEN",([[PF.task]]<>"")+([[PF.week_goal]]<>"")),2,TRUE),2,FALSE),IFERROR(VLOOKUP([[@id]],SORT(FILTER({[[ACT.obj_id]],[[ACT.next_step_date]]},[[ACT.next_step]]<>"",[[ACT.next_step_date]]>=TODAY()),2,TRUE),2,FALSE),""))',
-      }),
-      F('days_idle', 'Количество дней без активности', 'f', {
-        fmt: '0', d: 'Сегодня минус дата последнего выполненного действия (если действий нет — от даты подписания).',
-        f: 'IF([[@last_action_date]]="",IF([[@date_sign]]="","",TODAY()-[[@date_sign]]),TODAY()-[[@last_action_date]])',
-      }),
-      F('manager_comment', 'Комментарий руководителя', 'text', { w: 200, internal: true, d: 'Внутренний. В отчёт клиенту не попадает.' }),
-      F('risk_flag', 'Флаг активности', 'f', {
-        d: 'RISK — нет действий дольше порога NO_ACTIVITY_DAYS; ВНИМАНИЕ — дольше WARN_ACTIVITY_DAYS; OK; «—» — объект не в работе.',
-        f: 'IF([[@in_work]]<>"ДА","—",IF([[@days_idle]]="","",IF([[@days_idle]]>[[CFG.NO_ACTIVITY_DAYS]],"RISK",IF([[@days_idle]]>[[CFG.WARN_ACTIVITY_DAYS]],"ВНИМАНИЕ","OK"))))',
-      }),
-      F('id_check', 'Проверка ID', 'f', { d: '«НЕТ ID» — объект не участвует в расчётах; «ДУБЛЬ ID» — такой ID уже есть.', f: 'IF([[@id]]="","НЕТ ID",IF(COUNTIF([[@id]],[[@id]])>1,"ДУБЛЬ ID",""))' }),
-      F('status_class', 'Класс статуса', 'f', { helper: true, f: 'IFERROR(VLOOKUP([[@status]],[[D.obj_status:tbl]],2,FALSE),"")' }),
-      F('in_work', 'В работе', 'f', { helper: true, f: 'IFERROR(VLOOKUP([[@status]],[[D.obj_status:tbl]],3,FALSE),"ДА")' }),
-      F('last_action_date', 'Дата последнего действия', 'f', {
-        helper: true, fmt: 'date',
-        f: 'IFERROR(VLOOKUP([[@id]],SORT(FILTER({[[ACT.obj_id]],[[ACT.date]]},[[ACT.status_class]]="DONE",[[ACT.date]]<=TODAY()),2,FALSE),2,FALSE),"")',
-      }),
-      F('created_at', 'Создан', 'sys', { fmt: 'date', helper: true }),
+      F('smm', 'SMM', 'dd', { dict: 'people' }),
+      F('customer', 'Заказчик (для отчёта)', 'text', { w: 170, d: 'Как в договоре: например, ООО «Ромашка».' }),
+      F('contract_no', '№ договора', 'text', { w: 110 }),
+      F('contract_date', 'Дата договора', 'date'),
+      F('date_sign', 'Начало работы', 'date', { d: 'Дата начала эксклюзива / работы по объекту.' }),
+      F('crm_link', 'Ссылка на CRM', 'link', { w: 110 }),
+      F('folder_link', 'Папка объекта', 'link', { w: 110, d: 'Можно вставить ссылку на уже существующую папку объекта на Google Диске. Если пусто — папка «Название (ID)» создастся в 01_ОБЪЕКТЫ при первом отчёте.' }),
+      F('strategy_pct', 'Стратегия заполнена', 'sys', { fmt: 'pct', d: 'Считается по вкладке объекта: аналоги, цена, сценарии, аудитории, КП, каналы.' }),
+      F('last_report_link', 'Последний отчёт', 'sys', { w: 110 }),
+      F('last_report_date', 'Дата отчёта', 'sys', { fmt: 'date' }),
+      F('id_check', 'Проверка ID', 'f', { f: 'IF([[@id]]="","НЕТ ID",IF(COUNTIF([[@id]],[[@id]])>1,"ДУБЛЬ ID",""))' }),
+      F('in_work', 'В работе', 'f', { helper: true, f: 'IFERROR(VLOOKUP([[@status]],[[D.obj_status:tbl]],2,FALSE),"ДА")' }),
+      F('tab_name', 'Имя вкладки', 'sys', { helper: true }),
+      F('tab_url', 'Адрес вкладки', 'sys', { helper: true, d: '#gid=… — внутренняя ссылка на вкладку объекта.' }),
+      F('created_at', 'Создан', 'sys', { helper: true, fmt: 'date' }),
     ],
   };
 
-  // ─────────────────────────────── 02_СТРАТЕГИЯ ───────────────────────────────
-  const strText = (key, title, extra) => F(key, title, 'text', Object.assign({ track: true, w: 200 }, extra || {}));
-  S.STR = {
-    code: 'STR', guard: 'obj_id', frozenCols: 2,
-    about: 'Краткая управленческая версия стратегии. Полная стратегия — в Google Doc по ссылке.',
+  // ───────────────────────── 02_ЗАДАЧИ ─────────────────────────
+  S.TASK = {
+    code: 'TASK', guard: 'obj_id', frozenCols: 4, idField: 'id', idPrefix: 'TASK-', idPad: 4,
+    about: 'План-факт. Одна строка = одна задача по объекту на неделю. Факт по звонкам, КП, ответам и публикациям считается сам.',
     fields: [
-      F('obj_id', 'ID объекта', 'dd', { list: 'OBJ.id', d: 'Строка создаётся автоматически при добавлении объекта.' }),
-      F('obj_name', 'Объект', 'f', { w: 160, f: OBJ_NAME_F_('obj_id') }),
-      F('strategy_status', 'Статус стратегии', 'dd', { dict: 'strategy_status', track: true, d: 'Утверждает руководитель.' }),
-      F('strategy_doc', 'Ссылка на Google Doc стратегии', 'sys', { w: 130 }),
-      strText('goal', 'Цель продажи'),
-      F('target_price', 'Целевая цена', 'money', { track: true, internal: true }),
-      strText('price_range', 'Допустимый ценовой диапазон', { internal: true }),
-      strText('positioning', 'Позиционирование', { client: true }),
-      strText('ta1', 'Целевая аудитория №1'),
-      strText('ta2', 'Целевая аудитория №2'),
-      strText('ta3', 'Целевая аудитория №3'),
-      strText('motives', 'Основные мотивы покупателя'),
-      strText('objections', 'Основные возражения'),
-      strText('answers', 'Ответы на возражения'),
-      strText('competitors', 'Конкуренты'),
-      strText('advantages', 'Преимущества объекта'),
-      strText('weaknesses', 'Слабые стороны', { internal: true }),
-      strText('not_public', 'Что нельзя использовать в публичной коммуникации', { internal: true }),
-      strText('key_argument', 'Ключевой продающий аргумент', { client: true }),
-      strText('scenario', 'Основной сценарий продажи'),
-      strText('channels', 'Каналы продвижения', { client: true }),
-      strText('partner_channels', 'Партнёрские каналы', { client: true }),
-      strText('crm_base', 'CRM-база'),
-      strText('content_strategy', 'Контент-стратегия', { client: true }),
-      strText('outbound_strategy', 'Outbound-стратегия'),
-      strText('promo_plan', 'План продвижения', { client: true }),
-      strText('hypotheses', 'Гипотезы', { internal: true }),
-      F('review_date', 'Дата последнего пересмотра', 'date', { track: true }),
-      strText('conclusion', 'Вывод', { client: true }),
-      strText('next_hypothesis', 'Следующая гипотеза', { internal: true }),
-      F('need_change', 'Требуется изменение стратегии', 'cb', { d: 'Ручной флаг руководителя/ассистента.' }),
-      F('days_since_review', 'Дней с пересмотра', 'f', { fmt: '0', f: 'IF([[@review_date]]="","",TODAY()-[[@review_date]])' }),
-      F('changed_at', 'Дата последнего изменения', 'sys', { fmt: 'datetime', d: 'Ставит скрипт при любом изменении стратегии.' }),
-      F('changed_by', 'Кто изменил', 'sys'),
-    ],
-  };
-
-  // ─────────────────────────────── 03_ДЕЙСТВИЯ ───────────────────────────────
-  const cnt = (key, title, extra) => F(key, title, 'num', Object.assign({ fmt: '0', w: 88, client: true }, extra || {}));
-  S.ACT = {
-    code: 'ACT', guard: 'date', frozenCols: 3, idField: 'id', idPrefix: 'ACT-', idPad: 4,
-    about: 'Главный журнал работы. Одна строка = одно значимое действие по продаже объекта.',
-    fields: [
-      F('id', 'ID действия', 'id'),
-      F('date', 'Дата', 'date', { client: true, d: 'Если не указать — скрипт поставит сегодняшнюю.' }),
-      F('week', 'Неделя', 'f', { f: WEEK_OF_('[[@date]]'), d: 'ISO-неделя вида 2026-W39, считается из даты.' }),
+      F('id', 'ID', 'id', { w: 85 }),
+      F('week', 'Неделя', 'dd', { list: 'D.weeks', d: 'Если не указать — текущая.' }),
       F('obj_id', 'ID объекта', 'dd', { list: 'OBJ.id' }),
-      F('obj_name', 'Объект', 'f', { guard: 'obj_id', w: 150, f: OBJ_NAME_F_('obj_id') }),
-      F('owner', 'Ответственный', 'dd', { dict: 'people' }),
-      F('type', 'Тип действия', 'dd', { dict: 'action_types', client: true }),
-      F('channel', 'Канал', 'dd', { dict: 'channels', client: true }),
-      F('goal', 'Цель действия', 'text', { w: 180 }),
-      F('plan', 'План', 'text', { w: 160 }),
-      F('fact', 'Факт', 'text', { w: 220, client: true, d: 'Что сделано — пишется так, чтобы можно было показать клиенту.' }),
-      F('status', 'Статус', 'dd', { dict: 'task_status', track: true, d: 'По умолчанию «Выполнено». «Запланировано» с прошедшей датой = просрочка.' }),
-      cnt('contacts', 'Количество контактов'),
-      cnt('responses', 'Количество ответов'),
-      cnt('interested', 'Количество заинтересованных', { d: 'Сколько человек проявили интерес = ЛИДЫ. Из этого столбца считаются лиды, конверсии и стоимость лида.' }),
-      cnt('presentations', 'Количество презентаций'),
-      cnt('showings', 'Количество показов'),
-      cnt('repeat_contacts', 'Количество повторных контактов'),
-      cnt('offers', 'Количество предложений'),
-      cnt('negotiations', 'Количество переговоров'),
-      cnt('bookings', 'Количество броней'),
-      cnt('deals', 'Количество сделок'),
-      F('result', 'Результат', 'text', { w: 180 }),
-      F('refusal', 'Причина отказа', 'dd', { dict: 'refusal_reasons', client: true }),
-      F('feedback', 'Полученная обратная связь', 'text', { w: 220, client: true, d: 'Попадает в раздел «Что показал рынок».' }),
-      F('conclusion', 'Вывод', 'text', { w: 200, client: true, d: 'Попадает в раздел «Выводы».' }),
-      F('next_step', 'Следующий шаг', 'text', { w: 180, client: true }),
-      F('next_step_date', 'Дата следующего шага', 'date'),
-      F('comment', 'Комментарий', 'text', { w: 180, internal: true, d: 'Внутренний. В отчёт клиенту не попадает.' }),
-      F('views', 'Просмотры (охват)', 'num', { fmt: '#,##0', d: 'Просмотры объявления / охват публикации.' }),
-      F('cost', 'Расходы, ₽', 'money', { internal: true, d: 'Для расчёта стоимости лида (расходы / заинтересованные).' }),
-      F('to_report', 'В отчёт клиенту', 'cb', { d: 'Снимите галочку, если действие внутреннее и не должно попасть в отчёт.' }),
-      F('month', 'Месяц', 'f', { helper: true, f: MONTH_OF_('[[@date]]') }),
-      F('status_class', 'Класс статуса', 'f', { helper: true, guard: 'status', f: 'IFERROR(VLOOKUP([[@status]],[[D.task_status:tbl]],2,FALSE),"")' }),
-      F('channel_group', 'Группа канала', 'f', { helper: true, guard: 'channel', f: 'IFERROR(VLOOKUP([[@channel]],[[D.channels:tbl]],2,FALSE),"")' }),
-      F('is_listing', 'Площадка объявлений', 'f', { helper: true, guard: 'channel', f: 'IFERROR(VLOOKUP([[@channel]],[[D.channels:tbl]],3,FALSE),"НЕТ")' }),
-      F('window', 'Окно сравнения', 'f', {
-        helper: true,
-        f: 'IF(TODAY()-[[@date]]<=[[CFG.RECENT_DAYS]],"R",IF(TODAY()-[[@date]]<=[[CFG.RECENT_DAYS]]+[[CFG.COMPARE_DAYS]],"P",""))',
-      }),
-      F('created_at', 'Создано', 'sys', { fmt: 'datetime', helper: true }),
+      F('obj_name', 'Объект', 'f', { w: 150, f: OBJ_NAME_F_('obj_id') }),
+      F('block', 'Блок стратегии', 'dd', { dict: 'task_blocks' }),
+      F('task', 'Задача', 'text', { w: 260, client: true, d: 'Пишется так, чтобы можно было показать клиенту: «Обзвон медицинских центров».' }),
+      F('owner', 'Исполнитель', 'dd', { dict: 'people' }),
+      F('unit', 'Единица', 'dd', { dict: 'units', d: 'звонков / КП / ответов / публикаций — факт посчитается сам из журналов.' }),
+      F('plan', 'План', 'num', { fmt: '0', client: true, track: true }),
+      F('fact', 'Факт (вручную)', 'num', { fmt: '0', d: 'Заполняйте только если факт не считается автоматически.' }),
+      F('fact_auto', 'Факт (авто)', 'f', { guard: 'unit', fmt: '0', f: '__FACT_AUTO__', d: 'Из 03_ОБЗВОН_И_КП и 04_КОНТЕНТ по объекту и неделе.' }),
+      F('pct', '% выполнения', 'f', { guard: 'plan', fmt: 'pct', f: 'IFERROR(IF([[@fact]]="",IF([[@fact_auto]]="",0,[[@fact_auto]]),[[@fact]])/[[@plan]],"")' }),
+      F('deadline', 'Срок', 'date', { track: true, d: 'Если не указать — пятница недели.' }),
+      F('status', 'Статус', 'dd', { dict: 'task_status', track: true, d: '«Перенесено» создаёт копию на следующую неделю; старая строка остаётся.' }),
+      F('result', 'Результат / комментарий', 'text', { w: 240, client: true }),
+      F('to_report', 'В отчёт', 'cb', { d: 'Показывать задачу в отчёте клиенту.' }),
+      F('source', 'Откуда', 'dd', { dict: 'task_sources' }),
+      F('overdue', 'Просрочка', 'f', { f: 'IF(([[@status_class]]="OPEN")*([[@deadline]]<>"")*([[@deadline]]<TODAY()),"ПРОСРОЧЕНО","")' }),
+      F('status_class', 'Класс статуса', 'f', { helper: true, f: 'IF([[@status]]="","OPEN",IFERROR(VLOOKUP([[@status]],[[D.task_status:tbl]],2,FALSE),"OPEN"))' }),
+      F('moved_from', 'Перенесено из', 'sys', { helper: true }),
+      F('created_at', 'Создано', 'sys', { helper: true, fmt: 'datetime' }),
       F('author', 'Автор', 'sys', { helper: true }),
     ],
   };
 
-  // ─────────────────────────────── 06_ПЛАН_ФАКТ ───────────────────────────────
-  S.PF = {
-    code: 'PF', guard: 'obj_id', frozenCols: 3, idField: 'task_id', idPrefix: 'TASK-', idPad: 4,
-    about: 'План недели и его выполнение. Одна строка = одна задача или один KPI недели по объекту.',
+  // ───────────────────────── 03_ОБЗВОН_И_КП ─────────────────────────
+  S.BASE = {
+    code: 'BASE', guard: 'obj_id', frozenCols: 5, idField: 'id', idPrefix: 'BASE-', idPad: 4,
+    about: 'Работа с базой: одна строка = одна компания / контакт, которому звоним и отправляем КП. В CRM переносим только реально заинтересованных.',
     fields: [
-      F('week', 'Неделя', 'dd', { list: 'D.weeks', d: 'Ключ недели, например 2026-W40.' }),
+      F('id', 'ID', 'id', { w: 85 }),
       F('obj_id', 'ID объекта', 'dd', { list: 'OBJ.id' }),
-      F('obj_name', 'Объект', 'f', { w: 150, f: OBJ_NAME_F_('obj_id') }),
-      F('week_goal', 'Цель недели', 'text', { w: 180, client: true }),
-      F('task', 'Задача', 'text', { w: 200, client: true, d: 'Задачи следующей недели попадают в отчёт клиенту как «Что планируем».' }),
-      F('type', 'Тип действия', 'dd', { dict: 'action_types', d: 'Если указан — факт KPI считается только по действиям этого типа.' }),
-      F('owner', 'Ответственный', 'dd', { dict: 'people' }),
-      F('plan', 'План', 'text', { w: 160, track: true }),
-      F('fact', 'Факт', 'text', { w: 160 }),
-      F('result', 'Результат', 'text', { w: 160 }),
-      F('kpi_metric', 'KPI', 'dd', { dict: 'kpi_metrics', client: true, d: 'Какой показатель планируем (контакты, лиды = заинтересованные, показы…).' }),
-      F('kpi_plan', 'KPI план', 'num', { fmt: '0', track: true, client: true }),
-      F('kpi_fact', 'Фактический KPI', 'f', { guard: 'kpi_metric', fmt: '0', f: '__KPI_FACT__', d: 'Считается автоматически из 03_ДЕЙСТВИЯ / 04_ЛИДЫ по объекту и неделе.' }),
-      F('kpi_pct', '% выполнения KPI', 'f', { guard: 'kpi_plan', fmt: 'pct', f: 'IFERROR([[@kpi_fact]]/[[@kpi_plan]],"")' }),
-      F('status', 'Статус', 'dd', { dict: 'task_status', track: true, d: '«Перенесено» автоматически создаёт копию задачи на следующую неделю; старая строка остаётся в истории.' }),
-      F('fail_reason', 'Причина невыполнения', 'text', { w: 160, internal: true }),
-      F('conclusion', 'Вывод', 'text', { w: 180, client: true }),
-      F('next_step', 'Следующий шаг', 'text', { w: 160 }),
-      F('deadline', 'Дедлайн', 'date', { track: true }),
-      F('to_report', 'В отчёт клиенту', 'cb'),
-      F('overdue', 'Просрочка', 'f', { f: 'IF(([[@status_class]]="OPEN")*([[@deadline]]<>"")*([[@deadline]]<TODAY()),"ПРОСРОЧЕНО","")' }),
-      F('task_id', 'ID задачи', 'id'),
-      F('moved_from', 'Перенесено из', 'sys'),
-      F('status_class', 'Класс статуса', 'f', { helper: true, f: 'IF([[@status]]="","OPEN",IFERROR(VLOOKUP([[@status]],[[D.task_status:tbl]],2,FALSE),"OPEN"))' }),
-      F('created_at', 'Создано', 'sys', { fmt: 'datetime', helper: true }),
+      F('obj_name', 'Объект', 'f', { w: 140, f: OBJ_NAME_F_('obj_id') }),
+      F('audience', 'Аудитория', 'text', { w: 150, d: 'Как во вкладке объекта: «Сети медцентров», «Аптечные сети»… По ней считаются цифры по аудиториям.' }),
+      F('company', 'Компания', 'text', { w: 170, client: true }),
+      F('site', 'Сайт', 'link', { w: 110 }),
+      F('contact', 'Контакт (ЛПР, телефон, email)', 'text', { w: 220 }),
+      F('fit', 'Соответствие объекту', 'dd', { dict: 'fit' }),
+      F('fit_note', 'Почему подходит / нет', 'text', { w: 200 }),
+      F('call_date', 'Дата звонка', 'date'),
+      F('call_result', 'Итог звонка', 'text', { w: 240 }),
+      F('kp_date', 'Дата КП', 'date'),
+      F('kp_type', 'Какое КП', 'dd', { dict: 'kp_types' }),
+      F('response', 'Ответ', 'dd', { dict: 'responses', track: true }),
+      F('response_date', 'Дата ответа', 'date'),
+      F('next_step', 'Следующий шаг', 'text', { w: 180 }),
+      F('next_date', 'Когда', 'date'),
+      F('to_crm', 'Передан в CRM', 'cb', { d: 'Отметьте, когда контакт стал реальным интересом и заведён в CRM.' }),
+      F('owner', 'Кто ведёт', 'dd', { dict: 'people' }),
+      F('call_week', 'Неделя звонка', 'f', { helper: true, guard: 'call_date', f: WEEK_OF_('[[@call_date]]') }),
+      F('kp_week', 'Неделя КП', 'f', { helper: true, guard: 'kp_date', f: WEEK_OF_('[[@kp_date]]') }),
+      F('resp_week', 'Неделя ответа', 'f', { helper: true, guard: 'response_date', f: WEEK_OF_('[[@response_date]]') }),
+      F('resp_class', 'Класс ответа', 'f', { helper: true, guard: 'response', f: 'IFERROR(VLOOKUP([[@response]],[[D.responses:tbl]],2,FALSE),"")' }),
+      F('last_date', 'Последнее касание', 'f', { helper: true, fmt: 'date', f: 'LET(d_a,IF([[@call_date]]="",0,[[@call_date]]),d_b,IF([[@kp_date]]="",0,[[@kp_date]]),d_c,IF([[@response_date]]="",0,[[@response_date]]),d_m,IF(d_a>d_b,d_a,d_b),d_x,IF(d_m>d_c,d_m,d_c),IF(d_x=0,"",d_x))' }),
+      F('created_at', 'Создано', 'sys', { helper: true, fmt: 'datetime' }),
+      F('author', 'Автор', 'sys', { helper: true }),
     ],
   };
 
-  // ─────────────────────────────── 14_ГИПОТЕЗЫ ───────────────────────────────
-  S.HYP = {
-    code: 'HYP', guard: 'obj_id', frozenCols: 3, idField: 'id', idPrefix: 'HYP-', idPad: 3,
-    about: 'Журнал маркетинговых гипотез: что проверяем → в каком канале → какую цифру ждём → что получилось → вывод. Факт считается сам из 03_ДЕЙСТВИЯ.',
+  // ───────────────────────── 04_КОНТЕНТ ─────────────────────────
+  S.CONT = {
+    code: 'CONT', guard: 'obj_id', frozenCols: 4, idField: 'id', idPrefix: 'CNT-', idPad: 4,
+    about: 'Контент об объектах: одна строка = одна публикация (рилс, пост, шортс…). Цифры вносит SMM (пока вручную).',
     fields: [
-      F('id', 'ID гипотезы', 'id'),
+      F('id', 'ID', 'id', { w: 80 }),
       F('obj_id', 'ID объекта', 'dd', { list: 'OBJ.id' }),
-      F('obj_name', 'Объект', 'f', { w: 150, f: OBJ_NAME_F_('obj_id') }),
-      F('hypothesis', 'Гипотеза', 'text', { w: 260, client: true, d: 'Формула: «Если сделать …, то получим …». Пишется так, чтобы можно было показать клиенту.' }),
-      F('channel', 'Канал', 'dd', { dict: 'channels', client: true, d: 'Пусто = все каналы объекта.' }),
-      F('metric', 'Метрика', 'dd', { dict: 'kpi_metrics', client: true, d: 'Что меряем: контакты, лиды, показы…' }),
-      F('target', 'Цель', 'num', { fmt: '0', client: true }),
-      F('date_start', 'Начало проверки', 'date', { d: 'Если не указать — сегодня.' }),
-      F('date_end', 'Срок проверки', 'date', { d: 'Пусто = проверка идёт до сегодняшнего дня.' }),
-      F('fact', 'Факт', 'f', { guard: 'metric', fmt: '0', f: '__HYP_FACT__', d: 'Сумма метрики из 03_ДЕЙСТВИЯ по объекту (и каналу) за период проверки.' }),
-      F('fact_pct', '% от цели', 'f', { guard: 'target', fmt: 'pct', f: 'IFERROR([[@fact]]/[[@target]],"")' }),
-      F('status', 'Статус', 'dd', { dict: 'hyp_status', track: true, d: 'Итог ставит руководитель: подтвердилась / не подтвердилась.' }),
-      F('conclusion', 'Вывод', 'text', { w: 220, client: true, d: 'Что узнали о рынке. Попадает в отчёт клиенту.' }),
-      F('decision', 'Решение', 'text', { w: 220, internal: true, d: 'Что меняем в стратегии. Внутреннее.' }),
-      F('to_report', 'В отчёт клиенту', 'cb'),
-      F('due', 'Пора подвести итог', 'f', { f: 'IF(([[@status_class]]="OPEN")*([[@date_end]]<>"")*([[@date_end]]<TODAY()),"ДА","")' }),
-      F('status_class', 'Класс статуса', 'f', { helper: true, f: 'IF([[@status]]="","OPEN",IFERROR(VLOOKUP([[@status]],[[D.hyp_status:tbl]],2,FALSE),"OPEN"))' }),
-      F('created_at', 'Создано', 'sys', { fmt: 'datetime', helper: true }),
+      F('obj_name', 'Объект', 'f', { w: 140, f: OBJ_NAME_F_('obj_id') }),
+      F('topic', 'Тема', 'text', { w: 220, client: true }),
+      F('platform', 'Площадка', 'dd', { dict: 'platforms' }),
+      F('format', 'Формат', 'dd', { dict: 'content_formats' }),
+      F('goal', 'Цель', 'dd', { dict: 'content_goals' }),
+      F('script', 'Сценарий (текст или ссылка)', 'text', { w: 260 }),
+      F('status', 'Статус', 'dd', { dict: 'content_status', track: true }),
+      F('pub_date', 'Дата публикации', 'date'),
+      F('link', 'Ссылка', 'link', { w: 120, client: true }),
+      F('views', 'Просмотры', 'num', { fmt: '#,##0', client: true }),
+      F('reach', 'Охват', 'num', { fmt: '#,##0', client: true }),
+      F('saves', 'Сохранения', 'num', { fmt: '#,##0' }),
+      F('leads', 'Заявки', 'num', { fmt: '0' }),
+      F('owner', 'Кто делает', 'dd', { dict: 'people' }),
+      F('pub_week', 'Неделя публикации', 'f', { helper: true, guard: 'pub_date', f: WEEK_OF_('[[@pub_date]]') }),
+      F('status_class', 'Класс статуса', 'f', { helper: true, guard: 'status', f: 'IFERROR(VLOOKUP([[@status]],[[D.content_status:tbl]],2,FALSE),"")' }),
+      F('created_at', 'Создано', 'sys', { helper: true, fmt: 'datetime' }),
+      F('author', 'Автор', 'sys', { helper: true }),
     ],
   };
 
-  // ─────────────────────────────── 12_ИСТОРИЯ ───────────────────────────────
+  // ───────────────────────── 06_БИБЛИОТЕКА ─────────────────────────
+  S.LIB = {
+    code: 'LIB', guard: 'title', frozenCols: 3, idField: 'id', idPrefix: 'LIB-', idPad: 3,
+    about: 'Чек-листы, промпты, регламенты, скрипты. Пополняется командой; все правки сохраняются в истории.',
+    fields: [
+      F('id', 'ID', 'id', { w: 70 }),
+      F('kind', 'Раздел', 'dd', { dict: 'lib_kinds' }),
+      F('title', 'Название', 'text', { w: 240 }),
+      F('applies', 'Для чего / каких объектов', 'text', { w: 220 }),
+      F('text', 'Содержание', 'text', { w: 620, track: true }),
+      F('updated_at', 'Обновлено', 'sys', { fmt: 'datetime' }),
+      F('author', 'Кто обновил', 'sys', { w: 160 }),
+    ],
+  };
+
+  // ───────────────────────── 09_ИСТОРИЯ ─────────────────────────
   S.HIST = {
     code: 'HIST', guard: 'ts', frozenCols: 1, readonly: true,
-    about: 'Журнал изменений: цена, статусы, стратегия, переносы задач. Заполняет только скрипт, ничего не удаляется.',
+    about: 'Кто, когда и что изменил — во всех журналах и во вкладках объектов. Заполняет только скрипт.',
     fields: [
       F('ts', 'Дата и время', 'sys', { fmt: 'datetime', w: 130 }),
-      F('user', 'Пользователь', 'sys', { w: 160 }),
-      F('sheet', 'Лист', 'sys', { w: 130 }),
-      F('record_id', 'ID записи', 'sys'),
+      F('user', 'Пользователь', 'sys', { w: 170 }),
+      F('sheet', 'Лист', 'sys', { w: 170 }),
+      F('record_id', 'Запись / ячейка', 'sys', { w: 110 }),
       F('obj_id', 'ID объекта', 'sys'),
-      F('field', 'Поле', 'sys', { w: 170 }),
-      F('old', 'Было', 'sys', { w: 200 }),
-      F('new', 'Стало', 'sys', { w: 200 }),
-      F('kind', 'Тип изменения', 'sys', { w: 130 }),
+      F('field', 'Поле', 'sys', { w: 200 }),
+      F('old', 'Было', 'sys', { w: 240 }),
+      F('new', 'Стало', 'sys', { w: 240 }),
+      F('kind', 'Тип', 'sys', { w: 120 }),
       F('note', 'Комментарий', 'sys', { w: 200 }),
     ],
   };
 
-  // ─────────────────────────────── 13_АРХИВ_ОТЧЕТОВ ───────────────────────────────
+  // ───────────────────────── 10_АРХИВ_ОТЧЁТОВ ─────────────────────────
   S.ARCH = {
     code: 'ARCH', guard: 'ts', frozenCols: 1, readonly: true,
-    about: 'Реестр всех сформированных отчётов клиентам. Заполняет скрипт при создании отчёта.',
+    about: 'Все отчёты клиентам: номер, период, ссылки на Google Doc и PDF.',
     fields: [
-      F('ts', 'Дата создания', 'sys', { fmt: 'datetime', w: 130 }),
+      F('ts', 'Создан', 'sys', { fmt: 'datetime', w: 130 }),
       F('obj_id', 'ID объекта', 'sys'),
       F('obj_name', 'Объект', 'sys', { w: 150 }),
+      F('report_no', '№ отчёта', 'sys'),
       F('week', 'Неделя', 'sys'),
-      F('period', 'Период', 'sys', { w: 130 }),
+      F('period', 'Период', 'sys', { w: 150 }),
       F('doc_link', 'Google Doc', 'sys', { w: 130 }),
       F('pdf_link', 'PDF', 'sys', { w: 130 }),
       F('author', 'Создал', 'sys', { w: 160 }),
       F('status', 'Статус', 'sys'),
-      F('manager_comment', 'Комментарий руководителя', 'sys', { w: 220 }),
     ],
   };
 
@@ -546,15 +382,13 @@ function sheetSpecs_() {
 function sheetName_(code) { return SHEET_NAMES[code]; }
 
 function fieldOf_(code, key) {
-  const spec = sheetSpecs_()[code];
-  const f = spec.fields.find(x => x.key === key);
+  const f = sheetSpecs_()[code].fields.find(x => x.key === key);
   if (!f) throw new Error('Нет поля ' + code + '.' + key);
   return f;
 }
 
 function fieldIndex_(code, key) {
-  const spec = sheetSpecs_()[code];
-  const i = spec.fields.findIndex(x => x.key === key);
+  const i = sheetSpecs_()[code].fields.findIndex(x => x.key === key);
   if (i < 0) throw new Error('Нет поля ' + code + '.' + key);
   return i + 1;
 }
@@ -675,40 +509,20 @@ function resolveToken_(tok, ctx) {
 /** Формула заголовка столбца: заголовок + ARRAYFORMULA на весь столбец. */
 function headerFormula_(spec, field) {
   const guardKey = field.guard || spec.guard;
-  const expr = field.f === '__KPI_FACT__' ? kpiFactExpr_() : field.f === '__HYP_FACT__' ? hypFactExpr_() : field.f;
+  const expr = field.f === '__FACT_AUTO__' ? factAutoExpr_() : field.f;
   const g = colRef_(spec.code, guardKey, true);
   return '={"' + field.title + '";ARRAYFORMULA(IF(LEN(' + g + ')=0,"",' + resolveF_(expr, { own: spec.code }) + '))}';
 }
 
-/** Фактический KPI задачи: сумма нужного показателя по объекту и неделе (и типу действия, если указан). */
-function kpiFactExpr_() {
-  let expr = '""';
-  for (let i = KPI_SOURCES.length - 1; i >= 0; i--) {
-    const k = KPI_SOURCES[i];
-    let val;
-    if (k.count) val = 'IF(t_="",COUNTIF(k_ow&"|"&[[ACT.status_class]],c_ow&"|DONE"),COUNTIF(k_owt&"|"&[[ACT.status_class]],c_owt&"|DONE"))';
-    else val = 'IF(t_="",SUMIF(k_ow,c_ow,[[ACT.' + k.act + ']]),SUMIF(k_owt,c_owt,[[ACT.' + k.act + ']]))';
-    expr = 'IF(m_=[[D.kpi_metrics:' + (i + 1) + ']],' + val + ',' + expr + ')';
-  }
-  return 'LET(k_ow,[[ACT.obj_id]]&"|"&[[ACT.week]],k_owt,[[ACT.obj_id]]&"|"&[[ACT.week]]&"|"&[[ACT.type]],' +
-    'c_ow,[[@obj_id]]&"|"&[[@week]],c_owt,[[@obj_id]]&"|"&[[@week]]&"|"&[[@type]],' +
-    'm_,[[@kpi_metric]],t_,[[@type]],' + expr + ')';
-}
 
-/** Факт гипотезы: метрика из 03 по объекту (+каналу) между датой начала и сроком (или сегодня). */
-function hypFactExpr_() {
-  const conds = ',[[ACT.obj_id]],h_o,[[ACT.date]],">="&h_s,[[ACT.date]],"<="&h_to';
-  const withCh = v => 'IF(h_c="",' + v('') + ',' + v(',[[ACT.channel]],h_c') + ')';
-  let expr = '""';
-  for (let i = KPI_SOURCES.length - 1; i >= 0; i--) {
-    const k = KPI_SOURCES[i];
-    const val = k.count
-      ? withCh(ch => 'COUNTIFS([[ACT.status_class]],"DONE"' + conds + ch + ')')
-      : withCh(ch => 'SUMIFS([[ACT.' + k.act + ']]' + conds + ch + ')');
-    expr = 'IF(h_m=[[D.kpi_metrics:' + (i + 1) + ']],' + val + ',' + expr + ')';
-  }
-  return 'MAP([[@obj_id]],[[@channel]],[[@metric]],[[@date_start]],[[@date_end]],LAMBDA(h_o,h_c,h_m,h_s,h_e,' +
-    'IF(OR(h_o="",h_m="",h_s=""),"",LET(h_to,IF(h_e="",TODAY(),h_e),' + expr + '))))';
+/** Факт задачи из журналов: звонки / КП / ответы — из 03_ОБЗВОН_И_КП, публикации — из 04_КОНТЕНТ (по объекту и неделе). */
+function factAutoExpr_() {
+  const kBase = w => '[[BASE.obj_id]]&"|"&[[BASE.' + w + ']]';
+  return 'LET(u_code,IFERROR(VLOOKUP([[@unit]],[[D.units:tbl]],2,FALSE),""),c_ow,[[@obj_id]]&"|"&[[@week]],' +
+    'IF(u_code="CALLS",COUNTIF(' + kBase('call_week') + ',c_ow),' +
+    'IF(u_code="KP",COUNTIF(' + kBase('kp_week') + ',c_ow),' +
+    'IF(u_code="RESP",COUNTIF(' + kBase('resp_week') + ',c_ow)-COUNTIF(' + kBase('resp_week') + '&"|"&[[BASE.resp_class]],c_ow&"|NONE"),' +
+    'IF(u_code="PUB",COUNTIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]]&"|"&[[CONT.status_class]],c_ow&"|DONE"),"")))))';
 }
 
 const CURRENT_WEEK_F_ = 'YEAR(TODAY()-WEEKDAY(TODAY(),2)+4)&"-W"&TEXT(ISOWEEKNUM(TODAY()),"00")';
@@ -722,745 +536,236 @@ function dictGeneratedFormulas_() {
       'w_mon,w_start+7*SEQUENCE(w_count,1,w_count-1,-1),' +
       '{YEAR(w_mon+3)&"-W"&TEXT(ISOWEEKNUM(w_mon),"00"),w_mon,w_mon+6,' +
       'YEAR(w_mon+3)&"-W"&TEXT(ISOWEEKNUM(w_mon),"00")&" · "&TEXT(w_mon,"dd.mm")&"–"&TEXT(w_mon+6,"dd.mm.yyyy")}))',
-    obj_labels: '=ARRAYFORMULA(IFERROR(FILTER([[OBJ.id]]&" · "&[[OBJ.name]],[[OBJ.id]]<>""),""))',
-    obj_filter: '=ARRAYFORMULA({"Все";IFERROR(FILTER([[OBJ.id]]&" · "&[[OBJ.name]],[[OBJ.id]]<>""),"")})',
-    week_filter: '=ARRAYFORMULA({"Все время";IFERROR(FILTER([[D.weeks:c4]],[[D.weeks:c4]]<>""),"")})',
+    obj_labels: '=ARRAYFORMULA(IFERROR(FILTER([[OBJ.id]]&" · "&[[OBJ.name]],[[OBJ.id]]<>"",[[OBJ.name]]<>""),""))',
+    lib_checklists: '=IFERROR(FILTER([[LIB.title]],[[LIB.kind]]=[[D.lib_kinds:1]],[[LIB.title]]<>""),"")',
   };
 }
 
-// ───────────────────────── 05_СТАТИСТИКА ─────────────────────────
+// ───────────────────────── 00_ДЭШБОРД ─────────────────────────
 
-const STAT_SECTIONS = {
-  total: { title: 6, header: 7, first: 8, last: 8, label: 'ИТОГО ЗА ВЕСЬ ПЕРИОД' },
-  channel: { title: 10, header: 11, first: 12, last: 71, label: 'ПО КАНАЛАМ — весь период (до 60 каналов)' },
-  object: { title: 73, header: 74, first: 75, last: 274, label: 'ПО ОБЪЕКТАМ — весь период (до 200 объектов)' },
-  month: { title: 276, header: 277, first: 278, last: 397, label: 'ПО МЕСЯЦАМ' },
-  week: { title: 399, header: 400, first: 401, last: null, label: 'ПО НЕДЕЛЯМ — динамика (новые недели сверху)' },
+const DASH = {
+  WEEK_KEY: '$Z$1', IDLE: '$Z$2',
+  OBJ_HDR: 10, OBJ_FIRST: 11, OBJ_LAST: 70,
+  PEOPLE_HDR: 74, PEOPLE_FIRST: 75, PEOPLE_LAST: 89,
+  OVERDUE_HDR: 93, OVERDUE_FIRST: 94,
 };
-
-function statCommonCols_() {
-  return [
-    { t: 'Действия', m: 'done', d: 'Выполненные действия (статус класса DONE)' },
-    { t: 'Контакты', m: 'sum', f: 'contacts' },
-    { t: 'Ответы', m: 'sum', f: 'responses' },
-    { t: 'Лиды', m: 'sum', f: 'interested', d: 'Лиды = «Количество заинтересованных» в 03_ДЕЙСТВИЯ' },
-    { t: 'Презентации', m: 'sum', f: 'presentations' },
-    { t: 'Показы', m: 'sum', f: 'showings' },
-    { t: 'Повторные контакты', m: 'sum', f: 'repeat_contacts' },
-    { t: 'Переговоры', m: 'sum', f: 'negotiations' },
-    { t: 'Предложения', m: 'sum', f: 'offers' },
-    { t: 'Брони', m: 'sum', f: 'bookings' },
-    { t: 'Сделки', m: 'sum', f: 'deals' },
-    { t: 'Отказы', m: 'refusals', d: 'Действия с указанной причиной отказа' },
-    { t: 'Расходы, ₽', m: 'sum', f: 'cost', fmt: 'money' },
-    { t: 'Просмотры объявлений', m: 'listing', f: 'views', fmt: '#,##0' },
-    { t: 'Контакты по объявлениям', m: 'listing', f: 'contacts' },
-    { t: 'Ответ / контакт', m: 'ratio', a: 'Ответы', b: 'Контакты', fmt: 'pct' },
-    { t: 'Лид / контакт', m: 'ratio', a: 'Лиды', b: 'Контакты', fmt: 'pct' },
-    { t: 'Лид / ответ', m: 'ratio', a: 'Лиды', b: 'Ответы', fmt: 'pct' },
-    { t: 'Показ / лид', m: 'ratio', a: 'Показы', b: 'Лиды', fmt: 'pct' },
-    { t: 'Переговоры / показ', m: 'ratio', a: 'Переговоры', b: 'Показы', fmt: 'pct' },
-    { t: 'Предложение / переговоры', m: 'ratio', a: 'Предложения', b: 'Переговоры', fmt: 'pct' },
-    { t: 'Бронь / предложение', m: 'ratio', a: 'Брони', b: 'Предложения', fmt: 'pct' },
-    { t: 'Сделка / бронь', m: 'ratio', a: 'Сделки', b: 'Брони', fmt: 'pct' },
-    { t: 'Сделка / лид', m: 'ratio', a: 'Сделки', b: 'Лиды', fmt: 'pct' },
-    { t: 'Объявление → контакт', m: 'ratio', a: 'Контакты по объявлениям', b: 'Просмотры объявлений', fmt: 'pct' },
-    { t: 'Стоимость лида, ₽', m: 'ratio', a: 'Расходы, ₽', b: 'Лиды', fmt: 'money' },
-    { t: 'Действий на 1 лид', m: 'ratio', a: 'Действия', b: 'Лиды', fmt: '0.0' },
-    { t: 'Контактов до показа', m: 'ratio', a: 'Контакты', b: 'Показы', fmt: '0.0' },
-    { t: 'Показов до переговоров', m: 'ratio', a: 'Показы', b: 'Переговоры', fmt: '0.0' },
-  ];
-}
-
-function statObjectExtraCols_() {
-  return [
-    { t: 'Статус', m: 'obj', f: 'status' },
-    { t: 'Цена', m: 'obj', f: 'price', fmt: 'money' },
-    { t: 'Цена за м²', m: 'obj', f: 'price_m2', fmt: 'money' },
-    { t: 'Дней на рынке', m: 'obj', f: 'days_on_market', fmt: '0' },
-    { t: 'Дней без активности', m: 'obj', f: 'days_idle', fmt: '0' },
-    { t: 'Первая цена', m: 'firstprice', fmt: 'money' },
-    { t: 'Изменение цены, ₽', m: 'pricediff', fmt: 'money' },
-    { t: 'Изменение цены, %', m: 'pricepct', fmt: 'pct' },
-    { t: 'Изменений цены', m: 'pricechanges', fmt: '0' },
-  ];
-}
-
-function statTotalExtraCols_() {
-  return [
-    { t: 'Объектов в работе', m: 'objcount', fmt: '0' },
-    { t: 'Средн. дней на рынке (в работе)', m: 'objavg', f: 'days_on_market', fmt: '0' },
-    { t: 'Средн. дней без активности (в работе)', m: 'objavg', f: 'days_idle', fmt: '0' },
-  ];
-}
-
-function statsLayout_(gid) {
-  const cells = [];
-  cells.push({ a1: 'A1', v: 'СТАТИСТИКА — все показатели считаются автоматически', style: 'title' });
-  cells.push({ a1: 'A2', v: 'Фильтр по объекту:', style: 'label' });
-  cells.push({ a1: 'B2', v: 'Все', style: 'select', validation: { list: 'D.obj_filter' } });
-  cells.push({ a1: 'A3', v: 'критерий (служебное)', style: 'muted' });
-  cells.push({ a1: 'B3', f: '=IF(OR(B2="",B2="Все"),"*",REGEXEXTRACT(B2,"^(.*?) · "))', style: 'muted' });
-  const nav = [['channel', 'C4'], ['object', 'D4'], ['month', 'E4'], ['week', 'F4']];
-  cells.push({ a1: 'A4', v: 'Перейти:', style: 'label' });
-  nav.forEach(n => {
-    const s = STAT_SECTIONS[n[0]];
-    cells.push({ a1: n[1], f: '=HYPERLINK("#gid=' + gid + '&range=A' + s.title + '","→ ' + s.label.split(' —')[0] + '")', style: 'link' });
-  });
-
-  const formats = [];
-  Object.keys(STAT_SECTIONS).forEach(dim => {
-    const s = STAT_SECTIONS[dim];
-    const cols = statCommonCols_().concat(dim === 'object' ? statObjectExtraCols_() : dim === 'total' ? statTotalExtraCols_() : []);
-    cells.push({ a1: 'A' + s.title, v: s.label, style: 'section', spanCols: 3 + cols.length - 1 });
-    const keyTitles = {
-      total: ['', 'Объект'], channel: ['Канал', 'Группа'], object: ['ID объекта', 'Объект'],
-      month: ['Месяц', ''], week: ['Неделя', 'Период'],
-    }[dim];
-    cells.push({ a1: 'A' + s.header, v: keyTitles[0], style: 'header' });
-    cells.push({ a1: 'B' + s.header, v: keyTitles[1], style: 'header' });
-
-    const rng = L => '$' + L + '$' + s.first + ':$' + L + (s.last ? '$' + s.last : '');
-    const keys = rng('A');
-    const crit = '$B$3';
-    const dimMap = {
-      total: { ak: '[[ACT.obj_id]]', c: crit },
-      object: { ak: '[[ACT.obj_id]]', c: keys },
-      channel: { ak: '[[ACT.obj_id]]&"|"&[[ACT.channel]]', c: crit + '&"|"&' + keys },
-      week: { ak: '[[ACT.obj_id]]&"|"&[[ACT.week]]', c: crit + '&"|"&' + keys },
-      month: { ak: '[[ACT.obj_id]]&"|"&[[ACT.month]]', c: crit + '&"|"&' + keys },
-    }[dim];
-
-    // ключи строк
-    const keyF = {
-      total: null,
-      object: '=ARRAYFORMULA(IFERROR(FILTER({[[OBJ.id]],[[OBJ.name]]},[[OBJ.name]]<>"",[[OBJ.id]]<>"",([[OBJ.id]]=$B$3)+($B$3="*")),""))',
-      channel: '=ARRAYFORMULA(IFERROR(LET(ch_all,[[ACT.channel]],ob_all,[[ACT.obj_id]],' +
-        'ch_u,SORT(UNIQUE(FILTER(ch_all,ch_all<>"",(ob_all=$B$3)+($B$3="*")))),{ch_u,IFERROR(VLOOKUP(ch_u,[[D.channels:tbl]],2,FALSE),"")}),""))',
-      week: '=ARRAYFORMULA(IFERROR(LET(wk_all,[[ACT.week]],ob_all,[[ACT.obj_id]],' +
-        'wk_u,SORT(UNIQUE(FILTER(wk_all,wk_all<>"",(ob_all=$B$3)+($B$3="*"))),1,FALSE),' +
-        '{wk_u,IFERROR(TEXT(VLOOKUP(wk_u,[[D.weeks:tbl]],2,FALSE),"dd.mm")&"–"&TEXT(VLOOKUP(wk_u,[[D.weeks:tbl]],3,FALSE),"dd.mm.yy"),"")}),""))',
-      month: '=ARRAYFORMULA(IFERROR(LET(mo_all,[[ACT.month]],ob_all,[[ACT.obj_id]],' +
-        'SORT(UNIQUE(FILTER(mo_all,mo_all<>"",(ob_all=$B$3)+($B$3="*"))),1,FALSE)),""))',
-    }[dim];
-    if (dim === 'total') {
-      cells.push({ a1: 'A' + s.first, v: 'Итого', style: 'bold' });
-      cells.push({ a1: 'B' + s.first, f: '=IF($B$3="*","Все объекты",IFERROR(VLOOKUP($B$3,{[[OBJ.id]],[[OBJ.name]]},2,FALSE),$B$3))' });
-    } else {
-      cells.push({ a1: 'A' + s.first, f: keyF });
-    }
-
-    const letterOf = {};
-    cols.forEach((c, i) => { letterOf[c.t] = colLetter_(3 + i); });
-    cols.forEach((c, i) => {
-      const L = colLetter_(3 + i);
-      cells.push({ a1: L + s.header, v: c.t, style: 'header', note: c.d });
-      let e;
-      const ak = dimMap.ak, cr = dimMap.c;
-      switch (c.m) {
-        case 'done': e = 'COUNTIF(' + ak + '&"|"&[[ACT.status_class]],' + cr + '&"|DONE")'; break;
-        case 'sum': e = 'SUMIF(' + ak + ',' + cr + ',[[ACT.' + c.f + ']])'; break;
-        case 'refusals': e = 'COUNTIF(' + ak + '&"|"&IF([[ACT.refusal]]="","0","1"),' + cr + '&"|1")'; break;
-        case 'listing': e = 'SUMIF(' + ak + '&"|"&[[ACT.is_listing]],' + cr + '&"|ДА",[[ACT.' + c.f + ']])'; break;
-        case 'ratio': e = 'IFERROR(' + rng(letterOf[c.a]) + '/' + rng(letterOf[c.b]) + ',"")'; break;
-        case 'obj': e = 'IFERROR(VLOOKUP(' + keys + ',{[[OBJ.id]],[[OBJ.' + c.f + ']]},2,FALSE),"")'; break;
-        case 'firstprice':
-          e = 'IFERROR(VLOOKUP(' + keys + '&"|[[TITLE.OBJ.price]]",{[[HIST.obj_id]]&"|"&[[HIST.field]],[[HIST.new]]},2,FALSE),"")';
-          break;
-        case 'pricediff': e = 'IF(' + rng(letterOf['Первая цена']) + '="","",' + rng(letterOf['Цена']) + '-' + rng(letterOf['Первая цена']) + ')'; break;
-        case 'pricepct': e = 'IFERROR(' + rng(letterOf['Изменение цены, ₽']) + '/' + rng(letterOf['Первая цена']) + ',"")'; break;
-        case 'pricechanges':
-          e = 'COUNTIF([[HIST.obj_id]]&"|"&[[HIST.field]]&"|"&[[HIST.kind]],' + keys + '&"|[[TITLE.OBJ.price]]|' + HIST_KIND.CHANGE + '")';
-          break;
-        case 'objcount': e = 'COUNTIFS([[OBJ.in_work]],"ДА",[[OBJ.id]],IF($B$3="*","?*",$B$3))'; break;
-        case 'objavg': e = 'IFERROR(AVERAGEIFS([[OBJ.' + c.f + ']],[[OBJ.in_work]],"ДА",[[OBJ.id]],IF($B$3="*","?*",$B$3)),"")'; break;
-        default: throw new Error('metric ' + c.m);
-      }
-      cells.push({ a1: L + s.first, f: '=ARRAYFORMULA(IF(' + keys + '="","",' + e + '))' });
-      formats.push({ range: rng(L).replace(/\$/g, ''), fmt: c.fmt || '0' });
-    });
-  });
-  return { cells: cells, formats: formats };
-}
-
-// ───────────────────────── 04_ВОРОНКА ─────────────────────────
-// Воронка и конверсии считаются только из журнала действий 03 (карточек покупателей в системе нет — они в CRM).
-
-const FUN_CH_COL = 5; // E — таблица по каналам
-
-function funnelLayout_() {
-  const cells = [];
-  cells.push({ a1: 'A1', v: 'ВОРОНКА И КОНВЕРСИИ — считается из 03_ДЕЙСТВИЯ', style: 'title' });
-  cells.push({ a1: 'A2', v: 'Объект:', style: 'label' });
-  cells.push({ a1: 'B2', v: 'Все', style: 'select', validation: { list: 'D.obj_filter' } });
-  cells.push({ a1: 'A3', v: 'Неделя:', style: 'label' });
-  cells.push({ a1: 'B3', v: 'Все время', style: 'select', validation: { list: 'D.week_filter' } });
-  cells.push({ a1: 'A4', v: 'критерий объекта', style: 'muted' });
-  cells.push({ a1: 'B4', f: '=IF(OR(B2="",B2="Все"),"*",REGEXEXTRACT(B2,"^(.*?) · "))', style: 'muted' });
-  cells.push({ a1: 'A5', v: 'критерий недели', style: 'muted' });
-  cells.push({ a1: 'B5', f: '=IF(OR(B3="",B3="Все время"),"*",REGEXEXTRACT(B3,"^[^ ]+"))', style: 'muted' });
-  const oc = '$B$4', wc = '$B$5';
-  const act = f => '=SUMIFS([[ACT.' + f + ']],[[ACT.obj_id]],' + oc + ',[[ACT.week]],' + wc + ')';
-  const rows = [
-    ['actions', 'Действий выполнено', '=COUNTIFS([[ACT.obj_id]],' + oc + ',[[ACT.week]],' + wc + ',[[ACT.status_class]],"DONE")'],
-    ['contacts', 'Контакты', act('contacts')],
-    ['responses', 'Ответы', act('responses')],
-    ['leads', 'Лиды (заинтересовались)', act('interested')],
-    ['pres', 'Презентации', act('presentations')],
-    ['show', 'Показы', act('showings')],
-    ['repeat', 'Повторные контакты', act('repeat_contacts')],
-    ['neg', 'Переговоры', act('negotiations')],
-    ['offer', 'Предложения', act('offers')],
-    ['book', 'Брони', act('bookings')],
-    ['deal', 'Сделки', act('deals')],
-    ['refusals', 'Отказы (действий с причиной отказа)', '=COUNTIFS([[ACT.obj_id]],' + oc + ',[[ACT.week]],' + wc + ',[[ACT.refusal]],"?*")'],
-    ['cost', 'Расходы, ₽', act('cost')],
-  ];
-  cells.push({ a1: 'A7', v: 'Этап', style: 'header' });
-  cells.push({ a1: 'B7', v: 'Количество', style: 'header' });
-  const at = {};
-  rows.forEach((r, i) => {
-    const row = 8 + i;
-    at[r[0]] = 'B' + row;
-    cells.push({ a1: 'A' + row, v: r[1] });
-    cells.push({ a1: 'B' + row, f: r[2], fmt: r[0] === 'cost' ? 'money' : '0' });
-  });
-  let row = 8 + rows.length + 1;
-  cells.push({ a1: 'A' + row, v: 'Конверсия', style: 'header' });
-  cells.push({ a1: 'B' + row, v: '%', style: 'header' });
-  cells.push({ a1: 'C' + row, v: 'Расчёт', style: 'header' });
-  const conv = [
-    ['Контакт → ответ', 'responses', 'contacts'],
-    ['Ответ → интерес (лид)', 'leads', 'responses'],
-    ['Контакт → лид', 'leads', 'contacts'],
-    ['Лид → презентация', 'pres', 'leads'],
-    ['Презентация → показ', 'show', 'pres'],
-    ['Лид → показ', 'show', 'leads'],
-    ['Показ → переговоры', 'neg', 'show'],
-    ['Переговоры → предложение', 'offer', 'neg'],
-    ['Предложение → бронь', 'book', 'offer'],
-    ['Бронь → сделка', 'deal', 'book'],
-    ['Общая конверсия лид → сделка', 'deal', 'leads'],
-  ];
-  const convCells = {};
-  conv.forEach(c => {
-    row++;
-    cells.push({ a1: 'A' + row, v: c[0] });
-    cells.push({ a1: 'B' + row, f: '=IFERROR(' + at[c[1]] + '/' + at[c[2]] + ',"")', fmt: 'pct' });
-    cells.push({ a1: 'C' + row, f: '=' + at[c[1]] + '&" из "&' + at[c[2]], style: 'muted' });
-    convCells[c[0]] = 'B' + row;
-  });
-  row++;
-  cells.push({ a1: 'A' + row, v: 'Стоимость лида, ₽' });
-  cells.push({ a1: 'B' + row, f: '=IFERROR(' + at.cost + '/' + at.leads + ',"")', fmt: 'money' });
-  convCells['Стоимость лида'] = 'B' + row;
-
-  // причины отказов
-  row += 2;
-  const refRow = row;
-  cells.push({ a1: 'A' + row, v: 'ПРИЧИНЫ ОТКАЗОВ (возражения рынка)', style: 'section', spanCols: 3 });
-  cells.push({ a1: 'A' + (row + 1), f: '=IFERROR(QUERY(FILTER([[ACT.refusal]],[[ACT.refusal]]<>"",([[ACT.obj_id]]=' + oc + ')+(' + oc + '="*"),([[ACT.week]]=' + wc + ')+(' + wc + '="*")),' +
-    '"select Col1, count(Col1) group by Col1 order by count(Col1) desc label Col1 \'Причина\', count(Col1) \'Раз\'",0),"Отказов не зафиксировано")' });
-
-  // по каналам
-  const chCols = [
-    ['Канал', null],
-    ['Действия', k => 'COUNTIF(KEYA_&"|"&[[ACT.status_class]],KEYC_&"|DONE")', '0'],
-    ['Контакты', k => 'SUMIF(KEYA_,KEYC_,[[ACT.contacts]])', '0'],
-    ['Ответы', k => 'SUMIF(KEYA_,KEYC_,[[ACT.responses]])', '0'],
-    ['Лиды', k => 'SUMIF(KEYA_,KEYC_,[[ACT.interested]])', '0'],
-    ['Показы', k => 'SUMIF(KEYA_,KEYC_,[[ACT.showings]])', '0'],
-    ['Переговоры', k => 'SUMIF(KEYA_,KEYC_,[[ACT.negotiations]])', '0'],
-    ['Сделки', k => 'SUMIF(KEYA_,KEYC_,[[ACT.deals]])', '0'],
-    ['Отказы', k => 'COUNTIF(KEYA_&"|"&IF([[ACT.refusal]]="","0","1"),KEYC_&"|1")', '0'],
-    ['Расходы, ₽', k => 'SUMIF(KEYA_,KEYC_,[[ACT.cost]])', 'money'],
-    ['Контакт → лид', 'ratio', 'pct', 'Лиды', 'Контакты'],
-    ['Лид → показ', 'ratio', 'pct', 'Показы', 'Лиды'],
-    ['Стоимость лида, ₽', 'ratio', 'money', 'Расходы, ₽', 'Лиды'],
-  ];
-  const E = colLetter_(FUN_CH_COL);
-  cells.push({ a1: E + '6', v: 'ПО КАНАЛАМ — какой канал даёт результат (тот же фильтр)', style: 'section', spanCols: chCols.length });
-  const keys = '$' + E + '$8:$' + E;
-  const keyA = '[[ACT.obj_id]]&"|"&[[ACT.week]]&"|"&[[ACT.channel]]';
-  const keyC = oc + '&"|"&' + wc + '&"|"&' + keys;
-  const letter = {};
-  chCols.forEach((c, i) => { letter[c[0]] = colLetter_(FUN_CH_COL + i); });
-  const formats = [];
-  chCols.forEach((c, i) => {
-    const L = colLetter_(FUN_CH_COL + i);
-    cells.push({ a1: L + '7', v: c[0], style: 'header' });
-    let f;
-    if (i === 0) {
-      f = '=ARRAYFORMULA(IFERROR(SORT(UNIQUE(FILTER([[ACT.channel]],[[ACT.channel]]<>"",([[ACT.obj_id]]=' + oc + ')+(' + oc + '="*"),([[ACT.week]]=' + wc + ')+(' + wc + '="*")))),""))';
-    } else if (c[1] === 'ratio') {
-      const r = x => '$' + letter[x] + '$8:$' + letter[x];
-      f = '=ARRAYFORMULA(IF(' + keys + '="","",IFERROR(' + r(c[3]) + '/' + r(c[4]) + ',"")))';
-    } else {
-      f = '=ARRAYFORMULA(IF(' + keys + '="","",' + c[1]().replace(/KEYA_/g, keyA).replace(/KEYC_/g, keyC) + '))';
-    }
-    cells.push({ a1: L + '8', f: f });
-    const fmt = c[1] === 'ratio' ? c[2] : c[2];
-    if (fmt) formats.push({ range: L + '8:' + L, fmt: fmt });
-  });
-  return { cells: cells, at: at, conv: convCells, formats: formats, refRow: refRow, chLetter: letter, selObj: 'B2', selWeek: 'B3' };
-}
-
-// ───────────────────────── блок итогов в 06_ПЛАН_ФАКТ ─────────────────────────
-
-function pfBlockLayout_() {
-  const start = sheetSpecs_().PF.fields.length + 2;
-  const A = colLetter_(start), B = colLetter_(start + 1), C = colLetter_(start + 2), D = colLetter_(start + 3);
-  const cells = [];
-  cells.push({ a1: A + '1', v: 'ПЛАН-ФАКТ НЕДЕЛИ', style: 'section', spanCols: 4 });
-  cells.push({ a1: A + '2', v: 'Неделя (пусто = текущая):', style: 'label' });
-  cells.push({ a1: B + '2', v: '', style: 'select', validation: { list: 'D.weeks:c4' } });
-  cells.push({ a1: A + '3', v: 'Объект:', style: 'label' });
-  cells.push({ a1: B + '3', v: 'Все', style: 'select', validation: { list: 'D.obj_filter' } });
-  cells.push({ a1: A + '4', v: 'ключ недели', style: 'muted' });
-  cells.push({ a1: B + '4', f: '=IF(' + B + '2="",' + CURRENT_WEEK_F_ + ',REGEXEXTRACT(' + B + '2,"^[^ ]+"))', style: 'muted' });
-  cells.push({ a1: A + '5', v: 'критерий объекта', style: 'muted' });
-  cells.push({ a1: B + '5', f: '=IF(OR(' + B + '3="",' + B + '3="Все"),"*",REGEXEXTRACT(' + B + '3,"^(.*?) · "))', style: 'muted' });
-  const wk = '$' + B + '$4', oc = '$' + B + '$5';
-  const pfc = extra => '=COUNTIFS([[PF.week]],' + wk + ',[[PF.obj_id]],' + oc + ',' + extra + ')';
-  cells.push({ a1: A + '7', v: 'Задачи недели', style: 'header' });
-  cells.push({ a1: B + '7', v: 'Значение', style: 'header' });
-  const rows = [
-    ['total', 'Задач в плане (без отменённых)', pfc('[[PF.status_class]],"<>CANCEL"'), '0'],
-    ['done', 'Выполнено', pfc('[[PF.status_class]],"DONE"'), '0'],
-    ['pct', '% выполнения плана', null, 'pct'],
-    ['moved', 'Перенесено', pfc('[[PF.status_class]],"MOVED"'), '0'],
-    ['fail', 'Не выполнено', pfc('[[PF.status_class]],"FAIL"'), '0'],
-    ['open', 'Открыто (запланировано / в работе)', pfc('[[PF.status_class]],"OPEN"'), '0'],
-    ['overdue', 'Просрочено', pfc('[[PF.overdue]],"ПРОСРОЧЕНО"'), '0'],
-  ];
-  const at = {};
-  rows.forEach((r, i) => { at[r[0]] = B + (8 + i); });
-  rows.forEach((r, i) => {
-    const row = 8 + i;
-    cells.push({ a1: A + row, v: r[1], style: r[0] === 'pct' ? 'bold' : null });
-    const f = r[0] === 'pct' ? '=IFERROR(' + at.done + '/' + at.total + ',"")' : r[2];
-    cells.push({ a1: B + row, f: f, fmt: r[3], style: r[0] === 'pct' ? 'bold' : null });
-  });
-  let row = 8 + rows.length + 1;
-  cells.push({ a1: A + row, v: 'KPI', style: 'header' });
-  cells.push({ a1: B + row, v: 'План', style: 'header' });
-  cells.push({ a1: C + row, v: 'Факт', style: 'header' });
-  cells.push({ a1: D + row, v: '% выполнения', style: 'header' });
-  const kpiRows = {};
-  KPI_SOURCES.forEach((k, i) => {
-    row++;
-    const lbl = A + row;
-    cells.push({ a1: lbl, f: '=[[D.kpi_metrics:' + (i + 1) + ']]' });
-    cells.push({ a1: B + row, f: '=SUMIFS([[PF.kpi_plan]],[[PF.kpi_metric]],' + lbl + ',[[PF.week]],' + wk + ',[[PF.obj_id]],' + oc + ')', fmt: '0' });
-    let fact;
-    if (k.count) fact = '=COUNTIFS([[ACT.week]],' + wk + ',[[ACT.obj_id]],' + oc + ',[[ACT.status_class]],"DONE")';
-    else fact = '=SUMIFS([[ACT.' + k.act + ']],[[ACT.week]],' + wk + ',[[ACT.obj_id]],' + oc + ')';
-    cells.push({ a1: C + row, f: fact, fmt: '0' });
-    cells.push({ a1: D + row, f: '=IF(' + B + row + '=0,"",IFERROR(' + C + row + '/' + B + row + ',""))', fmt: 'pct' });
-    kpiRows[k.title] = row;
-  });
-  return { cells: cells, startCol: start, at: at, kpiRows: kpiRows, cols: { A: A, B: B, C: C, D: D }, selWeek: B + '2', selObj: B + '3' };
-}
-
-// ───────────────────────── 07_ОТЧЕТ ─────────────────────────
-
-const REP_PARAMS = { id: '$E$3', wk: '$E$4', start: '$E$5', end: '$E$6', next: '$E$7' };
-
-function reportRows_() {
-  const P = REP_PARAMS;
-  const actCond = '[[ACT.obj_id]]=' + P.id + ',[[ACT.week]]=' + P.wk;
-  const rep = '[[ACT.to_report]]=TRUE';
-  const sumAct = f => '=IF(' + P.id + '="","",SUMIFS([[ACT.' + f + ']],[[ACT.obj_id]],' + P.id + ',[[ACT.week]],' + P.wk + '))';
-  const conv = (label, num, den) => 'IF(N([[R.' + den + ']])>0,"' + label + ': "&TEXT([[R.' + num + ']]/[[R.' + den + ']],"0%")&" ("&[[R.' + num + ']]&" из "&[[R.' + den + ']]&")","")';
-  return [
-    { ph: 'OBJECT', label: 'Объект', f: '=IFERROR(VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.name]]},2,FALSE),"")' },
-    { ph: 'ADDRESS', label: 'Адрес', f: '=IFERROR(VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.address]]},2,FALSE),"")' },
-    { ph: 'PERIOD', label: 'Период отчёта', f: '=IF(' + P.start + '="","",TEXT(' + P.start + ',"dd.mm")&"–"&TEXT(' + P.end + ',"dd.mm.yyyy"))' },
-    { ph: 'PRICE', label: 'Цена', f: '=IFERROR(TEXT(VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.price]]},2,FALSE),"#,##0")&" ₽","")' },
-    { ph: 'DAYS_ON_MARKET', label: 'Дней в экспозиции', f: '=IFERROR(MIN(TODAY(),' + P.end + ',IFERROR(1/(1/VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.close_date]]},2,FALSE)),TODAY()))-VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.date_sign]]},2,FALSE),"")' },
-    { ph: 'ACTIONS', label: 'Количество действий', f: '=IF(' + P.id + '="","",COUNTIFS([[ACT.obj_id]],' + P.id + ',[[ACT.week]],' + P.wk + ',[[ACT.status_class]],"DONE",[[ACT.to_report]],TRUE))' },
-    { ph: 'CHANNELS', label: 'Основные каналы', f: '=IFERROR(ARRAYFORMULA(TEXTJOIN(", ",TRUE,UNIQUE(FILTER([[ACT.channel]],' + actCond + ',[[ACT.status_class]]="DONE",' + rep + ',[[ACT.channel]]<>"")))),"—")' },
-    {
-      ph: 'DONE', label: 'Что было сделано', list: true,
-      f: '=IF(' + P.id + '="","Выберите объект и неделю",IFERROR(ARRAYFORMULA(LET(sel_,FILTER({[[ACT.date]],TEXT([[ACT.date]],"dd.mm")&" — "&[[ACT.type]]&": "&IF([[ACT.fact]]="",[[ACT.goal]],[[ACT.fact]])},' +
-        actCond + ',[[ACT.status_class]]="DONE",' + rep + '),TEXTJOIN(CHAR(10),TRUE,INDEX(SORT(sel_,1,TRUE),0,2)))),"На этой неделе действий не зафиксировано."))',
-    },
-    { ph: 'CONTACTS', label: 'Контакты', f: sumAct('contacts') },
-    { ph: 'RESPONSES', label: 'Ответы', f: sumAct('responses') },
-    { ph: 'INTERESTED', label: 'Заинтересовались (лиды)', f: sumAct('interested') },
-    { ph: 'PRESENTATIONS', label: 'Презентации', f: sumAct('presentations') },
-    { ph: 'SHOWINGS', label: 'Показы', f: sumAct('showings') },
-    { ph: 'NEGOTIATIONS', label: 'Переговоры', f: sumAct('negotiations') },
-    { ph: 'OFFERS', label: 'Предложения', f: sumAct('offers') },
-    { ph: 'BOOKINGS', label: 'Брони', f: sumAct('bookings') },
-    { ph: 'DEALS', label: 'Сделки', f: sumAct('deals') },
-    {
-      ph: 'CONVERSIONS', label: 'Конверсии', list: true,
-      f: '=IF(' + P.id + '="","",TEXTJOIN(CHAR(10),TRUE,' +
-        '"Воронка недели: контакты "&[[R.CONTACTS]]&" → ответы "&[[R.RESPONSES]]&" → заинтересовались "&[[R.INTERESTED]]&" → презентации "&[[R.PRESENTATIONS]]&" → показы "&[[R.SHOWINGS]]&" → переговоры "&[[R.NEGOTIATIONS]],' +
-        conv('Контакт → ответ', 'RESPONSES', 'CONTACTS') + ',' +
-        conv('Ответ → интерес', 'INTERESTED', 'RESPONSES') + ',' +
-        conv('Интерес → презентация', 'PRESENTATIONS', 'INTERESTED') + ',' +
-        conv('Презентация → показ', 'SHOWINGS', 'PRESENTATIONS') + ',' +
-        conv('Показ → переговоры', 'NEGOTIATIONS', 'SHOWINGS') + ',' +
-        conv('Переговоры → предложение', 'OFFERS', 'NEGOTIATIONS') + ',' +
-        conv('Предложение → бронь', 'BOOKINGS', 'OFFERS') + ',' +
-        conv('Бронь → сделка', 'DEALS', 'BOOKINGS') + '))',
-    },
-    {
-      ph: 'MARKET_FEEDBACK', label: 'Что показал рынок', list: true,
-      f: '=IFERROR(ARRAYFORMULA(TEXTJOIN(CHAR(10),TRUE,UNIQUE(FILTER([[ACT.feedback]],' + actCond + ',' + rep + ',[[ACT.feedback]]<>"")))),"Существенной обратной связи от рынка за неделю не получено.")',
-    },
-    {
-      ph: 'TESTS', label: 'Что протестировали на рынке', list: true,
-      f: '=IFERROR(ARRAYFORMULA(TEXTJOIN(CHAR(10),TRUE,FILTER([[HYP.hypothesis]]&" — "&IF([[HYP.channel]]="","",[[HYP.channel]]&", ")&LOWER([[HYP.metric]])&": "&[[HYP.fact]]&" при цели "&[[HYP.target]]&" ("&IF([[HYP.status]]="","в проверке",LOWER([[HYP.status]]))&")"&IF([[HYP.conclusion]]="","",". "&[[HYP.conclusion]]),' +
-        '[[HYP.obj_id]]=' + P.id + ',[[HYP.to_report]]=TRUE,[[HYP.hypothesis]]<>"",[[HYP.date_start]]<=' + P.end + ',([[HYP.date_end]]="")+([[HYP.date_end]]>=' + P.start + '),[[HYP.status_class]]<>"CANCEL"))),"На этой неделе новые гипотезы не проверялись.")',
-    },
-    {
-      ph: 'OBJECTIONS', label: 'Какие возражения получили', list: true,
-      f: '=IFERROR(ARRAYFORMULA(LET(r_nb,FILTER([[ACT.refusal]],' + actCond + ',' + rep + ',[[ACT.refusal]]<>""),' +
-        'r_q,QUERY(r_nb,"select Col1, count(Col1) group by Col1 order by count(Col1) desc label count(Col1) \'\'",0),' +
-        'TEXTJOIN(CHAR(10),TRUE,INDEX(r_q,0,1)&" — "&INDEX(r_q,0,2)))),"Возражений не зафиксировано.")',
-    },
-    {
-      ph: 'CONCLUSIONS', label: 'Какие выводы сделали', list: true,
-      f: '=IFERROR(ARRAYFORMULA(LET(c_act,IFERROR(FILTER([[ACT.conclusion]],' + actCond + ',' + rep + ',[[ACT.conclusion]]<>""),""),' +
-        'c_pf,IFERROR(FILTER([[PF.conclusion]],[[PF.obj_id]]=' + P.id + ',[[PF.week]]=' + P.wk + ',[[PF.to_report]]=TRUE,[[PF.conclusion]]<>""),""),' +
-        'c_all,{c_act;c_pf},TEXTJOIN(CHAR(10),TRUE,UNIQUE(FILTER(c_all,c_all<>""))))),"Выводы будут сформированы по итогам следующих действий.")',
-    },
-    {
-      ph: 'STRATEGY_CHANGES', label: 'Что изменили в стратегии', list: true,
-      f: '=IFERROR(ARRAYFORMULA(LET(h_str,IFERROR(FILTER([[HIST.field]]&": "&[[HIST.new]],[[HIST.obj_id]]=' + P.id + ',[[HIST.sheet]]="[[NAME.STR]]",' +
-        '[[HIST.ts]]>=' + P.start + ',[[HIST.ts]]<' + P.end + '+1,ISNUMBER(MATCH([[HIST.field]],[[D.strategy_client_fields]],0))),""),' +
-        'h_price,IFERROR(FILTER("Цена скорректирована: "&TEXT([[HIST.old]],"#,##0")&" → "&TEXT([[HIST.new]],"#,##0")&" ₽",[[HIST.obj_id]]=' + P.id + ',' +
-        '[[HIST.field]]="[[TITLE.OBJ.price]]",[[HIST.kind]]="' + HIST_KIND.CHANGE + '",[[HIST.ts]]>=' + P.start + ',[[HIST.ts]]<' + P.end + '+1),""),' +
-        'h_all,{h_price;h_str},TEXTJOIN(CHAR(10),TRUE,UNIQUE(FILTER(h_all,h_all<>""))))),"Стратегия без изменений — продолжаем работу по утверждённому плану.")',
-    },
-    {
-      ph: 'NEXT_WEEK', label: 'Что планируем на следующую неделю', list: true,
-      f: '=IFERROR(ARRAYFORMULA(TEXTJOIN(CHAR(10),TRUE,UNIQUE(FILTER(IF([[PF.task]]="",[[PF.week_goal]],[[PF.task]]),[[PF.obj_id]]=' + P.id + ',[[PF.week]]=' + P.next + ',' +
-        '[[PF.status_class]]<>"CANCEL",[[PF.to_report]]=TRUE,([[PF.task]]<>"")+([[PF.week_goal]]<>""))))),' +
-        'IFERROR(ARRAYFORMULA(TEXTJOIN(CHAR(10),TRUE,UNIQUE(FILTER([[ACT.next_step]],' + actCond + ',' + rep + ',[[ACT.next_step]]<>"")))),"План следующей недели в работе."))',
-    },
-    {
-      ph: 'NEXT_WEEK_KPI', label: 'KPI следующей недели', list: true,
-      f: '=IFERROR(ARRAYFORMULA(LET(k_q,QUERY(FILTER({[[PF.kpi_metric]],[[PF.kpi_plan]]},[[PF.obj_id]]=' + P.id + ',[[PF.week]]=' + P.next + ',[[PF.kpi_metric]]<>"",[[PF.status_class]]<>"CANCEL"),' +
-        '"select Col1, sum(Col2) group by Col1 label sum(Col2) \'\'",0),TEXTJOIN(CHAR(10),TRUE,INDEX(k_q,0,1)&": "&INDEX(k_q,0,2)))),"Целевые показатели будут согласованы в начале недели.")',
-    },
-    { ph: 'MANAGER_COMMENT', label: 'Комментарий руководителя', f: '=IF($B$5="","—",$B$5)' },
-  ];
-}
-
-function reportInternalRows_() {
-  const P = REP_PARAMS;
-  return [
-    { label: '% выполнения плана недели', f: '=IFERROR(COUNTIFS([[PF.obj_id]],' + P.id + ',[[PF.week]],' + P.wk + ',[[PF.status_class]],"DONE")/COUNTIFS([[PF.obj_id]],' + P.id + ',[[PF.week]],' + P.wk + ',[[PF.status_class]],"<>CANCEL"),"")', fmt: 'pct' },
-    { label: 'Действий, скрытых из отчёта', f: '=IF(' + P.id + '="","",COUNTIFS([[ACT.obj_id]],' + P.id + ',[[ACT.week]],' + P.wk + ',[[ACT.to_report]],FALSE,[[ACT.date]],"<>"))' },
-    { label: 'Внутренние комментарии к действиям', f: '=IFERROR(ARRAYFORMULA(TEXTJOIN(CHAR(10),TRUE,FILTER([[ACT.id]]&": "&[[ACT.comment]],[[ACT.obj_id]]=' + P.id + ',[[ACT.week]]=' + P.wk + ',[[ACT.comment]]<>""))),"—")' },
-    { label: 'Комментарий руководителя в реестре', f: '=IFERROR(VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.manager_comment]]},2,FALSE),"")' },
-    { label: 'Причины невыполнения задач', f: '=IFERROR(ARRAYFORMULA(TEXTJOIN(CHAR(10),TRUE,FILTER([[PF.task]]&": "&[[PF.fail_reason]],[[PF.obj_id]]=' + P.id + ',[[PF.week]]=' + P.wk + ',[[PF.fail_reason]]<>""))),"—")' },
-  ];
-}
-
-const REP_FIRST_ROW = 11;
-
-function reportLayout_() {
-  const P = REP_PARAMS;
-  const cells = [];
-  cells.push({ a1: 'A1', v: 'ОТЧЁТ КЛИЕНТУ — выберите объект и неделю, проверьте текст и нажмите «Создать отчёт»', style: 'title' });
-  cells.push({ a1: 'A3', v: 'Объект:', style: 'label' });
-  cells.push({ a1: 'B3', v: '', style: 'select', validation: { list: 'D.obj_labels' } });
-  cells.push({ a1: 'A4', v: 'Неделя:', style: 'label' });
-  cells.push({ a1: 'B4', v: '', style: 'select', validation: { list: 'D.weeks:c4' } });
-  cells.push({ a1: 'A5', v: 'Комментарий руководителя для клиента:', style: 'label' });
-  cells.push({ a1: 'B5', v: '', style: 'select', note: 'Вводится вручную перед созданием отчёта. Сохраняется в 13_АРХИВ_ОТЧЕТОВ.' });
-  cells.push({ a1: 'D2', v: 'Служебное', style: 'muted' });
-  const params = [
-    ['D3', 'ID объекта', 'E3', '=IFERROR(REGEXEXTRACT(B3,"^(.*?) · "),"")'],
-    ['D4', 'Ключ недели', 'E4', '=IFERROR(REGEXEXTRACT(B4,"^[^ ]+"),"")'],
-    ['D5', 'Начало', 'E5', '=IFERROR(VLOOKUP(E4,[[D.weeks:tbl]],2,FALSE),"")'],
-    ['D6', 'Конец', 'E6', '=IF(E5="","",E5+6)'],
-    ['D7', 'Следующая неделя', 'E7', '=IF(E5="","",YEAR(E5+10)&"-W"&TEXT(ISOWEEKNUM(E5+7),"00"))'],
-  ];
-  params.forEach(p => {
-    cells.push({ a1: p[0], v: p[1], style: 'muted' });
-    cells.push({ a1: p[2], f: p[3], style: 'muted', fmt: (p[2] === 'E5' || p[2] === 'E6') ? 'date' : null });
-  });
-  cells.push({ a1: 'A9', v: 'ПРЕДПРОСМОТР — только то, что увидит клиент', style: 'section', spanCols: 3 });
-  cells.push({ a1: 'A10', v: 'Раздел', style: 'header' });
-  cells.push({ a1: 'B10', v: 'Содержание', style: 'header' });
-  cells.push({ a1: 'C10', v: 'Placeholder', style: 'header' });
-  const rows = reportRows_();
-  const rowOf = {};
-  rows.forEach((r, i) => { rowOf[r.ph] = REP_FIRST_ROW + i; });
-  const extra = {};
-  Object.keys(rowOf).forEach(ph => { extra[ph] = '$B$' + rowOf[ph]; });
-  rows.forEach(r => {
-    const row = rowOf[r.ph];
-    const f = r.f.replace(/\[\[R\.([A-Z_]+)\]\]/g, (m, ph) => extra[ph]);
-    cells.push({ a1: 'A' + row, v: r.label, style: 'bold' });
-    cells.push({ a1: 'B' + row, f: f, style: 'wrap' });
-    cells.push({ a1: 'C' + row, v: '{{' + r.ph + '}}', style: 'muted' });
-  });
-  let row = REP_FIRST_ROW + rows.length + 1;
-  cells.push({ a1: 'A' + row, v: 'ВНУТРЕННЕЕ — в отчёт НЕ попадает', style: 'section', spanCols: 3 });
-  reportInternalRows_().forEach(r => {
-    row++;
-    cells.push({ a1: 'A' + row, v: r.label, style: 'bold' });
-    cells.push({ a1: 'B' + row, f: r.f, style: 'wrap', fmt: r.fmt || null });
-  });
-  return { cells: cells, rowOf: rowOf, params: P, lastRow: row };
-}
-
-// ───────────────────────── 11_КОНТРОЛЬ ─────────────────────────
-
-const CTRL_FIRST = 3; // первая строка данных (1 — заголовок блока, 2 — шапка)
-const CTRL_MON_START = 11; // столбец K — начало таблицы мониторинга по объектам
-
-function ctrlMonitorCols_() {
-  const K = '[[X.K]]';
-  const col = t => '[[X.' + t + ']]';
-  return [
-    { k: 'id', t: 'ID объекта', key: true, f: '=IFERROR(FILTER([[OBJ.id]],[[OBJ.id]]<>"",[[OBJ.in_work]]="ДА"),"")' },
-    { k: 'name', t: 'Объект', e: 'IFERROR(VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.name]]},2,FALSE),"")' },
-    { k: 'owner', t: 'Ответственный', e: 'IFERROR(VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.manager]]},2,FALSE),"")' },
-    { k: 'idle', t: 'Дней без активности', e: 'IFERROR(VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.days_idle]]},2,FALSE),"")', fmt: '0' },
-    { k: 'last_lead', t: 'Последний интерес (лид)', e: 'IFERROR(VLOOKUP(' + K + ',SORT(FILTER({[[ACT.obj_id]],[[ACT.date]]},[[ACT.interested]]>0),2,FALSE),2,FALSE),"")', fmt: 'date' },
-    { k: 'no_leads', t: 'Дней без новых лидов', e: 'IF(' + col('last_lead') + '="",IFERROR(TODAY()-VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.date_sign]]},2,FALSE),""),TODAY()-' + col('last_lead') + ')', fmt: '0' },
-    { k: 'c_r', t: 'Контакты (посл. период)', e: 'SUMIF([[ACT.obj_id]]&"|"&[[ACT.window]],' + K + '&"|R",[[ACT.contacts]])', fmt: '0' },
-    { k: 'l_r', t: 'Лиды (посл. период)', e: 'SUMIF([[ACT.obj_id]]&"|"&[[ACT.window]],' + K + '&"|R",[[ACT.interested]])', fmt: '0' },
-    { k: 'cv_r', t: 'Конв. контакт→лид (посл.)', e: 'IFERROR(' + col('l_r') + '/' + col('c_r') + ',0)', fmt: 'pct' },
-    { k: 'c_p', t: 'Контакты (пред. период)', e: 'SUMIF([[ACT.obj_id]]&"|"&[[ACT.window]],' + K + '&"|P",[[ACT.contacts]])', fmt: '0' },
-    { k: 'l_p', t: 'Лиды (пред. период)', e: 'SUMIF([[ACT.obj_id]]&"|"&[[ACT.window]],' + K + '&"|P",[[ACT.interested]])', fmt: '0' },
-    { k: 'cv_p', t: 'Конв. контакт→лид (пред.)', e: 'IFERROR(' + col('l_p') + '/' + col('c_p') + ',0)', fmt: 'pct' },
-    {
-      k: 'drop', t: 'Падение конверсии',
-      e: 'IF((' + col('c_r') + '>=[[CFG.MIN_CONTACTS]])*(' + col('c_p') + '>=[[CFG.MIN_CONTACTS]])*(' + col('cv_p') + '>0)*(' + col('cv_r') + '<' + col('cv_p') + '*(1-[[CFG.CONV_DROP]])),"ДА","")',
-    },
-    { k: 'refusals', t: 'Отказов за окно сравнения', e: 'COUNTIF([[ACT.obj_id]]&"|"&[[ACT.window]]&"|"&IF([[ACT.refusal]]="","0","1"),' + K + '&"|R|1")+COUNTIF([[ACT.obj_id]]&"|"&[[ACT.window]]&"|"&IF([[ACT.refusal]]="","0","1"),' + K + '&"|P|1")', fmt: '0' },
-    { k: 'review', t: 'Дата пересмотра стратегии', e: 'IFERROR(VLOOKUP(' + K + ',{[[STR.obj_id]],[[STR.review_date]]},2,FALSE),"")', fmt: 'date' },
-    { k: 'next_report', t: 'Следующий отчёт', e: 'IFERROR(VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.next_report]]},2,FALSE),"")', fmt: 'date' },
-    { k: 'to_end', t: 'Дней до конца эксклюзива', e: 'LET(e_d,IFERROR(VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.date_end]]},2,FALSE),""),IF(e_d="","",e_d-TODAY()))', fmt: '0' },
-    { k: 'need_change', t: 'Флаг «изменить стратегию»', e: 'IFERROR(VLOOKUP(' + K + ',{[[STR.obj_id]],[[STR.need_change]]},2,FALSE),FALSE)' },
-  ];
-}
-
-function ctrlLayout_() {
-  const cells = [];
-  const mon = ctrlMonitorCols_();
-  const letter = {};
-  mon.forEach((c, i) => { letter[c.k] = colLetter_(CTRL_MON_START + i); });
-  const rngOf = k => '$' + letter[k] + '$' + CTRL_FIRST + ':$' + letter[k];
-  const extra = {};
-  mon.forEach(c => { extra[c.k] = rngOf(c.k); });
-  extra.K = rngOf('id');
-
-  cells.push({ a1: 'A1', v: 'ПРЕДУПРЕЖДЕНИЯ — обновляются автоматически', style: 'section', spanCols: 8 });
-  ['Критичность', 'Тип', 'ID объекта', 'Объект', 'Что случилось', 'Ответственный', 'Срок / дата', 'Где исправить'].forEach((t, i) => {
-    cells.push({ a1: colLetter_(1 + i) + '2', v: t, style: 'header' });
-  });
-  cells.push({ a1: colLetter_(CTRL_MON_START) + '1', v: 'МОНИТОРИНГ ОБЪЕКТОВ В РАБОТЕ (основа для предупреждений)', style: 'section', spanCols: mon.length });
-  mon.forEach(c => {
-    cells.push({ a1: letter[c.k] + '2', v: c.t, style: 'header' });
-    const f = c.key ? c.f : '=ARRAYFORMULA(IF(' + extra.K + '="","",' + c.e + '))';
-    cells.push({ a1: letter[c.k] + CTRL_FIRST, f: resolveF_(f, { extra: extra }), fmt: c.fmt || null });
-  });
-  cells.push({ a1: 'A' + CTRL_FIRST, f: alertsFormula_(extra) });
-  return { cells: cells, monLetter: letter };
-}
-
-/** Одна формула собирает все предупреждения в общий список, сортирует по критичности. */
-function alertsFormula_(m) {
-  const blocks = [];
-  const t = s => '"' + s + '"';
-  const on = (rng, s) => 'IF(ROW(' + rng + '),' + t(s) + ')'; // растянуть строку-константу на весь столбец
-  const K = m.K;
-  const fmtD = x => 'IFERROR(TEXT(' + x + ',"dd.mm.yyyy"),"")';
-  const monBlock = (sev, type, what, when, where, cond) =>
-    'IFERROR(FILTER({' + on(K, sev) + ',' + on(K, type) + ',' + K + ',' + m.name + ',' + what + ',' + m.owner + ',' + when + ',' + on(K, where) + '},' + K + '<>"",' + cond + '),E_)';
-
-  blocks.push(monBlock(SEVERITY.HIGH, ALERT.IDLE_HIGH, '"Нет действий "&' + m.idle + '&" дн. (порог "&CFG_NO_ACTIVITY_DAYS&")"', on(K, ''), SHEET_NAMES.ACT, m.idle + '>CFG_NO_ACTIVITY_DAYS'));
-  blocks.push(monBlock(SEVERITY.MID, ALERT.IDLE_WARN, '"Нет действий "&' + m.idle + '&" дн."', on(K, ''), SHEET_NAMES.ACT, '(' + m.idle + '>CFG_WARN_ACTIVITY_DAYS)*(' + m.idle + '<=CFG_NO_ACTIVITY_DAYS)'));
-  blocks.push(monBlock(SEVERITY.HIGH, ALERT.EXCL_END, 'IF(' + m.to_end + '<0,"Эксклюзив истёк "&-' + m.to_end + '&" дн. назад","До окончания эксклюзива "&' + m.to_end + '&" дн.")', 'IFERROR(TEXT(TODAY()+' + m.to_end + ',"dd.mm.yyyy"),"")', SHEET_NAMES.OBJ, '(' + m.to_end + '<>"")*(' + m.to_end + '<=CFG_EXCL_END_WARN_DAYS)'));
-  blocks.push(monBlock(SEVERITY.MID, ALERT.REPORT_DUE, '"Отчёт клиенту должен быть готов"', fmtD(m.next_report), SHEET_NAMES.REP, '(' + m.next_report + '<>"")*(' + m.next_report + '<=TODAY())'));
-  blocks.push(monBlock(SEVERITY.MID, ALERT.NO_LEADS, '"Нет новых заинтересованных "&' + m.no_leads + '&" дн."', fmtD(m.last_lead), SHEET_NAMES.ACT, '(' + m.no_leads + '<>"")*(' + m.no_leads + '>CFG_NO_LEADS_DAYS)'));
-  blocks.push(monBlock(SEVERITY.MID, ALERT.CONV_DROP, '"Контакт→интерес: было "&TEXT(' + m.cv_p + ',"0%")&", стало "&TEXT(' + m.cv_r + ',"0%")', on(K, ''), SHEET_NAMES.STAT, m.drop + '="ДА"'));
-  blocks.push(monBlock(SEVERITY.MID, ALERT.MANY_LOST, '"Отказов за последние "&(CFG_RECENT_DAYS+CFG_COMPARE_DAYS)&" дн.: "&' + m.refusals, on(K, ''), SHEET_NAMES.FUN, m.refusals + '>=CFG_MANY_REFUSALS'));
-  blocks.push(monBlock(SEVERITY.MID, ALERT.STRATEGY_OLD, 'IF(' + m.review + '="","Дата пересмотра стратегии не указана","Пересмотр был "&TEXT(' + m.review + ',"dd.mm.yyyy"))', fmtD(m.review), SHEET_NAMES.STR, 'IF(' + m.review + '="",TRUE,TODAY()-' + m.review + '>CFG_STRATEGY_REVIEW_DAYS)'));
-  blocks.push(monBlock(SEVERITY.MID, ALERT.STRATEGY_FLAG, '"Отмечено вручную в 02_СТРАТЕГИЯ"', on(K, ''), SHEET_NAMES.STR, m.need_change + '=TRUE'));
-
-  // гипотезы, по которым пора подвести итог
-  const HYo = '[[HYP.obj_id]]';
-  blocks.push('IFERROR(FILTER({' + on(HYo, SEVERITY.MID) + ',' + on(HYo, ALERT.HYP_DUE) + ',' + HYo + ',[[HYP.obj_name]],[[HYP.id]]&" «"&LEFT([[HYP.hypothesis]],80)&"» — факт "&[[HYP.fact]]&" из "&[[HYP.target]],' + on(HYo, '') + ',' + fmtD('[[HYP.date_end]]') + ',' + on(HYo, SHEET_NAMES.HYP) + '},[[HYP.due]]="ДА"),E_)');
-
-  // объекты без ID / с повторяющимся ID
-  const OBn = '[[OBJ.name]]';
-  blocks.push('IFERROR(FILTER({' + on(OBn, SEVERITY.HIGH) + ',' + on(OBn, ALERT.ID_PROBLEM) + ',[[OBJ.id]],' + OBn + ',IF([[OBJ.id_check]]="ДУБЛЬ ID","ID "&[[OBJ.id]]&" повторяется — проверьте по CRM","ID не указан — объект не участвует в расчётах"),[[OBJ.manager]],' + on(OBn, '') + ',' + on(OBn, SHEET_NAMES.OBJ) + '},' + OBn + '<>"",[[OBJ.id_check]]<>""),E_)');
-
-  // задачи и действия
-  const PFo = '[[PF.obj_id]]';
-  blocks.push('IFERROR(FILTER({' + on(PFo, SEVERITY.HIGH) + ',' + on(PFo, ALERT.TASK_OVERDUE) + ',' + PFo + ',[[PF.obj_name]],"Задача «"&IF([[PF.task]]="",[[PF.week_goal]]&[[PF.kpi_metric]],[[PF.task]])&"» ("&[[PF.task_id]]&")",[[PF.owner]],' + fmtD('[[PF.deadline]]') + ',' + on(PFo, SHEET_NAMES.PF) + '},[[PF.overdue]]="ПРОСРОЧЕНО"),E_)');
-  const ACo = '[[ACT.obj_id]]';
-  blocks.push('IFERROR(FILTER({' + on(ACo, SEVERITY.HIGH) + ',' + on(ACo, ALERT.ACTION_OVERDUE) + ',' + ACo + ',[[ACT.obj_name]],"Действие "&[[ACT.id]]&" «"&[[ACT.type]]&" "&[[ACT.goal]]&"» не отмечено выполненным",[[ACT.owner]],' + fmtD('[[ACT.date]]') + ',' + on(ACo, SHEET_NAMES.ACT) + '},[[ACT.status_class]]="OPEN",[[ACT.date]]<>"",[[ACT.date]]<TODAY()),E_)');
-  blocks.push('IFERROR(FILTER({' + on(PFo, SEVERITY.LOW) + ',' + on(PFo, ALERT.NO_OWNER) + ',' + PFo + ',[[PF.obj_name]],"Задача «"&IF([[PF.task]]="",[[PF.kpi_metric]],[[PF.task]])&"» ("&[[PF.task_id]]&") без ответственного",' + on(PFo, '') + ',' + fmtD('[[PF.deadline]]') + ',' + on(PFo, SHEET_NAMES.PF) + '},' + PFo + '<>"",[[PF.owner]]="",([[PF.status_class]]="OPEN")+([[PF.status_class]]="FAIL")),E_)');
-  blocks.push('IFERROR(FILTER({' + on(ACo, SEVERITY.LOW) + ',' + on(ACo, ALERT.NO_OWNER) + ',' + ACo + ',[[ACT.obj_name]],"Действие "&[[ACT.id]]&" без ответственного",' + on(ACo, '') + ',' + fmtD('[[ACT.date]]') + ',' + on(ACo, SHEET_NAMES.ACT) + '},' + ACo + '<>"",[[ACT.owner]]="",[[ACT.status_class]]="OPEN"),E_)');
-
-  const body = 'LET(E_,{"","","","","","","",""},all_,{' + blocks.join(';') + '},res_,FILTER(all_,INDEX(all_,0,2)<>""),SORT(res_,1,TRUE,2,TRUE,3,TRUE))';
-  return resolveF_('=IFERROR(ARRAYFORMULA(' + body + '),{"✓ Предупреждений нет","","","","","","",""})', { extra: m });
-}
-
-// ───────────────────────── 09_ДЭШБОРД ─────────────────────────
-
-const DASH_OBJ_FIRST = 40; // первая строка таблицы объектов (выше — сводка предупреждений)
-const DASH_CHART_COL = 27; // AA — данные графика
 
 function dashLayout_() {
   const cells = [];
-  const wk = '$Z$1', prev = '$Z$2';
-  cells.push({ a1: 'A1', v: 'ДЭШБОРД — СИСТЕМА УПРАВЛЕНИЯ ЭКСКЛЮЗИВАМИ', style: 'title' });
+  const wk = DASH.WEEK_KEY;
+  cells.push({ a1: 'A1', v: 'ДЭШБОРД — маркетинг эксклюзивов', style: 'title' });
   cells.push({ a1: 'A2', v: 'Неделя (пусто = текущая):', style: 'label' });
-  cells.push({ a1: 'C2', v: '', style: 'select', validation: { list: 'D.weeks:c4' } });
-  cells.push({ a1: 'E2', v: 'Сегодня:', style: 'label' });
-  cells.push({ a1: 'F2', f: '=TODAY()', fmt: 'date' });
-  // служебные параметры (Z) — нужны и для условного форматирования
+  cells.push({ a1: 'B2', v: '', style: 'select', validation: { list: 'D.weeks:c4' } });
+  cells.push({ a1: 'D2', f: '="Сегодня: "&TEXT(TODAY(),"dd.mm.yyyy")', style: 'muted' });
   cells.push({ a1: 'Y1', v: 'неделя', style: 'muted' });
-  cells.push({ a1: 'Z1', f: '=IF(C2="",' + CURRENT_WEEK_F_ + ',REGEXEXTRACT(C2,"^[^ ]+"))', style: 'muted' });
-  cells.push({ a1: 'Y2', v: 'пред. неделя', style: 'muted' });
-  cells.push({ a1: 'Z2', f: '=IFERROR(LET(p_m,VLOOKUP(Z1,[[D.weeks:tbl]],2,FALSE)-7,YEAR(p_m+3)&"-W"&TEXT(ISOWEEKNUM(p_m),"00")),"")', style: 'muted' });
-  cells.push({ a1: 'Y3', v: 'порог риска', style: 'muted' });
-  cells.push({ a1: 'Z3', f: '=CFG_NO_ACTIVITY_DAYS', style: 'muted' });
-  cells.push({ a1: 'Y4', v: 'порог внимания', style: 'muted' });
-  cells.push({ a1: 'Z4', f: '=CFG_WARN_ACTIVITY_DAYS', style: 'muted' });
+  cells.push({ a1: 'Z1', f: '=IF(B2="",' + CURRENT_WEEK_F_ + ',REGEXEXTRACT(B2,"^[^ ]+"))', style: 'muted' });
+  cells.push({ a1: 'Y2', v: 'порог дней', style: 'muted' });
+  cells.push({ a1: 'Z2', f: '=CFG_IDLE_DAYS', style: 'muted' });
 
-  // ОБЩАЯ КАРТИНА
-  cells.push({ a1: 'A4', v: 'ОБЩАЯ КАРТИНА', style: 'section', spanCols: 9 });
-  const riskTemp = '[[D.temperature:4]]';
-  const stratAlerts = ALERTS_STRATEGY.map(a => '(' + quoteSheet_(SHEET_NAMES.CTRL) + '!$B$' + CTRL_FIRST + ':$B="' + a + '")').join('+');
+  // плитки недели
+  cells.push({ a1: 'A4', f: '="НЕДЕЛЯ "&Z1&IFERROR(" · "&TEXT(VLOOKUP(Z1,[[D.weeks:tbl]],2,FALSE),"dd.mm")&"–"&TEXT(VLOOKUP(Z1,[[D.weeks:tbl]],3,FALSE),"dd.mm.yyyy"),"")', style: 'section', spanCols: 12 });
+  const tkW = '[[TASK.week]]&"|"&[[TASK.status_class]]';
   const tiles = [
-    ['Активных эксклюзивов', '=COUNTIF([[OBJ.in_work]],"ДА")', '0'],
-    ['Без активности', '=COUNTIFS([[OBJ.in_work]],"ДА",[[OBJ.risk_flag]],"RISK")', '0'],
-    ['С риском', '=SUMPRODUCT(([[OBJ.in_work]]="ДА")*((([[OBJ.risk_flag]]="RISK")+([[OBJ.temperature]]=' + riskTemp + '))>0))', '0'],
-    ['В переговорах', '=COUNTIF([[OBJ.status_class]],"NEGOTIATION")', '0'],
-    ['Брони', '=COUNTIF([[OBJ.status_class]],"BOOKING")', '0'],
-    ['Сделки / проданы', '=COUNTIF([[OBJ.status_class]],"DEAL")+COUNTIF([[OBJ.status_class]],"SOLD")', '0'],
-    ['Стоимость активного портфеля', '=SUMIFS([[OBJ.price]],[[OBJ.in_work]],"ДА")', 'money_short'],
-    ['Нужно изменить стратегию', '=IFERROR(ROWS(UNIQUE(FILTER(' + quoteSheet_(SHEET_NAMES.CTRL) + '!$C$' + CTRL_FIRST + ':$C,' + stratAlerts + '))),0)', '0'],
-    ['Гипотез в проверке', '=COUNTIFS([[HYP.status_class]],"OPEN",[[HYP.hypothesis]],"?*")', '0'],
+    ['Объектов в работе', '=COUNTIFS([[OBJ.in_work]],"ДА",[[OBJ.id]],"?*")', '0'],
+    ['Задач на неделе', '=COUNTIF([[TASK.week]],' + wk + ')-COUNTIF(' + tkW + ',' + wk + '&"|CANCEL")', '0'],
+    ['Выполнено', '=COUNTIF(' + tkW + ',' + wk + '&"|DONE")', '0'],
+    ['% плана', '=IFERROR(C6/B6,"—")', 'pct'],
+    ['Просрочено (всего)', '=COUNTIF([[TASK.overdue]],"ПРОСРОЧЕНО")', '0'],
+    ['Звонков', '=COUNTIF([[BASE.call_week]],' + wk + ')', '0'],
+    ['КП отправлено', '=COUNTIF([[BASE.kp_week]],' + wk + ')', '0'],
+    ['Ответов', '=COUNTIF([[BASE.resp_week]],' + wk + ')-COUNTIF([[BASE.resp_week]]&"|"&[[BASE.resp_class]],' + wk + '&"|NONE")', '0'],
+    ['Интересно', '=COUNTIF([[BASE.resp_week]]&"|"&[[BASE.resp_class]],' + wk + '&"|YES")', '0'],
+    ['Публикаций', '=COUNTIF([[CONT.pub_week]]&"|"&[[CONT.status_class]],' + wk + '&"|DONE")', '0'],
+    ['Просмотры', '=SUMIF([[CONT.pub_week]],' + wk + ',[[CONT.views]])', '#,##0'],
+    ['Охват', '=SUMIF([[CONT.pub_week]],' + wk + ',[[CONT.reach]])', '#,##0'],
   ];
   tiles.forEach((t, i) => {
     const L = colLetter_(1 + i);
     cells.push({ a1: L + '5', v: t[0], style: 'tileLabel' });
-    cells.push({ a1: L + '6', f: t[1], style: 'tileValue', fmt: t[2] });
+    cells.push({ a1: L + '6', f: t[1].indexOf('&') > 0 ? '=ARRAYFORMULA(' + t[1].slice(1) + ')' : t[1], style: 'tileValue', fmt: t[2] });
   });
 
-  // НЕДЕЛЯ
-  cells.push({ a1: 'A8', f: '="ЗА НЕДЕЛЮ "&Z1&IFERROR(" · "&TEXT(VLOOKUP(Z1,[[D.weeks:tbl]],2,FALSE),"dd.mm")&"–"&TEXT(VLOOKUP(Z1,[[D.weeks:tbl]],3,FALSE),"dd.mm.yyyy"),"")', style: 'section', spanCols: 9 });
-  const wm = [
-    ['Действия', w => 'COUNTIFS([[ACT.week]],' + w + ',[[ACT.status_class]],"DONE")'],
-    ['Контакты', w => 'SUMIFS([[ACT.contacts]],[[ACT.week]],' + w + ')'],
-    ['Лиды', w => 'SUMIFS([[ACT.interested]],[[ACT.week]],' + w + ')'],
-    ['Показы', w => 'SUMIFS([[ACT.showings]],[[ACT.week]],' + w + ')'],
-    ['Переговоры', w => 'SUMIFS([[ACT.negotiations]],[[ACT.week]],' + w + ')'],
-    ['Предложения', w => 'SUMIFS([[ACT.offers]],[[ACT.week]],' + w + ')'],
-    ['Брони', w => 'SUMIFS([[ACT.bookings]],[[ACT.week]],' + w + ')'],
-    ['Сделки', w => 'SUMIFS([[ACT.deals]],[[ACT.week]],' + w + ')'],
-  ];
-  cells.push({ a1: 'A9', v: '', style: 'header' });
-  cells.push({ a1: 'A10', v: 'Эта неделя', style: 'bold' });
-  cells.push({ a1: 'A11', v: 'Прошлая неделя' });
-  cells.push({ a1: 'A12', v: 'Изменение' });
-  const weekCell = {};
-  wm.forEach((m, i) => {
-    const L = colLetter_(2 + i);
-    weekCell[m[0]] = L + '10';
-    cells.push({ a1: L + '9', v: m[0], style: 'header' });
-    cells.push({ a1: L + '10', f: '=' + m[1](wk), fmt: '0', style: 'bold' });
-    cells.push({ a1: L + '11', f: '=' + m[1](prev), fmt: '0' });
-    cells.push({ a1: L + '12', f: '=' + L + '10-' + L + '11', fmt: '+0;-0;0', style: 'delta' });
-  });
-
-  // КОНВЕРСИИ
-  cells.push({ a1: 'A14', v: 'КОНВЕРСИИ', style: 'section', spanCols: 9 });
-  const conv = [
-    ['Контакт → лид', 'Лиды', 'Контакты', 'SUM([[ACT.interested]])', 'SUM([[ACT.contacts]])'],
-    ['Лид → показ', 'Показы', 'Лиды', 'SUM([[ACT.showings]])', 'SUM([[ACT.interested]])'],
-    ['Показ → переговоры', 'Переговоры', 'Показы', 'SUM([[ACT.negotiations]])', 'SUM([[ACT.showings]])'],
-    ['Переговоры → предложение', 'Предложения', 'Переговоры', 'SUM([[ACT.offers]])', 'SUM([[ACT.negotiations]])'],
-    ['Предложение → бронь', 'Брони', 'Предложения', 'SUM([[ACT.bookings]])', 'SUM([[ACT.offers]])'],
-    ['Бронь → сделка', 'Сделки', 'Брони', 'SUM([[ACT.deals]])', 'SUM([[ACT.bookings]])'],
-  ];
-  cells.push({ a1: 'A15', v: '', style: 'header' });
-  cells.push({ a1: 'A16', v: 'Эта неделя', style: 'bold' });
-  cells.push({ a1: 'A17', v: 'Весь период' });
-  conv.forEach((c, i) => {
-    const L = colLetter_(2 + i);
-    cells.push({ a1: L + '15', v: c[0], style: 'header' });
-    cells.push({ a1: L + '16', f: '=IFERROR(' + weekCell[c[1]] + '/' + weekCell[c[2]] + ',"—")', fmt: 'pct', style: 'bold' });
-    cells.push({ a1: L + '17', f: '=IFERROR(' + c[3] + '/' + c[4] + ',"—")', fmt: 'pct' });
-  });
-
-  // ПРЕДУПРЕЖДЕНИЯ (сводка)
-  cells.push({ a1: 'A19', v: 'ПРЕДУПРЕЖДЕНИЯ (подробно — лист 11_КОНТРОЛЬ)', style: 'section', spanCols: 9 });
-  cells.push({ a1: 'A20', f: '=IFERROR(QUERY(' + quoteSheet_(SHEET_NAMES.CTRL) + '!$A$' + CTRL_FIRST + ':$H,"select B, count(B) where B<>\'\' group by B order by count(B) desc label B \'Тип\', count(B) \'Кол-во\'",0),"Нет предупреждений")' });
-
-  // ПО ОБЪЕКТАМ
-  const hdr = DASH_OBJ_FIRST - 1;
-  cells.push({ a1: 'A' + (hdr - 1), v: 'ПО КАЖДОМУ ОБЪЕКТУ (в работе; сверху — дольше всего без активности)', style: 'section', spanCols: 17 });
-  const K = '$A$' + DASH_OBJ_FIRST + ':$A';
+  // по объектам
+  const oF = DASH.OBJ_FIRST, oL = DASH.OBJ_LAST;
+  cells.push({ a1: 'A' + (DASH.OBJ_HDR - 1), v: 'ПО ОБЪЕКТАМ (в работе) — неделя из фильтра выше', style: 'section', spanCols: 17 });
+  const K = '$B$' + oF + ':$B$' + oL;
+  const c = K + '&"|"&' + wk;
   const look = f => 'IFERROR(VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.' + f + ']]},2,FALSE),"")';
-  const cols = [
+  const objCols = [
+    ['Объект', 'IF(' + look('tab_url') + '="",' + look('name') + ',HYPERLINK(' + look('tab_url') + ',' + look('name') + '))'],
     ['ID', null],
-    ['Название', look('name')],
-    ['Статус', look('status')],
-    ['Темп.', look('temperature')],
-    ['Цена', look('price'), 'money_short'],
-    ['Цена за м²', look('price_m2'), 'money'],
-    ['Дни на рынке', look('days_on_market'), '0'],
-    ['Лиды', 'SUMIF([[ACT.obj_id]],' + K + ',[[ACT.interested]])', '0'],
-    ['Показы', 'SUMIF([[ACT.obj_id]],' + K + ',[[ACT.showings]])', '0'],
-    ['Переговоры', 'SUMIF([[ACT.obj_id]],' + K + ',[[ACT.negotiations]])', '0'],
-    ['Брони', 'SUMIF([[ACT.obj_id]],' + K + ',[[ACT.bookings]])', '0'],
-    ['Конверсия лид → показ', 'IFERROR(SUMIF([[ACT.obj_id]],' + K + ',[[ACT.showings]])/SUMIF([[ACT.obj_id]],' + K + ',[[ACT.interested]]),"")', 'pct'],
-    ['Последнее действие', look('last_action')],
-    ['Следующее действие', look('next_action')],
-    ['Дедлайн', look('next_action_deadline'), 'date'],
-    ['Дней без активности', look('days_idle'), '0'],
     ['Ответственный', look('manager')],
+    ['Стратегия', look('strategy_pct'), 'pct'],
+    ['Задач', 'COUNTIF([[TASK.obj_id]]&"|"&[[TASK.week]],' + c + ')-COUNTIF([[TASK.obj_id]]&"|"&' + tkW + ',' + c + '&"|CANCEL")', '0'],
+    ['Выполнено', 'COUNTIF([[TASK.obj_id]]&"|"&' + tkW + ',' + c + '&"|DONE")', '0'],
+    ['% плана', 'IFERROR($F$' + oF + ':$F$' + oL + '/$E$' + oF + ':$E$' + oL + ',"")', 'pct'],
+    ['Просрочено', 'COUNTIF([[TASK.obj_id]]&"|"&[[TASK.overdue]],' + K + '&"|ПРОСРОЧЕНО")', '0'],
+    ['Звонков', 'COUNTIF([[BASE.obj_id]]&"|"&[[BASE.call_week]],' + c + ')', '0'],
+    ['КП', 'COUNTIF([[BASE.obj_id]]&"|"&[[BASE.kp_week]],' + c + ')', '0'],
+    ['Ответов', 'COUNTIF([[BASE.obj_id]]&"|"&[[BASE.resp_week]],' + c + ')-COUNTIF([[BASE.obj_id]]&"|"&[[BASE.resp_week]]&"|"&[[BASE.resp_class]],' + c + '&"|NONE")', '0'],
+    ['Интересно', 'COUNTIF([[BASE.obj_id]]&"|"&[[BASE.resp_week]]&"|"&[[BASE.resp_class]],' + c + '&"|YES")', '0'],
+    ['В CRM (всего)', 'COUNTIF([[BASE.obj_id]]&"|"&IF([[BASE.to_crm]],"1","0"),' + K + '&"|1")', '0'],
+    ['Публикаций', 'COUNTIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]]&"|"&[[CONT.status_class]],' + c + '&"|DONE")', '0'],
+    ['Охват', 'SUMIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]],' + c + ',[[CONT.reach]])', '#,##0'],
+    ['Последнее изменение', 'IFERROR(VLOOKUP(' + K + ',SORT(FILTER({[[HIST.obj_id]],[[HIST.ts]]},[[HIST.obj_id]]<>""),2,FALSE),2,FALSE),"")', 'datetime'],
+    ['Дней без работы', 'IF($P$' + oF + ':$P$' + oL + '="",IFERROR(TODAY()-VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.date_sign]]},2,FALSE),""),INT(TODAY()-$P$' + oF + ':$P$' + oL + '))', '0'],
   ];
-  const objCol = {};
-  cols.forEach((c, i) => {
+  const objLetter = {};
+  objCols.forEach((col, i) => {
     const L = colLetter_(1 + i);
-    objCol[c[0]] = L;
-    cells.push({ a1: L + hdr, v: c[0], style: 'header' });
-    if (i === 0) {
-      cells.push({ a1: L + DASH_OBJ_FIRST, f: '=ARRAYFORMULA(IFERROR(INDEX(SORT(FILTER({[[OBJ.id]],IF([[OBJ.days_idle]]="",-1,[[OBJ.days_idle]])},[[OBJ.id]]<>"",[[OBJ.in_work]]="ДА"),2,FALSE),0,1),""))' });
-    } else {
-      cells.push({ a1: L + DASH_OBJ_FIRST, f: '=ARRAYFORMULA(IF(' + K + '="","",' + c[1] + '))', fmt: c[2] || null });
-    }
+    objLetter[col[0]] = L;
+    cells.push({ a1: L + DASH.OBJ_HDR, v: col[0], style: 'header' });
+    if (col[0] === 'ID') cells.push({ a1: L + oF, f: '=IFERROR(FILTER([[OBJ.id]],[[OBJ.id]]<>"",[[OBJ.name]]<>"",[[OBJ.in_work]]="ДА"),"")' });
+    else cells.push({ a1: L + oF, f: '=ARRAYFORMULA(IF(' + K + '="","",' + col[1] + '))', fmt: col[2] || null });
   });
 
-  // данные графика: последние 12 недель
-  const A = colLetter_(DASH_CHART_COL);
-  const chartCols = [
-    ['Неделя', '=ARRAYFORMULA(TEXT(TODAY()-WEEKDAY(TODAY(),2)+1+7*SEQUENCE(12,1,-11,1),"dd.mm"))'],
-    ['Действия', 'COUNTIF([[ACT.week]]&"|"&[[ACT.status_class]],KEYS_&"|DONE")'],
-    ['Лиды', 'SUMIF([[ACT.week]],KEYS_,[[ACT.interested]])'],
-    ['Показы', 'SUMIF([[ACT.week]],KEYS_,[[ACT.showings]])'],
-    ['Переговоры', 'SUMIF([[ACT.week]],KEYS_,[[ACT.negotiations]])'],
+  // по сотрудникам
+  const pF = DASH.PEOPLE_FIRST, pL = DASH.PEOPLE_LAST;
+  cells.push({ a1: 'A' + (DASH.PEOPLE_HDR - 1), v: 'ПО СОТРУДНИКАМ — неделя из фильтра выше', style: 'section', spanCols: 9 });
+  const P = '$A$' + pF + ':$A$' + pL;
+  const cp = P + '&"|"&' + wk;
+  const peopleCols = [
+    ['Сотрудник', null],
+    ['Задач', 'COUNTIF([[TASK.owner]]&"|"&[[TASK.week]],' + cp + ')-COUNTIF([[TASK.owner]]&"|"&' + tkW + ',' + cp + '&"|CANCEL")', '0'],
+    ['Выполнено', 'COUNTIF([[TASK.owner]]&"|"&' + tkW + ',' + cp + '&"|DONE")', '0'],
+    ['% плана', 'IFERROR($C$' + pF + ':$C$' + pL + '/$B$' + pF + ':$B$' + pL + ',"")', 'pct'],
+    ['Просрочено', 'COUNTIF([[TASK.owner]]&"|"&[[TASK.overdue]],' + P + '&"|ПРОСРОЧЕНО")', '0'],
+    ['Звонков', 'COUNTIF([[BASE.owner]]&"|"&[[BASE.call_week]],' + cp + ')', '0'],
+    ['КП', 'COUNTIF([[BASE.owner]]&"|"&[[BASE.kp_week]],' + cp + ')', '0'],
+    ['Публикаций', 'COUNTIF([[CONT.owner]]&"|"&[[CONT.pub_week]]&"|"&[[CONT.status_class]],' + cp + '&"|DONE")', '0'],
+    ['Контент в работе', 'COUNTIF([[CONT.owner]]&"|"&[[CONT.status_class]],' + P + '&"|OPEN")', '0'],
   ];
-  const keyCol = colLetter_(DASH_CHART_COL + chartCols.length);
-  const keysRng = '$' + keyCol + '$3:$' + keyCol + '$14';
-  cells.push({ a1: A + '1', v: 'Данные графика (последние 12 недель)', style: 'muted' });
-  chartCols.forEach((c, i) => {
-    const L = colLetter_(DASH_CHART_COL + i);
-    cells.push({ a1: L + '2', v: c[0], style: 'header' });
-    const f = i === 0 ? c[1] : '=ARRAYFORMULA(' + c[1].replace(/KEYS_/g, keysRng) + ')';
-    cells.push({ a1: L + '3', f: f });
+  peopleCols.forEach((col, i) => {
+    const L = colLetter_(1 + i);
+    cells.push({ a1: L + DASH.PEOPLE_HDR, v: col[0], style: 'header' });
+    if (i === 0) cells.push({ a1: L + pF, f: '=IFERROR(FILTER([[D.people]],[[D.people]]<>""),"")' });
+    else cells.push({ a1: L + pF, f: '=ARRAYFORMULA(IF(' + P + '="","",' + col[1] + '))', fmt: col[2] || null });
   });
-  cells.push({ a1: keyCol + '2', v: 'ключ', style: 'muted' });
-  cells.push({ a1: keyCol + '3', f: '=ARRAYFORMULA(LET(c_m,TODAY()-WEEKDAY(TODAY(),2)+1+7*SEQUENCE(12,1,-11,1),YEAR(c_m+3)&"-W"&TEXT(ISOWEEKNUM(c_m),"00")))', style: 'muted' });
 
-  return { cells: cells, objCol: objCol, chartRange: A + '2:' + colLetter_(DASH_CHART_COL + chartCols.length - 1) + '14' };
+  // просроченные задачи
+  cells.push({ a1: 'A' + (DASH.OVERDUE_HDR - 1), v: 'ПРОСРОЧЕННЫЕ ЗАДАЧИ', style: 'section', spanCols: 6 });
+  ['Объект', 'Задача', 'Исполнитель', 'Срок', 'Неделя', 'ID'].forEach((t, i) => cells.push({ a1: colLetter_(1 + i) + DASH.OVERDUE_HDR, v: t, style: 'header' }));
+  cells.push({
+    a1: 'A' + DASH.OVERDUE_FIRST,
+    f: '=IFERROR(ARRAYFORMULA(INDEX(SORT(FILTER({[[TASK.obj_name]],[[TASK.task]],[[TASK.owner]],TEXT([[TASK.deadline]],"dd.mm.yyyy"),[[TASK.week]],[[TASK.id]],[[TASK.deadline]]},[[TASK.overdue]]="ПРОСРОЧЕНО"),7,TRUE),0,{1,2,3,4,5,6})),"✓ Просроченных задач нет")',
+  });
+  return { cells: cells, objLetter: objLetter };
+}
+
+// ───────────────────────── 05_ОТЧЁТ_КЛИЕНТУ ─────────────────────────
+// Формат — как в отчётах руководителя: шапка ИП, «Приложение №1 к Договору», таблица реквизитов,
+// Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА, Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ, Раздел 3. ПЛАН РАБОТЫ.
+// Период отчёта — рабочая неделя пн–пт.
+
+const REP_P = { id: '$E$3', wk: '$E$4', start: '$E$5', end: '$E$6', next: '$E$7', no: '$E$8' };
+const REP_FIRST_ROW = 11;
+
+/** Значения-«поля» отчёта (одна ячейка = один placeholder). */
+function reportRows_() {
+  const P = REP_P;
+  const look = f => '=IFERROR(VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.' + f + ']]},2,FALSE),"")';
+  const bKey = w => '[[BASE.obj_id]]&"|"&[[BASE.' + w + ']]';
+  const cw = P.id + '&"|"&' + P.wk;
+  return [
+    { ph: 'EXEC_HEADER', label: 'Шапка исполнителя', f: '=SUBSTITUTE(CFG_EXEC_HEADER," | ",CHAR(10))', lines: true },
+    { ph: 'CONTRACT_NO', label: '№ договора', f: look('contract_no') },
+    { ph: 'CONTRACT_DATE', label: 'Дата договора', f: '=IFERROR(TEXT(VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.contract_date]]},2,FALSE),"dd.mm.yyyy")&"г.","")' },
+    { ph: 'REPORT_NO', label: 'Отчёт №', f: '=' + P.no },
+    { ph: 'PERIOD', label: 'Период', f: '=IF(' + P.start + '="","",TEXT(' + P.start + ',"dd.mm.yyyy")&" – "&TEXT(' + P.start + '+4,"dd.mm.yyyy"))' },
+    { ph: 'OBJECT', label: 'Объект', f: look('address') },
+    { ph: 'CUSTOMER', label: 'Заказчик', f: look('customer') },
+    { ph: 'EXECUTOR', label: 'Исполнитель', f: '=CFG_EXEC_NAME' },
+    {
+      ph: 'SUMMARY', label: 'Итоги недели в цифрах', lines: true,
+      f: '=ARRAYFORMULA(IF(' + P.id + '="","",LET(n_call,COUNTIF(' + bKey('call_week') + ',' + cw + '),n_kp,COUNTIF(' + bKey('kp_week') + ',' + cw + '),' +
+        'n_resp,COUNTIF(' + bKey('resp_week') + ',' + cw + ')-COUNTIF(' + bKey('resp_week') + '&"|"&[[BASE.resp_class]],' + cw + '&"|NONE"),' +
+        'n_yes,COUNTIF(' + bKey('resp_week') + '&"|"&[[BASE.resp_class]],' + cw + '&"|YES"),' +
+        'n_pub,COUNTIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]]&"|"&[[CONT.status_class]],' + cw + '&"|DONE"),' +
+        'n_views,SUMIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]],' + cw + ',[[CONT.views]]),n_reach,SUMIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]],' + cw + ',[[CONT.reach]]),' +
+        'n_txt,TEXTJOIN(CHAR(10),TRUE,IF(n_call>0,"Обзвонено компаний: "&n_call,""),IF(n_kp>0,"Направлено коммерческих предложений: "&n_kp,""),' +
+        'IF(n_resp>0,"Получено ответов: "&n_resp&IF(n_yes>0,", из них заинтересованы: "&n_yes,""),""),' +
+        'IF(n_pub>0,"Опубликовано материалов об объекте: "&n_pub&IF(n_views>0,", просмотры: "&TEXT(n_views,"#,##0"),"")&IF(n_reach>0,", охват: "&TEXT(n_reach,"#,##0"),""),"")),' +
+        'n_txt)))',
+    },
+    { ph: 'COMMENT', label: 'Комментарий для клиента', f: '=$B$5' },
+    { ph: 'SIGNATURE', label: 'Подпись', f: '=CFG_MANAGER_NAME' },
+  ];
+}
+
+/** Таблицы отчёта: строки собираются формулой, в Google Doc вставляются строками таблицы. */
+function reportTables_() {
+  const P = REP_P;
+  const tCond = '[[TASK.obj_id]]=' + P.id + ',[[TASK.status_class]]<>"CANCEL",[[TASK.to_report]]=TRUE';
+  const factOf = 'IF([[TASK.fact]]="",[[TASK.fact_auto]],[[TASK.fact]])';
+  const numbered = (n, filter, empty) => '=IFERROR(ARRAY_CONSTRAIN(ARRAYFORMULA(LET(t_rows,' + filter + ',{SEQUENCE(ROWS(t_rows)),t_rows})),' + n + ',3),' + (empty ? '{"—","' + empty + '",""}' : '""') + ')';
+  return [
+    {
+      ph: 'PLAN_ROWS', title: 'Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА', rows: 25,
+      cols: ['№', 'Действие по плану на эту неделю', 'Статус (выполнено / нет)'],
+      f: numbered(25, 'FILTER({[[TASK.task]]&IF([[TASK.plan]]="",""," — "&' + factOf + '&" из "&[[TASK.plan]]&IF([[TASK.unit]]="",""," "&[[TASK.unit]]))&IF([[TASK.result]]="","",". "&[[TASK.result]]),' +
+        'IF([[TASK.status]]="","Запланировано",[[TASK.status]])},[[TASK.week]]=' + P.wk + ',' + tCond + ')', 'Задачи на неделю не внесены'),
+    },
+    {
+      ph: 'LEADS_ROWS', title: 'Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ', rows: 15,
+      cols: ['№', 'Заявка', 'Следующий шаг'],
+      f: numbered(15, 'FILTER({[[BASE.company]]&IF([[BASE.audience]]="",""," ("&[[BASE.audience]]&")"),[[BASE.next_step]]&IF([[BASE.next_date]]="",""," — "&TEXT([[BASE.next_date]],"dd.mm.yyyy"))},' +
+        '[[BASE.obj_id]]=' + P.id + ',[[BASE.resp_week]]=' + P.wk + ',[[BASE.resp_class]]="YES")', 'Новых заявок за неделю нет'),
+    },
+    {
+      ph: 'NEXT_ROWS', title: 'Раздел 3. ПЛАН РАБОТЫ', rows: 20,
+      cols: ['№', 'Действие', 'Дата выполнения'],
+      f: numbered(20, 'FILTER({[[TASK.task]]&IF([[TASK.plan]]="",""," — "&[[TASK.plan]]&IF([[TASK.unit]]="",""," "&[[TASK.unit]])),' +
+        'IF(([[TASK.deadline]]="")+([[TASK.deadline]]=' + P.start + '+11),TEXT(' + P.start + '+7,"dd.mm.yyyy")&" – "&TEXT(' + P.start + '+11,"dd.mm.yyyy"),"до "&TEXT([[TASK.deadline]],"dd.mm.yyyy"))},' +
+        '[[TASK.week]]=' + P.next + ',' + tCond + ')', 'План на следующую неделю формируется'),
+    },
+  ];
+}
+
+function reportLayout_() {
+  const cells = [];
+  cells.push({ a1: 'A1', v: 'ОТЧЁТ КЛИЕНТУ — выберите объект и неделю, проверьте текст, затем меню «Создать отчёт клиенту»', style: 'title' });
+  cells.push({ a1: 'A3', v: 'Объект:', style: 'label' });
+  cells.push({ a1: 'B3', v: '', style: 'select', validation: { list: 'D.obj_labels' } });
+  cells.push({ a1: 'A4', v: 'Неделя:', style: 'label' });
+  cells.push({ a1: 'B4', v: '', style: 'select', validation: { list: 'D.weeks:c4' } });
+  cells.push({ a1: 'A5', v: 'Комментарий для клиента:', style: 'label' });
+  cells.push({ a1: 'B5', v: '', style: 'select', note: 'Необязательно. Если пусто — раздела «Комментарий» в отчёте не будет.' });
+  cells.push({ a1: 'D2', v: 'Служебное', style: 'muted' });
+  [
+    ['D3', 'ID объекта', 'E3', '=IFERROR(REGEXEXTRACT(B3,"^(.*?) · "),"")'],
+    ['D4', 'Ключ недели', 'E4', '=IFERROR(REGEXEXTRACT(B4,"^[^ ]+"),"")'],
+    ['D5', 'Понедельник', 'E5', '=IFERROR(VLOOKUP(E4,[[D.weeks:tbl]],2,FALSE),"")'],
+    ['D6', 'Пятница', 'E6', '=IF(E5="","",E5+4)'],
+    ['D7', 'Следующая неделя', 'E7', '=IF(E5="","",YEAR(E5+10)&"-W"&TEXT(ISOWEEKNUM(E5+7),"00"))'],
+    ['D8', '№ отчёта', 'E8', '=IF(E3="","",COUNTIFS([[ARCH.obj_id]],E3,[[ARCH.status]],"' + REPORT_STATUS.ACTUAL + '",[[ARCH.week]],"<>"&E4)+1)'],
+  ].forEach(p => {
+    cells.push({ a1: p[0], v: p[1], style: 'muted' });
+    cells.push({ a1: p[2], f: p[3], style: 'muted', fmt: (p[2] === 'E5' || p[2] === 'E6') ? 'date' : null });
+  });
+  cells.push({ a1: 'A9', v: 'ПРЕДПРОСМОТР ОТЧЁТА', style: 'section', spanCols: 4 });
+  cells.push({ a1: 'A10', v: 'Поле', style: 'header' });
+  cells.push({ a1: 'B10', v: 'Значение', style: 'header' });
+  cells.push({ a1: 'D10', v: 'Метка в шаблоне', style: 'header' });
+  const rows = reportRows_();
+  rows.forEach((r, i) => {
+    const row = REP_FIRST_ROW + i;
+    cells.push({ a1: 'A' + row, v: r.label, style: 'bold' });
+    cells.push({ a1: 'B' + row, f: r.f, style: 'wrap', spanCols: 2 });
+    cells.push({ a1: 'D' + row, v: '{{' + r.ph + '}}', style: 'muted' });
+  });
+  let row = REP_FIRST_ROW + rows.length + 1;
+  const tables = {};
+  reportTables_().forEach(t => {
+    cells.push({ a1: 'A' + row, v: t.title, style: 'section', spanCols: 4 });
+    cells.push({ a1: 'D' + row, v: '{{' + t.ph + '}}', style: 'muted' });
+    row++;
+    t.cols.forEach((c, i) => cells.push({ a1: colLetter_(1 + i) + row, v: c, style: 'header' }));
+    row++;
+    cells.push({ a1: 'A' + row, f: t.f });
+    tables[t.ph] = { first: row, rows: t.rows };
+    row += t.rows + 1;
+  });
+  return { cells: cells, lastRow: row, tables: tables, kvRows: rows.length };
 }
 
 // ═════════════ 03_Setup.gs ═════════════
@@ -1468,9 +773,9 @@ function dashLayout_() {
  * 03_Setup — установка и обновление системы.
  *
  * «Установить / обновить систему» можно запускать повторно:
- *  - данные в журналах (01–04, 06, 12, 13) и значения настроек/справочников сохраняются;
+ *  - данные журналов (01–04, 06, 09, 10), вкладок объектов, значения настроек и справочников сохраняются;
  *  - заголовки, формулы, списки, форматирование и защита пересоздаются по схеме;
- *  - расчётные листы (05, 07, 09, 11) пересобираются, выбранные фильтры сохраняются.
+ *  - дэшборд и лист отчёта пересобираются (выбранные фильтры сохраняются).
  */
 
 function setupSystem() {
@@ -1486,26 +791,30 @@ function setupSystem() {
   }
   const ok = ui.alert(
     'Установка / обновление системы',
-    'Будут созданы или обновлены все листы, формулы, выпадающие списки, папки Google Drive, шаблоны документов и триггеры.\n\n' +
-    'Данные в журналах не удаляются. Продолжить?',
+    'Будут созданы или обновлены все листы, формулы, выпадающие списки, папки Google Drive, шаблон отчёта и триггер.\n\n' +
+    'Данные в журналах и во вкладках объектов не удаляются. Продолжить?',
     ui.ButtonSet.OK_CANCEL);
   if (ok !== ui.Button.OK) return;
   const log = [];
   runSetup_(log);
-  let driveMsg = '';
+  let warn = '';
   try {
     ensureDrive_();
-    log.push('Google Drive: папки и шаблоны готовы');
+    log.push('Google Drive: папки и шаблон отчёта готовы');
   } catch (err) {
-    driveMsg = '\n\n⚠ Drive: ' + err.message + '\nПапки можно создать позже повторным запуском установки.';
+    warn = '\n\n⚠ Drive: ' + err.message + '\nПапки можно создать позже повторным запуском установки.';
   }
   try {
     installTriggers_();
-    log.push('Триггер onEdit установлен');
+    log.push('Триггер «при изменении» установлен');
   } catch (err) {
-    driveMsg += '\n\n⚠ Триггер: ' + err.message;
+    warn += '\n\n⚠ Триггер: ' + err.message;
   }
-  ui.alert('Готово', log.join('\n') + driveMsg + '\n\nДальше: «Загрузить тестовые данные» → «Самопроверка», либо сразу добавляйте реальные объекты в 01_ОБЪЕКТЫ.', ui.ButtonSet.OK);
+  const tabs = objectTabs_().length;
+  ui.alert('Готово', log.join('\n') + warn +
+    (tabs ? '\n\nВкладок объектов: ' + tabs + '. Чтобы применить к ним новую версию — «Сервис → Обновить все вкладки объектов».' :
+      '\n\nДальше: внесите объекты в 01_ОБЪЕКТЫ (ID из CRM + название) — вкладка объекта создастся сама. Для примера: «Сервис → Загрузить пример (Лермонтовский)».'),
+    ui.ButtonSet.OK);
 }
 
 /** Строит листы (без Drive и триггеров). */
@@ -1518,15 +827,12 @@ function runSetup_(log) {
   sheetSpecs_.cache = null;
 
   SHEET_ORDER.forEach(code => ensureSheet_(code));
-  buildSettings_(); log.push('10_НАСТРОЙКИ');
-  buildDict_(); log.push('08_СПРАВОЧНИКИ');
-  ['OBJ', 'STR', 'ACT', 'PF', 'HIST', 'ARCH', 'HYP'].forEach(code => { buildDataSheet_(code); log.push(SHEET_NAMES[code]); });
-  buildPfBlock_();
+  buildSettings_(); log.push(SHEET_NAMES.CFG);
+  buildDict_(); log.push(SHEET_NAMES.DICT);
+  ['OBJ', 'TASK', 'BASE', 'CONT', 'LIB', 'HIST', 'ARCH'].forEach(code => { buildDataSheet_(code); log.push(SHEET_NAMES[code]); });
   SpreadsheetApp.flush();
-  buildFunnel_(); log.push(SHEET_NAMES.FUN);
-  buildStats_(); log.push(SHEET_NAMES.STAT);
+  seedLibrary_();
   buildReportSheet_(); log.push(SHEET_NAMES.REP);
-  buildCtrl_(); log.push(SHEET_NAMES.CTRL);
   buildDash_(); log.push(SHEET_NAMES.DASH);
   orderSheets_();
   removeDefaultSheet_();
@@ -1541,10 +847,13 @@ function ensureSheet_(code) {
   return sh;
 }
 
+/** Порядок: 00_ДЭШБОРД, 01_ОБЪЕКТЫ, вкладки объектов, затем журналы и служебные листы. */
 function orderSheets_() {
   const ss = ss_();
-  SHEET_ORDER.forEach((code, i) => {
-    const sh = ss.getSheetByName(SHEET_NAMES[code]);
+  const order = [ss.getSheetByName(SHEET_NAMES.DASH), ss.getSheetByName(SHEET_NAMES.OBJ)]
+    .concat(objectTabs_())
+    .concat(SHEET_ORDER.slice(2).map(code => ss.getSheetByName(SHEET_NAMES[code])));
+  order.forEach((sh, i) => {
     ss.setActiveSheet(sh);
     ss.moveActiveSheet(i + 1);
   });
@@ -1555,7 +864,7 @@ function removeDefaultSheet_() {
   const ss = ss_();
   const ours = Object.keys(SHEET_NAMES).map(k => SHEET_NAMES[k]);
   ss.getSheets().forEach(sh => {
-    if (ours.indexOf(sh.getName()) < 0 && sh.getLastRow() === 0 && sh.getLastColumn() === 0 && ss.getSheets().length > 1) {
+    if (ours.indexOf(sh.getName()) < 0 && !isObjectTab_(sh) && sh.getLastRow() === 0 && sh.getLastColumn() === 0 && ss.getSheets().length > 1) {
       ss.deleteSheet(sh);
     }
   });
@@ -1578,7 +887,10 @@ function protectWarn_(range, what) {
   range.protect().setDescription(SYS.PROTECT_PREFIX + what).setWarningOnly(true);
 }
 
-// ───────────────────────── 10_НАСТРОЙКИ ─────────────────────────
+// ───────────────────────── 08_НАСТРОЙКИ ─────────────────────────
+
+const CFG_TASKS_COL = 6;   // F: задачи недели по умолчанию (Блок, Задача, Единица, План)
+const CFG_TASKS_ROWS = 15;
 
 function buildSettings_() {
   const sh = sheet_('CFG');
@@ -1586,21 +898,21 @@ function buildSettings_() {
   if (sh.getLastRow() > 1) {
     sh.getRange(1, 1, sh.getLastRow(), 3).getValues().forEach(r => { if (r[0]) existing[r[0]] = r[2]; });
   }
-  const kpiExisting = [];
-  if (sh.getLastRow() > 1 && sh.getMaxColumns() >= 7) {
-    sh.getRange(2, 6, 20, 2).getValues().forEach(r => { if (r[0] !== '') kpiExisting.push(r); });
+  let tasksExisting = [];
+  if (sh.getLastRow() > 1 && sh.getMaxColumns() >= CFG_TASKS_COL + 3 && sh.getRange(1, CFG_TASKS_COL).getValue() === 'Блок стратегии') {
+    tasksExisting = sh.getRange(2, CFG_TASKS_COL, CFG_TASKS_ROWS, 4).getValues().filter(r => r[1] !== '');
   }
   removeSysProtections_(sh);
   sh.clear();
   sh.clearConditionalFormatRules();
-  ensureSize_(sh, 60, 8);
-  sh.getRange('A:H').clearDataValidations();
+  ensureSize_(sh, 60, CFG_TASKS_COL + 4);
+  sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).clearDataValidations();
 
   const defs = cfgDefs_();
   const rows = [['Ключ', 'Параметр', 'Значение', 'Описание']];
   defs.forEach(d => {
     if (d.group) { rows.push(['', d.group, '', '']); return; }
-    let v = (d.key in existing && existing[d.key] !== '' && !(d.key === 'SYSTEM_VERSION')) ? existing[d.key] : d.value;
+    let v = (d.key in existing && existing[d.key] !== '' && d.key !== 'SYSTEM_VERSION') ? existing[d.key] : d.value;
     if (d.date && typeof v === 'string' && v) v = new Date(v + 'T00:00:00');
     rows.push([d.key, d.label, v, d.sys ? 'заполняет скрипт' : '']);
   });
@@ -1615,27 +927,31 @@ function buildSettings_() {
       ss_().setNamedRange('CFG_' + d.key, cell);
       if (d.fmt) cell.setNumberFormat(d.fmt);
       if (d.sys) sh.getRange(r, 1, 1, 4).setFontColor(COLORS.GREY_FG);
-      else cell.setBackground(COLORS.SELECT_BG);
+      else cell.setBackground(COLORS.SELECT_BG).setWrap(true);
     }
     r++;
   });
   sh.getRange(1, 1, r, 1).setFontColor(COLORS.GREY_FG).setFontSize(9);
-  sh.setColumnWidth(1, 170); sh.setColumnWidth(2, 420); sh.setColumnWidth(3, 200); sh.setColumnWidth(4, 140);
+  sh.setColumnWidth(1, 170); sh.setColumnWidth(2, 360); sh.setColumnWidth(3, 260); sh.setColumnWidth(4, 120);
 
-  // KPI по умолчанию для «Создать план недели»
-  sh.getRange('F1:G1').setValues([['KPI по умолчанию', 'План на объект в неделю']]);
-  styleHeaderRow_(sh.getRange('F1:G1'), 'input');
-  const kpi = kpiExisting.length ? kpiExisting : DEFAULT_WEEK_KPI;
-  sh.getRange(2, 6, kpi.length, 2).setValues(kpi);
-  sh.getRange('F2:F21').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInRange(rangeFromToken_('D.kpi_metrics'), true).setAllowInvalid(false).build());
-  sh.getRange('F2:G21').setBackground(COLORS.SELECT_BG);
-  ss_().setNamedRange('CFG_DEFAULT_KPI', sh.getRange('F2:G21'));
-  sh.setColumnWidth(6, 170); sh.setColumnWidth(7, 170);
+  // задачи недели по умолчанию («Создать план недели»)
+  const c = CFG_TASKS_COL;
+  sh.getRange(1, c, 1, 4).setValues([['Блок стратегии', 'Задача недели по умолчанию', 'Единица', 'План на объект']]);
+  styleHeaderRow_(sh.getRange(1, c, 1, 4), 'input');
+  const tasks = tasksExisting.length ? tasksExisting : DEFAULT_WEEK_TASKS;
+  sh.getRange(2, c, tasks.length, 4).setValues(tasks);
+  const DV = SpreadsheetApp.newDataValidation;
+  sh.getRange(2, c, CFG_TASKS_ROWS, 1).setDataValidation(DV().requireValueInRange(rangeFromToken_('D.task_blocks'), true).build());
+  sh.getRange(2, c + 2, CFG_TASKS_ROWS, 1).setDataValidation(DV().requireValueInRange(rangeFromToken_('D.units'), true).build());
+  sh.getRange(2, c, CFG_TASKS_ROWS, 4).setBackground(COLORS.SELECT_BG);
+  ss_().setNamedRange('CFG_DEFAULT_TASKS', sh.getRange(2, c, CFG_TASKS_ROWS, 4));
+  sh.getRange(1, c).setNote('Эти задачи «Создать план недели» ставит каждому объекту в работе. Факт по звонкам / КП / ответам / публикациям считается сам.');
+  sh.setColumnWidth(c - 1, 24); sh.setColumnWidth(c, 160); sh.setColumnWidth(c + 1, 260); sh.setColumnWidth(c + 2, 110); sh.setColumnWidth(c + 3, 110);
   sh.setFrozenRows(1);
   sh.hideColumns(1);
 }
 
-// ───────────────────────── 08_СПРАВОЧНИКИ ─────────────────────────
+// ───────────────────────── 07_СПРАВОЧНИКИ ─────────────────────────
 
 function buildDict_() {
   const sh = sheet_('DICT');
@@ -1682,8 +998,7 @@ function buildDataSheet_(code) {
   const spec = sheetSpecs_()[code];
   const sh = sheet_(code);
   const n = spec.fields.length;
-  const extraCols = code === 'PF' ? 5 : 0;
-  ensureSize_(sh, SYS.DATA_ROWS, n + extraCols);
+  ensureSize_(sh, SYS.DATA_ROWS, n);
   checkHeaders_(sh, spec);
   removeSysProtections_(sh);
   const maxRows = sh.getMaxRows();
@@ -1751,7 +1066,7 @@ function fieldNote_(f) {
   const flags = [];
   if (f.client) flags.push('может попасть в отчёт клиенту');
   if (f.internal) flags.push('ВНУТРЕННЕЕ — клиенту не показывается');
-  if (f.track) flags.push('изменения пишутся в 12_ИСТОРИЯ');
+  if (f.track) flags.push('изменения пишутся в 09_ИСТОРИЯ');
   return [how, f.d || '', flags.length ? '(' + flags.join('; ') + ')' : ''].filter(Boolean).join('\n');
 }
 
@@ -1810,46 +1125,35 @@ function applyDataCF_(code, sh) {
   const colRange = k => sh.getRange(2, fieldIndex_(code, k), max - 1, 1);
   const row = sh.getRange(2, 1, max - 1, n);
   const R = [];
-  const red = [COLORS.RED_BG, COLORS.RED_FG], yel = [COLORS.YELLOW_BG, COLORS.YELLOW_FG], grn = [COLORS.GREEN_BG, COLORS.GREEN_FG];
+  const red = [COLORS.RED_BG, COLORS.RED_FG], yel = [COLORS.YELLOW_BG, COLORS.YELLOW_FG], grn = [COLORS.GREEN_BG, COLORS.GREEN_FG], grey = [null, COLORS.GREY_FG];
   const add = (f, rng, c) => R.push(cfRule_(f, rng, c[0], c[1]));
   if (code === 'OBJ') {
     add('=$' + col('id_check') + '2<>""', colRange('id'), red);
-    add('=$' + col('risk_flag') + '2="RISK"', row, red);
-    add('=$' + col('risk_flag') + '2="ВНИМАНИЕ"', row, yel);
-    add('=($' + col('status_class') + '2="SOLD")+($' + col('status_class') + '2="DEAL")', colRange('status'), grn);
-    add('=($' + col('status_class') + '2="PAUSED")+($' + col('status_class') + '2="REMOVED")', row, [null, COLORS.GREY_FG]);
-    add('=$' + col('temperature') + '2="HOT"', colRange('temperature'), grn);
-    add('=$' + col('temperature') + '2="WARM"', colRange('temperature'), yel);
-    add('=$' + col('temperature') + '2="RISK"', colRange('temperature'), red);
-    add('=($' + col('next_action_deadline') + '2<>"")*($' + col('next_action_deadline') + '2<TODAY())', colRange('next_action_deadline'), red);
-    add('=($' + col('next_report') + '2<>"")*($' + col('next_report') + '2<=TODAY())*($' + col('in_work') + '2="ДА")', colRange('next_report'), yel);
-    add('=($' + col('date_end') + '2<>"")*($' + col('date_end') + '2-TODAY()<=INDIRECT("CFG_EXCL_END_WARN_DAYS"))', colRange('date_end'), red);
+    add('=$' + col('in_work') + '2="НЕТ"', row, grey);
+    add('=($' + col('strategy_pct') + '2<>"")*($' + col('strategy_pct') + '2>=1)', colRange('strategy_pct'), grn);
+    add('=($' + col('strategy_pct') + '2<>"")*($' + col('strategy_pct') + '2<0.5)', colRange('strategy_pct'), red);
+    add('=($' + col('strategy_pct') + '2<>"")*($' + col('strategy_pct') + '2<1)', colRange('strategy_pct'), yel);
   }
-  if (code === 'STR') {
-    add('=$' + col('need_change') + '2=TRUE', colRange('need_change'), red);
-    add('=($' + col('obj_id') + '2<>"")*($' + col('review_date') + '2="")', colRange('review_date'), yel);
-    add('=($' + col('days_since_review') + '2<>"")*($' + col('days_since_review') + '2>INDIRECT("CFG_STRATEGY_REVIEW_DAYS"))', colRange('days_since_review'), yel);
-    add('=$' + col('strategy_status') + '2="Утверждена"', colRange('strategy_status'), grn);
-  }
-  if (code === 'ACT') {
-    add('=($' + col('status_class') + '2="OPEN")*($' + col('date') + '2<>"")*($' + col('date') + '2<TODAY())', row, red);
-    add('=$' + col('status_class') + '2="DONE"', colRange('status'), grn);
-    add('=($' + col('id') + '2<>"")*($' + col('to_report') + '2=FALSE)', colRange('to_report'), [null, COLORS.GREY_FG]);
-  }
-  if (code === 'HYP') {
-    add('=$' + col('due') + '2="ДА"', row, yel);
-    add('=$' + col('status_class') + '2="DONE"', colRange('status'), grn);
-    add('=$' + col('status_class') + '2="FAIL"', colRange('status'), red);
-    add('=($' + col('fact_pct') + '2<>"")*($' + col('fact_pct') + '2>=1)', colRange('fact_pct'), grn);
-  }
-  if (code === 'PF') {
+  if (code === 'TASK') {
     add('=$' + col('overdue') + '2="ПРОСРОЧЕНО"', row, red);
     add('=$' + col('status_class') + '2="DONE"', colRange('status'), grn);
     add('=$' + col('status_class') + '2="FAIL"', colRange('status'), red);
-    add('=$' + col('status_class') + '2="MOVED"', row, [null, COLORS.GREY_FG]);
-    add('=($' + col('kpi_pct') + '2<>"")*($' + col('kpi_pct') + '2>=1)', colRange('kpi_pct'), grn);
-    add('=($' + col('kpi_pct') + '2<>"")*($' + col('kpi_pct') + '2<1)', colRange('kpi_pct'), yel);
+    add('=($' + col('status_class') + '2="MOVED")+($' + col('status_class') + '2="CANCEL")', row, grey);
+    add('=($' + col('pct') + '2<>"")*($' + col('pct') + '2>=1)', colRange('pct'), grn);
+    add('=($' + col('pct') + '2<>"")*($' + col('pct') + '2<1)', colRange('pct'), yel);
     add('=($' + col('obj_id') + '2<>"")*($' + col('owner') + '2="")', colRange('owner'), yel);
+  }
+  if (code === 'BASE') {
+    add('=$' + col('resp_class') + '2="YES"', colRange('response'), grn);
+    add('=$' + col('resp_class') + '2="NO"', row, grey);
+    add('=$' + col('to_crm') + '2=TRUE', colRange('company'), grn);
+    add('=$' + col('fit') + '2="Не подходит"', colRange('fit'), red);
+    add('=($' + col('next_date') + '2<>"")*($' + col('next_date') + '2<TODAY())*($' + col('to_crm') + '2=FALSE)', colRange('next_date'), red);
+  }
+  if (code === 'CONT') {
+    add('=$' + col('status_class') + '2="DONE"', colRange('status'), grn);
+    add('=$' + col('status_class') + '2="CANCEL"', row, grey);
+    add('=($' + col('status_class') + '2="DONE")*($' + col('link') + '2="")', colRange('link'), yel);
   }
   sh.setConditionalFormatRules(R);
 }
@@ -1889,45 +1193,6 @@ function styleCell_(sh, r, c) {
   }
 }
 
-/** 04_ВОРОНКА — расчётный лист (воронка, конверсии, каналы, причины отказов) из 03_ДЕЙСТВИЯ. */
-function buildFunnel_() {
-  const sh = sheet_('FUN');
-  const L = funnelLayout_();
-  const keep = [safeGet_(sh, L.selObj), safeGet_(sh, L.selWeek)];
-  resetSheet_(sh);
-  ensureSize_(sh, 300, FUN_CH_COL + 14);
-  applyCells_(sh, L.cells);
-  L.formats.forEach(f => sh.getRange(f.range).setNumberFormat(nf_(f.fmt)));
-  restoreSel_(sh, L.selObj, keep[0]);
-  restoreSel_(sh, L.selWeek, keep[1]);
-  sh.setColumnWidth(1, 290); sh.setColumnWidth(2, 130); sh.setColumnWidth(3, 110); sh.setColumnWidth(4, 24);
-  sh.setColumnWidth(FUN_CH_COL, 190);
-  for (let c = FUN_CH_COL + 1; c < FUN_CH_COL + 14; c++) sh.setColumnWidth(c, 100);
-  sh.setRowHeight(7, 40);
-  protectWarn_(sh.getRange(4, 1, sh.getMaxRows() - 3, sh.getMaxColumns()), 'Воронка считается автоматически');
-}
-
-/** Блок «План-факт недели» справа от журнала задач. */
-function buildPfBlock_() {
-  const sh = sheet_('PF');
-  const L = pfBlockLayout_();
-  const keepW = safeGet_(sh, L.selWeek), keepO = safeGet_(sh, L.selObj);
-  const rng = sh.getRange(1, L.startCol, 40, 4);
-  rng.clear(); rng.clearDataValidations();
-  applyCells_(sh, L.cells);
-  restoreSel_(sh, L.selWeek, keepW);
-  restoreSel_(sh, L.selObj, keepO);
-  sh.setColumnWidth(L.startCol - 1, 24);
-  sh.setColumnWidth(L.startCol, 230);
-  for (let i = 1; i < 4; i++) sh.setColumnWidth(L.startCol + i, 110);
-  const pctCell = sh.getRange(L.at.pct);
-  const rules = sh.getConditionalFormatRules();
-  rules.push(cfRule_('=(' + L.at.pct + '<>"")*(' + L.at.pct + '>=1)', pctCell, COLORS.GREEN_BG, COLORS.GREEN_FG));
-  rules.push(cfRule_('=(' + L.at.pct + '<>"")*(' + L.at.pct + '<1)', pctCell, COLORS.YELLOW_BG, COLORS.YELLOW_FG));
-  sh.setConditionalFormatRules(rules);
-  protectWarn_(sh.getRange(4, L.startCol, 37, 4), 'Расчёт план-факта');
-}
-
 function safeGet_(sh, a1) { try { return sh.getRange(a1).getValue(); } catch (e) { return ''; } }
 function restoreSel_(sh, a1, v) { if (v !== '' && v !== null && v !== undefined) { try { sh.getRange(a1).setValue(v); } catch (e) { /* значение больше не допустимо */ } } }
 
@@ -1942,119 +1207,72 @@ function resetSheet_(sh) {
   sh.setFrozenRows(0); sh.setFrozenColumns(0);
 }
 
-// ───────────────────────── 05_СТАТИСТИКА ─────────────────────────
-
-function buildStats_() {
-  const sh = sheet_('STAT');
-  const keep = safeGet_(sh, 'B2');
-  resetSheet_(sh);
-  ensureSize_(sh, SYS.STAT_ROWS, 50);
-  const L = statsLayout_(sh.getSheetId());
-  applyCells_(sh, L.cells);
-  L.formats.forEach(f => sh.getRange(f.range).setNumberFormat(nf_(f.fmt)));
-  restoreSel_(sh, 'B2', keep);
-  Object.keys(STAT_SECTIONS).forEach(k => sh.setRowHeight(STAT_SECTIONS[k].header, 44));
-  sh.setColumnWidth(1, 150); sh.setColumnWidth(2, 170);
-  for (let c = 3; c <= 50; c++) sh.setColumnWidth(c, 96);
-  sh.setFrozenColumns(2);
-  protectWarn_(sh.getRange(3, 1, sh.getMaxRows() - 2, sh.getMaxColumns()), 'Статистика считается автоматически');
-}
-
-// ───────────────────────── 07_ОТЧЕТ ─────────────────────────
+// ───────────────────────── 05_ОТЧЁТ_КЛИЕНТУ ─────────────────────────
 
 function buildReportSheet_() {
   const sh = sheet_('REP');
   const keep = ['B3', 'B4', 'B5'].map(a => safeGet_(sh, a));
   resetSheet_(sh);
-  ensureSize_(sh, 60, 6);
+  try { sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).breakApart(); } catch (e) { /* нечего разъединять */ }
   const L = reportLayout_();
+  ensureSize_(sh, L.lastRow + 5, 6);
   applyCells_(sh, L.cells);
   ['B3', 'B4', 'B5'].forEach((a, i) => restoreSel_(sh, a, keep[i]));
   if (!keep[1]) {
-    // по умолчанию — текущая неделя
     SpreadsheetApp.flush();
-    const label = weekLabelByKey_(isoWeekKey_(new Date()));
+    const label = weekLabelByKey_(isoWeekKey_(addDays_(today_(), -7)));
     if (label) sh.getRange('B4').setValue(label);
   }
-  sh.setColumnWidth(1, 250); sh.setColumnWidth(2, 620); sh.setColumnWidth(3, 170); sh.setColumnWidth(4, 130); sh.setColumnWidth(5, 110);
-  sh.getRange('B5').setWrap(true);
-  sh.setFrozenRows(0);
+  for (let i = 0; i < L.kvRows; i++) sh.getRange(REP_FIRST_ROW + i, 2, 1, 2).merge();
+  Object.keys(L.tables).forEach(k => {
+    const t = L.tables[k];
+    sh.getRange(t.first, 1, t.rows, 3).setWrap(true).setVerticalAlignment('top');
+    sh.getRange(t.first, 1, t.rows, 1).setHorizontalAlignment('center');
+  });
+  sh.setColumnWidth(1, 210); sh.setColumnWidth(2, 520); sh.setColumnWidth(3, 190); sh.setColumnWidth(4, 130); sh.setColumnWidth(5, 110);
+  sh.getRange('B5:C5').merge().setWrap(true);
+  sh.setRowHeight(5, 48);
   protectWarn_(sh.getRange(REP_FIRST_ROW, 1, L.lastRow - REP_FIRST_ROW + 1, 5), 'Отчёт собирается автоматически');
   protectWarn_(sh.getRange('D2:E8'), 'Служебные параметры отчёта');
 }
 
-// ───────────────────────── 11_КОНТРОЛЬ ─────────────────────────
-
-function buildCtrl_() {
-  const sh = sheet_('CTRL');
-  resetSheet_(sh);
-  ensureSize_(sh, SYS.DATA_ROWS, CTRL_MON_START + ctrlMonitorCols_().length + 1);
-  const L = ctrlLayout_();
-  applyCells_(sh, L.cells);
-  sh.setFrozenRows(2);
-  const widths = [110, 190, 90, 150, 380, 130, 95, 130];
-  widths.forEach((w, i) => sh.setColumnWidth(i + 1, w));
-  sh.setColumnWidth(9, 24); sh.setColumnWidth(10, 24);
-  for (let c = CTRL_MON_START; c < CTRL_MON_START + ctrlMonitorCols_().length; c++) sh.setColumnWidth(c, 105);
-  sh.setRowHeight(2, 44);
-  const body = sh.getRange(CTRL_FIRST, 1, sh.getMaxRows() - CTRL_FIRST + 1, 8);
-  sh.setConditionalFormatRules([
-    cfRule_('=LEFT($A' + CTRL_FIRST + ')="1"', body, COLORS.RED_BG, COLORS.RED_FG),
-    cfRule_('=LEFT($A' + CTRL_FIRST + ')="2"', body, COLORS.YELLOW_BG, COLORS.YELLOW_FG),
-  ]);
-  protectWarn_(sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()), 'Контроль считается автоматически');
-}
-
-// ───────────────────────── 09_ДЭШБОРД ─────────────────────────
+// ───────────────────────── 00_ДЭШБОРД ─────────────────────────
 
 function buildDash_() {
   const sh = sheet_('DASH');
-  const keep = safeGet_(sh, 'C2');
+  const keep = safeGet_(sh, 'B2');
   resetSheet_(sh);
-  ensureSize_(sh, 300, DASH_CHART_COL + 8);
+  ensureSize_(sh, DASH.OVERDUE_FIRST + 150, 26);
   const L = dashLayout_();
   applyCells_(sh, L.cells);
-  restoreSel_(sh, 'C2', keep);
-  sh.setColumnWidth(1, 200); sh.setColumnWidth(2, 170);
-  for (let c = 3; c <= 17; c++) sh.setColumnWidth(c, 105);
-  sh.setColumnWidth(13, 230); sh.setColumnWidth(14, 230);
+  restoreSel_(sh, 'B2', keep);
+  sh.setColumnWidth(1, 210);
+  for (let c = 2; c <= 17; c++) sh.setColumnWidth(c, 100);
+  sh.setColumnWidth(2, 150);
   sh.setRowHeight(5, 36); sh.setRowHeight(6, 34);
+  sh.setRowHeight(DASH.OBJ_HDR, 40); sh.setRowHeight(DASH.PEOPLE_HDR, 40);
   sh.setFrozenRows(2);
   sh.hideColumns(25, 2); // Y:Z — параметры
-  sh.hideColumns(DASH_CHART_COL, 6); // данные графика
 
-  const oc = L.objCol;
-  const first = DASH_OBJ_FIRST;
-  const max = sh.getMaxRows();
-  const colR = L => sh.getRange(L + first + ':' + L + max);
-  const idle = oc['Дней без активности'], dl = oc['Дедлайн'], tmp = oc['Темп.'];
-  const row = sh.getRange('A' + first + ':Q' + max);
+  const oc = L.objLetter;
+  const oF = DASH.OBJ_FIRST, oL = DASH.OBJ_LAST;
+  const idle = oc['Дней без работы'], pct = oc['% плана'], str = oc['Стратегия'], od = oc['Просрочено'];
+  const rowR = sh.getRange('A' + oF + ':Q' + oL);
+  const colR = L => sh.getRange(L + oF + ':' + L + oL);
+  const pF = DASH.PEOPLE_FIRST, pL = DASH.PEOPLE_LAST;
   const rules = [
-    cfRule_('=($' + idle + first + '<>"")*($' + idle + first + '>$Z$3)', row, COLORS.RED_BG, COLORS.RED_FG),
-    cfRule_('=($' + idle + first + '<>"")*($' + idle + first + '>$Z$4)', row, COLORS.YELLOW_BG, COLORS.YELLOW_FG),
-    cfRule_('=($' + dl + first + '<>"")*($' + dl + first + '<TODAY())', colR(dl), COLORS.RED_BG, COLORS.RED_FG),
-    cfRule_('=$' + tmp + first + '="HOT"', colR(tmp), COLORS.GREEN_BG, COLORS.GREEN_FG),
-    cfRule_('=$' + tmp + first + '="RISK"', colR(tmp), COLORS.RED_BG, COLORS.RED_FG),
-    cfRule_('=B6>0', sh.getRange('B6:C6'), COLORS.RED_BG, COLORS.RED_FG),
-    cfRule_('=H6>0', sh.getRange('H6'), COLORS.YELLOW_BG, COLORS.YELLOW_FG),
-    cfRule_('=B12>0', sh.getRange('B12:I12'), null, COLORS.GREEN_FG),
-    cfRule_('=B12<0', sh.getRange('B12:I12'), null, COLORS.RED_FG),
+    cfRule_('=($' + idle + oF + '<>"")*($' + idle + oF + '>$Z$2)', rowR, COLORS.RED_BG, COLORS.RED_FG),
+    cfRule_('=($' + pct + oF + '<>"")*($' + pct + oF + '>=1)', colR(pct), COLORS.GREEN_BG, COLORS.GREEN_FG),
+    cfRule_('=($' + pct + oF + '<>"")*($' + pct + oF + '<0.7)', colR(pct), COLORS.YELLOW_BG, COLORS.YELLOW_FG),
+    cfRule_('=($' + str + oF + '<>"")*($' + str + oF + '<0.5)', colR(str), COLORS.RED_BG, COLORS.RED_FG),
+    cfRule_('=($' + str + oF + '<>"")*($' + str + oF + '>=1)', colR(str), COLORS.GREEN_BG, COLORS.GREEN_FG),
+    cfRule_('=$' + od + oF + '>0', colR(od), COLORS.RED_BG, COLORS.RED_FG),
+    cfRule_('=($D' + pF + '<>"")*($D' + pF + '<0.7)', sh.getRange('A' + pF + ':I' + pL), COLORS.YELLOW_BG, COLORS.YELLOW_FG),
+    cfRule_('=$E' + pF + '>0', sh.getRange('E' + pF + ':E' + pL), COLORS.RED_BG, COLORS.RED_FG),
+    cfRule_('=E6>0', sh.getRange('E6'), COLORS.RED_BG, COLORS.RED_FG),
   ];
   sh.setConditionalFormatRules(rules);
-
-  const chart = sh.newChart()
-    .setChartType(Charts.ChartType.COLUMN)
-    .addRange(sh.getRange(L.chartRange))
-    .setNumHeaders(1)
-    .setHiddenDimensionStrategy(Charts.ChartHiddenDimensionStrategy.SHOW_BOTH)
-    .setPosition(4, 11, 0, 0)
-    .setOption('title', 'Динамика за 12 недель')
-    .setOption('legend', { position: 'bottom' })
-    .setOption('colors', ['#90A4AE', '#546E7A', '#26A69A', '#1565C0'])
-    .setOption('width', 620).setOption('height', 300)
-    .build();
-  sh.insertChart(chart);
-  protectWarn_(sh.getRange(3, 1, max - 2, sh.getMaxColumns()), 'Дэшборд считается автоматически');
+  protectWarn_(sh.getRange(3, 1, sh.getMaxRows() - 2, sh.getMaxColumns()), 'Дэшборд считается автоматически');
 }
 
 // ───────────────────────── Google Drive ─────────────────────────
@@ -2082,11 +1300,12 @@ function ensureDrive_() {
   while (parents.hasNext()) if (parents.next().getId() === sub.MASTER.getId()) inMaster = true;
   if (!inMaster) file.moveTo(sub.MASTER);
   ensureReportTemplate_();
-  ensureStrategyTemplate_();
-  const email = String(cfgGet_('ASSISTANT_EMAIL') || '').trim();
-  if (email) {
+  // доступ сотрудникам из справочника (email): таблица + папка системы
+  dictRows_('people').forEach(p => {
+    const email = String(p[2] || '').trim();
+    if (!email) return;
     try { root.addEditor(email); ss.addEditor(email); } catch (e) { /* email может быть недоступен для шаринга */ }
-  }
+  });
   return sub;
 }
 
@@ -2113,21 +1332,544 @@ function installTriggers_() {
   ScriptApp.newTrigger('onEditHandler').forSpreadsheet(ss).onEdit().create();
 }
 
-// ═════════════ 04_Triggers.gs ═════════════
+// ═════════════ 04_ObjectTab.gs ═════════════
 /**
- * 04_Triggers — автоматика при редактировании (устанавливаемый триггер onEdit).
+ * 04_ObjectTab — вкладка объекта «▸ Название (ID)»: маркетинговая стратегия по одному объекту.
  *
- * Что делает при вводе данных:
- *  - ставит ID действиям и задачам (ACT-0001, TASK-0001), дату, статус по умолчанию, автора;
+ * Разделы 1–7 заполняет команда (белые ячейки), разделы 8–10 собираются сами из журналов.
+ * Вкладка строится по описанию objTabSections_(): при обновлении системы она пересобирается,
+ * а всё, что внесла команда, сохраняется (в т.ч. строки, вставленные внутрь раздела).
+ * Столбец A — служебные метки разделов (скрыт), по ним скрипт находит разделы.
+ * Все правки во вкладке пишутся в 09_ИСТОРИЯ.
+ */
+
+const TAB = { ID: '$I$1', PCT: '$H$3', LAST_COL: 9, FIRST_ROW: 7 };
+
+/** kind: text | dd | date | num | money | link | f (формула; [[C:n]] — n-й столбец этого раздела) */
+function C_(title, kind, opts) { return Object.assign({ t: title, k: kind }, opts || {}); }
+
+function objTabSections_() {
+  return [
+    {
+      key: 'ANALOG', type: 'table', rows: 8, title: '1. АНАЛИТИКА: АНАЛОГИ',
+      hint: 'Аналоги вносим вручную (ЦИАН, Авито, BestPlace). Цена за м² считается сама. Минимум 3 аналога.',
+      cols: [
+        C_('Аналог (адрес, ЖК)', 'text'), C_('Назначение / тип', 'text'), C_('Площадь, м²', 'num'), C_('Цена, ₽', 'money'),
+        C_('Цена за м²', 'f', { f: 'IFERROR(ROUND([[C:4]]/[[C:3]],0),"")', fmt: 'money' }),
+        C_('Источник / ссылка', 'link'), C_('Комментарий', 'text'),
+      ],
+    },
+    {
+      key: 'PRICE', type: 'kv', title: '2. ЦЕНА И ПОЗИЦИОНИРОВАНИЕ',
+      hint: 'Сравнение с аналогами считается само. Вывод по цене можно вставить из разбора Claude.',
+      items: [
+        { key: 'median', label: 'Медиана цены за м² по аналогам', k: 'f', f: 'IFERROR(MEDIAN([[S:ANALOG:5]]),"")', fmt: 'money' },
+        { key: 'our_m2', label: 'Наша цена за м² (из 01_ОБЪЕКТЫ)', k: 'f', f: 'IFERROR(VLOOKUP([[ID]],{[[OBJ.id]],[[OBJ.price_m2]]},2,FALSE),"")', fmt: 'money' },
+        { key: 'diff', label: 'Отклонение от медианы', k: 'f', f: 'IFERROR([[K:our_m2]]/[[K:median]]-1,"")', fmt: '+0%;-0%;0%' },
+        { key: 'rec_price', label: 'Рекомендуемая цена, ₽', k: 'money' },
+        { key: 'min_price', label: 'Минимальная цена для торга, ₽', k: 'money' },
+        { key: 'positioning', label: 'Позиционирование (1–2 предложения)', k: 'text' },
+        { key: 'price_note', label: 'Вывод по цене', k: 'text' },
+        { key: 'analysis_link', label: 'Полный анализ (ссылка)', k: 'link' },
+      ],
+    },
+    {
+      key: 'SCEN', type: 'table', rows: 6, title: '3. СЦЕНАРИИ ИСПОЛЬЗОВАНИЯ',
+      hint: 'Под какой бизнес можно продать / сдать. Для каждого: чек-лист из 06_БИБЛИОТЕКА, что запросить у УК и собственника, кого привлечь (консультанты, подрядчики, их КП), вывод.',
+      cols: [
+        C_('Сценарий', 'text'), C_('Чек-лист', 'dd', { list: 'D.lib_checklists' }), C_('Что проверить / документы от УК', 'text'),
+        C_('Консультанты, подрядчики, КП', 'text'), C_('Вывод', 'text'), C_('Статус', 'dd', { dict: 'scenario_status' }), C_('Ссылки', 'link'),
+      ],
+    },
+    {
+      key: 'AUD', type: 'table', rows: 8, title: '4. ЦЕЛЕВЫЕ АУДИТОРИИ',
+      hint: 'Кому предлагаем. Пишите аудиторию так же, как в 03_ОБЗВОН_И_КП, — тогда цифры справа посчитаются сами. Неочевидные идеи (посольства, аэропорт…) — тоже сюда.',
+      cols: [
+        C_('Аудитория', 'text'), C_('Кто', 'dd', { dict: 'audience_types' }), C_('Портрет: зачем им объект', 'text'), C_('Где искать', 'text'),
+        C_('Приоритет', 'dd', { dict: 'priorities' }),
+        C_('В базе', 'f', { f: 'COUNTIF([[BASE.obj_id]]&"|"&[[BASE.audience]],[[ID]]&"|"&[[C:1]])', fmt: '0' }),
+        C_('КП отправлено', 'f', { f: 'COUNTIF([[BASE.obj_id]]&"|"&[[BASE.audience]]&"|"&([[BASE.kp_date]]<>""),[[ID]]&"|"&[[C:1]]&"|TRUE")', fmt: '0' }),
+        C_('Интересно', 'f', { f: 'COUNTIF([[BASE.obj_id]]&"|"&[[BASE.audience]]&"|"&[[BASE.resp_class]],[[ID]]&"|"&[[C:1]]&"|YES")', fmt: '0' }),
+      ],
+    },
+    {
+      key: 'KP', type: 'table', rows: 6, title: '5. КП И МАТЕРИАЛЫ',
+      hint: 'КП клиенту — с контактами агентства; КП партнёру — без контактов (для пересылки). Файлы — в папке объекта «КП и презентации».',
+      cols: [
+        C_('Материал', 'text'), C_('Какое', 'dd', { dict: 'kp_types' }), C_('Для аудитории / сценария', 'text'), C_('Ссылка', 'link'),
+        C_('Готовность', 'dd', { dict: 'work_status' }), C_('Комментарий', 'text'),
+      ],
+    },
+    {
+      key: 'CHAN', type: 'table', rows: 8, title: '6. КАНАЛЫ И ПАРТНЁРЫ',
+      hint: 'Где и через кого продвигаем: площадки, соцсети, брокеры, УК, консультанты, ассоциации, рассылки.',
+      cols: [
+        C_('Канал / партнёр', 'text'), C_('Что делаем', 'text'), C_('Ответственный', 'dd', { dict: 'people' }),
+        C_('Статус', 'dd', { dict: 'work_status' }), C_('Результат', 'text'), C_('Ссылка', 'link'),
+      ],
+    },
+    {
+      key: 'DEC', type: 'table', rows: 6, title: '7. ВЫВОДЫ И РЕШЕНИЯ ПО СТРАТЕГИИ',
+      hint: 'Что поняли и что меняем (в т.ч. итоги оперативок по объекту). Старые записи не удаляйте — это история стратегии.',
+      cols: [C_('Дата', 'date'), C_('Вывод / решение', 'text'), C_('Кто', 'dd', { dict: 'people' }), C_('Что делаем дальше', 'text')],
+    },
+    {
+      key: 'PF', type: 'auto', rows: 15, title: '8. ПЛАН-ФАКТ: ТЕКУЩАЯ НЕДЕЛЯ И НЕЗАКРЫТЫЕ ЗАДАЧИ',
+      hint: 'Собирается из 02_ЗАДАЧИ. Задачи добавляются там (или меню «Создать план недели»).',
+      cols: ['Неделя', 'Задача', 'Исполнитель', 'План', 'Факт', '%', 'Срок', 'Статус'],
+      fmts: [null, null, null, '0', '0', 'pct', 'date', null],
+      f: '=IFERROR(ARRAY_CONSTRAIN(ARRAYFORMULA(SORT(FILTER({[[TASK.week]],[[TASK.task]],[[TASK.owner]],[[TASK.plan]],IF([[TASK.fact]]="",[[TASK.fact_auto]],[[TASK.fact]]),[[TASK.pct]],[[TASK.deadline]],IF([[TASK.overdue]]="",[[TASK.status]],[[TASK.overdue]])},' +
+        '[[TASK.obj_id]]=[[ID]],([[TASK.week]]=[[CW]])+(([[TASK.status_class]]="OPEN")*([[TASK.week]]<[[CW]])*([[TASK.week]]<>""))),1,TRUE,7,TRUE)),15,8),"Задач на эту неделю нет — меню «Создать план недели» или 02_ЗАДАЧИ")',
+    },
+    {
+      key: 'WORK', type: 'grid', title: '9. РАБОТА С БАЗОЙ И КОНТЕНТ',
+      hint: 'Из 03_ОБЗВОН_И_КП и 04_КОНТЕНТ. Подробности — в журналах (фильтр по ID объекта).',
+      cols: ['Период', 'Компаний в базе', 'Звонков', 'КП', 'Ответов', 'Интересно', 'Передано в CRM', 'Публикаций'],
+      grid: [
+        ['="Эта неделя"', '=COUNTIF([[BASE.obj_id]]&"|"&' + WEEK_OF_('[[BASE.created_at]]') + ',[[ID]]&"|"&[[CW]])',
+          '=COUNTIF([[BASE.obj_id]]&"|"&[[BASE.call_week]],[[ID]]&"|"&[[CW]])', '=COUNTIF([[BASE.obj_id]]&"|"&[[BASE.kp_week]],[[ID]]&"|"&[[CW]])',
+          '=COUNTIF([[BASE.obj_id]]&"|"&[[BASE.resp_week]],[[ID]]&"|"&[[CW]])-COUNTIF([[BASE.obj_id]]&"|"&[[BASE.resp_week]]&"|"&[[BASE.resp_class]],[[ID]]&"|"&[[CW]]&"|NONE")',
+          '=COUNTIF([[BASE.obj_id]]&"|"&[[BASE.resp_week]]&"|"&[[BASE.resp_class]],[[ID]]&"|"&[[CW]]&"|YES")', '',
+          '=COUNTIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]]&"|"&[[CONT.status_class]],[[ID]]&"|"&[[CW]]&"|DONE")'],
+        ['="Всего"', '=COUNTIF([[BASE.obj_id]],[[ID]])', '=COUNTIFS([[BASE.obj_id]],[[ID]],[[BASE.call_date]],"<>")', '=COUNTIFS([[BASE.obj_id]],[[ID]],[[BASE.kp_date]],"<>")',
+          '=COUNTIFS([[BASE.obj_id]],[[ID]],[[BASE.resp_class]],"<>",[[BASE.resp_class]],"<>NONE")', '=COUNTIFS([[BASE.obj_id]],[[ID]],[[BASE.resp_class]],"YES")',
+          '=COUNTIFS([[BASE.obj_id]],[[ID]],[[BASE.to_crm]],TRUE)', '=COUNTIFS([[CONT.obj_id]],[[ID]],[[CONT.status_class]],"DONE")'],
+      ],
+    },
+    {
+      key: 'CONT', type: 'auto', rows: 15, title: '10. КОНТЕНТ ОБ ОБЪЕКТЕ',
+      hint: 'Из 04_КОНТЕНТ: последние публикации и то, что в работе. Цифры вносит SMM.',
+      cols: ['Дата', 'Площадка', 'Формат', 'Тема', 'Статус', 'Просмотры', 'Охват', 'Ссылка'],
+      fmts: ['date', null, null, null, null, '#,##0', '#,##0', null],
+      f: '=IFERROR(ARRAY_CONSTRAIN(SORT(FILTER({[[CONT.pub_date]],[[CONT.platform]],[[CONT.format]],[[CONT.topic]],[[CONT.status]],[[CONT.views]],[[CONT.reach]],[[CONT.link]]},' +
+        '[[CONT.obj_id]]=[[ID]]),1,FALSE),15,8),"Контента по объекту пока нет — 04_КОНТЕНТ")',
+    },
+  ];
+}
+
+/** Критерии «Стратегия заполнена» (доля выполненных). */
+function strategyPctFormula_(L) {
+  const r = (key, n) => L.colRange(key, n);
+  return '=(' + [
+    '(COUNTA(' + r('ANALOG', 1) + ')>=3)',
+    '(' + L.kvCell('rec_price') + '<>"")',
+    '(COUNTA(' + r('SCEN', 1) + ')>=1)',
+    '(COUNTA(' + r('AUD', 1) + ')>=3)',
+    '(COUNTA(' + r('KP', 4) + ')>=1)',
+    '(COUNTA(' + r('CHAN', 1) + ')>=2)',
+  ].join('+') + ')/6';
+}
+
+const STRATEGY_PCT_NOTE = 'Заполнено из 6: ≥3 аналога; рекомендуемая цена; ≥1 сценарий; ≥3 аудитории; ≥1 КП со ссылкой; ≥2 канала.';
+
+// ───────────────────────── раскладка ─────────────────────────
+
+/** Раскладка вкладки по строкам. counts — сколько строк данных в табличных разделах (по умолчанию rows). */
+function objTabLayout_(counts) {
+  counts = counts || {};
+  const secs = objTabSections_();
+  let row = TAB.FIRST_ROW;
+  const pos = {};
+  secs.forEach(s => {
+    const p = { title: row, hint: row + 1 };
+    row += 2;
+    if (s.type === 'kv') {
+      p.items = {};
+      s.items.forEach(it => { p.items[it.key] = row++; });
+    } else {
+      p.header = row++;
+      const n = s.type === 'table' ? Math.max(s.rows, counts[s.key] || 0) : (s.type === 'grid' ? s.grid.length : s.rows);
+      p.first = row;
+      p.last = row + n - 1;
+      row += n;
+    }
+    p.sep = row++;
+    pos[s.key] = p;
+  });
+  const L = {
+    secs: secs, pos: pos, lastRow: row,
+    colRange: (key, n) => { const p = pos[key]; const c = colLetter_(1 + n); return '$' + c + '$' + p.first + ':$' + c + '$' + p.last; },
+    kvCell: key => { const s = secs.find(x => x.type === 'kv' && x.items.some(i => i.key === key)); return '$C$' + pos[s.key].items[key]; },
+  };
+  return L;
+}
+
+/** Токены вкладки: [[ID]], [[CW]], [[C:n]], [[S:РАЗДЕЛ:n]], [[K:поле]]; остальные — общие (resolveF_). */
+function resolveTabF_(f, L, secKey) {
+  const own = f.replace(/\[\[(ID|CW|C:\d+|S:[A-Z]+:\d+|K:[a-z_0-9]+)\]\]/g, (m, t) => {
+    if (t === 'ID') return TAB.ID;
+    if (t === 'CW') return '(' + CURRENT_WEEK_F_ + ')';
+    const p = t.split(':');
+    if (p[0] === 'C') return L.colRange(secKey, Number(p[1]));
+    if (p[0] === 'S') return L.colRange(p[1], Number(p[2]));
+    return L.kvCell(p[1]);
+  });
+  return resolveF_(own);
+}
+
+// ───────────────────────── чтение / построение ─────────────────────────
+
+/** Читает всё, что внесла команда: {tables: {KEY: [[...]]}, kv: {key: value}}. */
+function readObjectTab_(sh) {
+  const out = { tables: {}, kv: {} };
+  const max = sh.getLastRow();
+  if (max < TAB.FIRST_ROW) return out;
+  const vals = sh.getRange(1, 1, max, TAB.LAST_COL).getValues();
+  const secs = {};
+  objTabSections_().forEach(s => { secs[s.key] = s; });
+  let cur = null, inData = false;
+  for (let r = 0; r < vals.length; r++) {
+    const m = String(vals[r][0] || '');
+    if (m.indexOf('§') === 0) { cur = secs[m.slice(1)] || null; inData = false; continue; }
+    if (!cur) continue;
+    if (m === 'H') { inData = true; continue; }
+    if (m === '·') { inData = false; continue; }
+    if (cur.type === 'kv' && m.indexOf('K:') === 0) { out.kv[m.slice(2)] = vals[r][2]; continue; }
+    if (cur.type === 'table' && inData) {
+      const row = cur.cols.map((c, i) => c.k === 'f' ? '' : vals[r][1 + i]);
+      if (row.some(v => v !== '' && v !== null)) (out.tables[cur.key] = out.tables[cur.key] || []).push(row);
+    }
+  }
+  return out;
+}
+
+/** Полностью строит вкладку (sh уже существует), затем возвращает сохранённые данные. */
+function buildObjectTab_(sh, objId, data) {
+  data = data || { tables: {}, kv: {} };
+  const counts = {};
+  Object.keys(data.tables).forEach(k => { counts[k] = data.tables[k].length + 1; });
+  const L = objTabLayout_(counts);
+  resetSheet_(sh);
+  try { sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).breakApart(); } catch (e) { /* нечего разъединять */ }
+  ensureSize_(sh, L.lastRow + 5, TAB.LAST_COL);
+  if (sh.getMaxColumns() > TAB.LAST_COL + 1) sh.deleteColumns(TAB.LAST_COL + 2, sh.getMaxColumns() - TAB.LAST_COL - 1);
+  sh.setTabColor(TAB_COLORS.OBJTAB);
+  const markers = [];
+  for (let r = 1; r <= L.lastRow; r++) markers.push(['']);
+
+  // ── шапка ──
+  sh.getRange('I1').setNumberFormat('@').setValue(String(objId));
+  sh.getRange('H1').setValue('ID объекта:');
+  const look = f => 'IFERROR(VLOOKUP([[ID]],{[[OBJ.id]],[[OBJ.' + f + ']]},2,FALSE),"")';
+  const tf = f => resolveTabF_(f, L, null);
+  sh.getRange('B1').setFormula(tf('=IFERROR(VLOOKUP([[ID]],{[[OBJ.id]],[[OBJ.name]]},2,FALSE),"⚠ объекта с этим ID нет в 01_ОБЪЕКТЫ")'));
+  sh.getRange('B1:G1').merge();
+  const head = [
+    ['Адрес', '=' + look('address')], ['Тип · сделка', '=' + look('kind') + '&IF(' + look('deal') + '="",""," · "&' + look('deal') + ')'],
+    ['Площадь, м²', '=' + look('area')], ['Цена', '=' + look('price')], ['Цена за м²', '=' + look('price_m2')], ['Статус', '=' + look('status')],
+    ['Стратегия заполнена', null],
+    ['Команда', '=TEXTJOIN(" · ",TRUE,' + look('manager') + ',' + look('assistant') + ',' + look('smm') + ')'],
+  ];
+  head.forEach((h, i) => {
+    sh.getRange(2, 2 + i).setValue(h[0]);
+    if (h[1]) sh.getRange(3, 2 + i).setFormula(tf(h[1]));
+  });
+  sh.getRange(TAB.PCT.replace(/\$/g, '')).setFormula(strategyPctFormula_(L)).setNote(STRATEGY_PCT_NOTE);
+  const gid = code => { try { return sheet_(code).getSheetId(); } catch (e) { return 0; } };
+  const links = [
+    ['=IF(' + look('crm_link') + '="","",HYPERLINK(' + look('crm_link') + ',"Объект в CRM"))'],
+    ['=IF(' + look('folder_link') + '="","",HYPERLINK(' + look('folder_link') + ',"Папка объекта"))'],
+    ['=IF(' + look('last_report_link') + '="","",HYPERLINK(' + look('last_report_link') + ',"Последний отчёт"))'],
+    ['=HYPERLINK("#gid=' + gid('TASK') + '","→ 02 Задачи")'],
+    ['=HYPERLINK("#gid=' + gid('BASE') + '","→ 03 Обзвон и КП")'],
+    ['=HYPERLINK("#gid=' + gid('CONT') + '","→ 04 Контент")'],
+    ['=HYPERLINK("#gid=' + gid('DASH') + '","→ Дэшборд")'],
+  ];
+  links.forEach((l, i) => sh.getRange(4, 2 + i).setFormula(tf(l[0])));
+  sh.getRange('B5').setValue('Белые ячейки заполняет команда, серые считаются сами. Строки внутри раздела можно добавлять (вставить строку). Все изменения пишутся в 09_ИСТОРИЯ.');
+  sh.getRange('B1').setFontSize(16).setFontWeight('bold');
+  sh.getRange('H1').setFontColor(COLORS.GREY_FG).setFontSize(9).setHorizontalAlignment('right');
+  sh.getRange('I1').setFontColor(COLORS.GREY_FG).setFontWeight('bold');
+  sh.getRange('B2:I2').setFontColor(COLORS.GREY_FG).setFontSize(9);
+  sh.getRange('B3:I3').setFontWeight('bold').setBackground(COLORS.FORMULA_CELL_BG).setWrap(true).setVerticalAlignment('top');
+  sh.getRange('D3').setNumberFormat(nf_('#,##0.0'));
+  sh.getRange('E3:F3').setNumberFormat(nf_('money'));
+  sh.getRange(TAB.PCT.replace(/\$/g, '')).setNumberFormat('0%').setFontSize(14);
+  sh.getRange('B4:H4').setFontColor('#1565C0');
+  sh.getRange('B5').setFontColor(COLORS.GREY_FG).setFontSize(9).setFontStyle('italic');
+  protectWarn_(sh.getRange(1, 1, 5, TAB.LAST_COL), 'Шапка вкладки объекта — считается автоматически');
+
+  const DV = SpreadsheetApp.newDataValidation;
+  const cfRules = [];
+  const pctCell = sh.getRange(TAB.PCT.replace(/\$/g, ''));
+  cfRules.push(cfRule_('=' + TAB.PCT + '>=1', pctCell, COLORS.GREEN_BG, COLORS.GREEN_FG));
+  cfRules.push(cfRule_('=' + TAB.PCT + '<0.5', pctCell, COLORS.RED_BG, COLORS.RED_FG));
+  cfRules.push(cfRule_('=' + TAB.PCT + '<1', pctCell, COLORS.YELLOW_BG, COLORS.YELLOW_FG));
+
+  // ── разделы ──
+  L.secs.forEach(s => {
+    const p = L.pos[s.key];
+    markers[p.title - 1] = ['§' + s.key];
+    markers[p.hint - 1] = ['~'];
+    markers[p.sep - 1] = ['·'];
+    sh.getRange(p.title, 2).setValue(s.title);
+    sh.getRange(p.title, 2, 1, TAB.LAST_COL - 1).setBackground(COLORS.SECTION_BG).setFontColor(COLORS.SECTION_FG).setFontWeight('bold');
+    sh.getRange(p.hint, 2).setValue(s.hint).setFontColor(COLORS.GREY_FG).setFontSize(9).setFontStyle('italic');
+    sh.getRange(p.hint, 2, 1, TAB.LAST_COL - 1).merge().setWrap(true);
+
+    if (s.type === 'kv') {
+      s.items.forEach(it => {
+        const r = p.items[it.key];
+        markers[r - 1] = ['K:' + it.key];
+        sh.getRange(r, 2).setValue(it.label).setFontWeight('bold').setVerticalAlignment('top');
+        const val = sh.getRange(r, 3, 1, TAB.LAST_COL - 2).merge();
+        const cell = sh.getRange(r, 3);
+        if (it.k === 'f') {
+          cell.setFormula(resolveTabF_('=' + it.f, L, s.key));
+          val.setBackground(COLORS.FORMULA_CELL_BG);
+          protectWarn_(val, 'Считается автоматически');
+        } else {
+          val.setBorder(true, true, true, true, false, false, COLORS.INPUT_BORDER, SpreadsheetApp.BorderStyle.SOLID).setWrap(true).setVerticalAlignment('top');
+          if (it.key in data.kv && data.kv[it.key] !== '') cell.setValue(data.kv[it.key]);
+          const v = tabValidation_(it.k);
+          if (v) cell.setDataValidation(v);
+        }
+        const fmt = it.fmt || ({ money: 'money', date: 'date' })[it.k];
+        if (fmt) cell.setNumberFormat(nf_(fmt));
+        cell.setHorizontalAlignment('left');
+      });
+      return;
+    }
+
+    markers[p.header - 1] = ['H'];
+    const n = p.last - p.first + 1;
+    const titles = s.type === 'table' ? s.cols.map(c => c.t) : s.cols;
+    const hdr = sh.getRange(p.header, 2, 1, titles.length);
+    hdr.setValues([titles]).setFontWeight('bold').setWrap(true).setVerticalAlignment('middle');
+
+    if (s.type === 'table') {
+      const rows = (data.tables[s.key] || []);
+      s.cols.forEach((c, i) => {
+        const col = 2 + i;
+        const body = sh.getRange(p.first, col, n, 1);
+        const hcell = sh.getRange(p.header, col);
+        if (c.k === 'f') {
+          hcell.setFormula('={"' + c.t + '";ARRAYFORMULA(IF(LEN(' + L.colRange(s.key, 1) + ')=0,"",' + resolveTabF_(c.f, L, s.key) + '))}');
+          hcell.setBackground(COLORS.HDR_FORMULA_BG).setFontColor(COLORS.HDR_FORMULA_FG);
+          body.setBackground(COLORS.FORMULA_CELL_BG);
+          protectWarn_(sh.getRange(p.header, col, n + 1, 1), 'Формула «' + c.t + '» — считается автоматически');
+        } else {
+          hcell.setBackground(COLORS.HDR_INPUT_BG).setFontColor(COLORS.HDR_INPUT_FG);
+          body.setBorder(true, true, true, true, true, true, COLORS.INPUT_BORDER, SpreadsheetApp.BorderStyle.SOLID);
+          const v = tabValidation_(c.k, c);
+          if (v) body.setDataValidation(v);
+          if (c.k === 'text' || c.k === 'link') body.setNumberFormat('@');
+        }
+        const fmt = c.fmt || ({ money: 'money', date: 'date', num: '#,##0.0' })[c.k];
+        if (fmt) body.setNumberFormat(nf_(fmt));
+        body.setWrap(c.k === 'text').setVerticalAlignment('top');
+      });
+      if (rows.length) {
+        s.cols.forEach((c, i) => {
+          if (c.k === 'f') return;
+          sh.getRange(p.first, 2 + i, rows.length, 1).setValues(rows.map(r => [r[i] === null ? '' : r[i]]));
+        });
+      }
+      for (let r = p.first; r <= p.last; r++) markers[r - 1] = [''];
+    } else {
+      // auto / grid — только чтение
+      hdr.setBackground(COLORS.HDR_FORMULA_BG).setFontColor(COLORS.HDR_FORMULA_FG);
+      const body = sh.getRange(p.first, 2, n, titles.length);
+      body.setBackground(COLORS.FORMULA_CELL_BG).setVerticalAlignment('top');
+      if (s.type === 'auto') {
+        sh.getRange(p.first, 2).setFormula(resolveTabF_(s.f, L, s.key));
+        (s.fmts || []).forEach((f, i) => { if (f) sh.getRange(p.first, 2 + i, n, 1).setNumberFormat(nf_(f)); });
+        sh.getRange(p.first, 3, n, 1).setWrap(true);
+        if (s.key === 'PF') {
+          const stat = sh.getRange(p.first, 9, n, 1);
+          cfRules.push(cfRule_('=$I' + p.first + '="ПРОСРОЧЕНО"', sh.getRange(p.first, 2, n, 8), COLORS.RED_BG, COLORS.RED_FG));
+          cfRules.push(cfRule_('=$I' + p.first + '="' + (dictFirstByClassSafe_('task_status', CLS.DONE) || 'Выполнено') + '"', stat, COLORS.GREEN_BG, COLORS.GREEN_FG));
+        }
+      } else {
+        s.grid.forEach((gr, ri) => gr.forEach((f, ci) => {
+          if (f) sh.getRange(p.first + ri, 2 + ci).setFormula('=ARRAYFORMULA(' + resolveTabF_(f, L, s.key).slice(1) + ')');
+        }));
+        sh.getRange(p.first, 2, n, 1).setFontWeight('bold');
+      }
+      protectWarn_(sh.getRange(p.header, 1, n + 1, TAB.LAST_COL), 'Раздел «' + s.title + '» собирается автоматически');
+    }
+  });
+
+  sh.getRange(1, 1, markers.length, 1).setValues(markers).setFontColor('#B0BEC5').setFontSize(8);
+  protectWarn_(sh.getRange(1, 1, sh.getMaxRows(), 1), 'Служебные метки разделов — не менять');
+  sh.setConditionalFormatRules(cfRules);
+  [22, 230, 150, 150, 170, 170, 130, 110, 120].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+  sh.setRowHeight(1, 34);
+  sh.setFrozenRows(3);
+  sh.hideColumns(1);
+  return L;
+}
+
+function tabValidation_(kind, c) {
+  const DV = SpreadsheetApp.newDataValidation;
+  if (kind === 'dd') {
+    const src = c.dict ? 'D.' + c.dict : c.list;
+    return DV().requireValueInRange(rangeFromToken_(src), true).setAllowInvalid(true).build();
+  }
+  if (kind === 'date') return DV().requireDate().setAllowInvalid(false).setHelpText('Введите дату').build();
+  if (kind === 'num' || kind === 'money') return DV().requireNumberGreaterThanOrEqualTo(0).setAllowInvalid(false).setHelpText('Введите число').build();
+  return null;
+}
+
+function dictFirstByClassSafe_(key, cls) { try { return dictFirstByClass_(key, cls); } catch (e) { return ''; } }
+
+// ───────────────────────── связь с 01_ОБЪЕКТЫ ─────────────────────────
+
+function objTabName_(obj) {
+  const clean = String(obj.name || '').replace(/[\[\]\*\?\/\\:']/g, ' ').replace(/\s+/g, ' ').trim();
+  return (SYS.TAB_PREFIX + clean).slice(0, 80) + ' (' + obj.id + ')';
+}
+
+function isObjectTab_(sh) { return sh.getName().indexOf(SYS.TAB_PREFIX) === 0; }
+
+function objectTabs_() { return ss_().getSheets().filter(isObjectTab_); }
+
+/** Вкладка объекта: по сохранённому gid, по ID в I1, по имени. */
+function findObjectTab_(obj) {
+  const ss = ss_();
+  const m = /#gid=(\d+)/.exec(String(obj.tab_url || ''));
+  const tabs = objectTabs_();
+  if (m) { const s = tabs.find(x => String(x.getSheetId()) === m[1]); if (s) return s; }
+  const byId = tabs.find(x => String(x.getRange(TAB.ID).getValue()) === String(obj.id));
+  if (byId) return byId;
+  return ss.getSheetByName(objTabName_(obj));
+}
+
+/**
+ * Создаёт вкладку объекта или обновляет существующую.
+ * mode: 'create' — только если вкладки нет; 'rebuild' — пересобрать с сохранением данных; 'rename' — имя и ID.
+ */
+function syncObjectTab_(obj, mode) {
+  if (!obj || !obj.id || !obj.name) return null;
+  const ss = ss_();
+  let sh = findObjectTab_(obj);
+  const name = objTabName_(obj);
+  let built = false;
+  if (!sh) {
+    sh = ss.insertSheet(name, objTabInsertIndex_());
+    buildObjectTab_(sh, obj.id, null);
+    built = true;
+  } else {
+    if (sh.getName() !== name && !ss.getSheetByName(name)) sh.setName(name);
+    if (String(sh.getRange(TAB.ID).getValue()) !== String(obj.id)) sh.getRange(TAB.ID).setNumberFormat('@').setValue(String(obj.id));
+    if (mode === 'rebuild') { buildObjectTab_(sh, obj.id, readObjectTab_(sh)); built = true; }
+  }
+  const url = '#gid=' + sh.getSheetId();
+  const quoted = "'" + sh.getName().replace(/'/g, "''") + "'";
+  writeFields_(sheet_('OBJ'), 'OBJ', obj._row, {
+    tab_link: '=HYPERLINK("' + url + '","открыть")',
+    strategy_pct: '=IFERROR(' + quoted + '!' + TAB.PCT + ',"")',
+    tab_name: sh.getName(), tab_url: url,
+  });
+  return { sheet: sh, built: built };
+}
+
+/** Новые вкладки встают после последней вкладки объекта (сразу за 01_ОБЪЕКТЫ). */
+function objTabInsertIndex_() {
+  const sheets = ss_().getSheets();
+  let idx = 0;
+  sheets.forEach((s, i) => {
+    if (s.getName() === SHEET_NAMES.OBJ || isObjectTab_(s)) idx = i + 1;
+  });
+  return idx;
+}
+
+/** Меню: создать вкладки для объектов, у которых их ещё нет. */
+function createObjectTabs() {
+  const t = readTable_('OBJ');
+  let created = 0;
+  const missing = [];
+  t.rows.forEach(o => {
+    if (!o.id || !o.name) { if (o.name || o.id) missing.push(o.name || o.id); return; }
+    const r = syncObjectTab_(o, 'create');
+    if (r && r.built) created++;
+  });
+  SpreadsheetApp.flush();
+  toast_('Создано вкладок: ' + created + (missing.length ? '. Без ID или названия: ' + missing.join(', ') : ''), 'Вкладки объектов', 8);
+}
+
+/** Сервис: пересобрать все вкладки (после обновления системы). Данные команды сохраняются. */
+function rebuildObjectTabs() {
+  const t = readTable_('OBJ');
+  let n = 0;
+  t.rows.forEach(o => { if (o.id && o.name) { syncObjectTab_(o, 'rebuild'); n++; } });
+  SpreadsheetApp.flush();
+  toast_('Обновлено вкладок: ' + n, 'Вкладки объектов', 6);
+}
+
+/** Меню: перейти во вкладку выбранного объекта. */
+function openObjectTab() {
+  const id = selectedObjectId_();
+  const obj = id ? objectById_(id) : null;
+  if (!obj) {
+    SpreadsheetApp.getUi().alert('Встаньте на строку объекта (01_ОБЪЕКТЫ, дэшборд или любой журнал) и повторите.');
+    return;
+  }
+  const r = syncObjectTab_(obj, 'create');
+  if (r) r.sheet.activate();
+}
+
+/** onEdit во вкладке объекта: история изменений (раздел · столбец, было → стало). */
+function handleObjectTabEdit_(e, sh) {
+  const rng = e.range;
+  if (rng.getLastRow() < TAB.FIRST_ROW) return;
+  const objId = String(sh.getRange(TAB.ID).getValue() || '');
+  const lastRow = rng.getLastRow();
+  const markers = sh.getRange(1, 1, lastRow, TAB.LAST_COL).getValues();
+  const secs = {};
+  objTabSections_().forEach(s => { secs[s.key] = s; });
+  const single = rng.getNumRows() === 1 && rng.getNumColumns() === 1;
+  const newVals = rng.getValues();
+  const hist = [];
+  let cur = null, headerRow = null;
+  const ctx = [];
+  for (let r = 0; r < lastRow; r++) {
+    const m = String(markers[r][0] || '');
+    if (m.indexOf('§') === 0) { cur = secs[m.slice(1)] || null; headerRow = null; }
+    else if (m === 'H') headerRow = markers[r];
+    ctx.push({ sec: cur, header: headerRow, marker: m });
+  }
+  for (let i = 0; i < newVals.length && hist.length < 60; i++) {
+    const row = rng.getRow() + i;
+    const c = ctx[row - 1];
+    if (!c || !c.sec || c.sec.type === 'auto' || c.sec.type === 'grid') continue;
+    if (c.marker === '§' + c.sec.key || c.marker === '~' || c.marker === 'H' || c.marker === '·') continue;
+    for (let j = 0; j < newVals[i].length; j++) {
+      const col = rng.getColumn() + j;
+      if (col < 2) continue;
+      let field;
+      if (c.sec.type === 'kv') field = c.sec.title + ' · ' + markers[row - 1][1];
+      else field = c.sec.title + ' · ' + (c.header ? c.header[col - 1] : '');
+      const nv = newVals[i][j];
+      const ov = single ? (e.oldValue === undefined ? '' : e.oldValue) : '(массовое изменение)';
+      if (single && String(ov) === String(nv)) continue;
+      hist.push({
+        sheet: sh.getName(), record_id: colLetter_(col) + row, obj_id: objId, field: field,
+        old: ov, new: nv, kind: ov === '' ? HIST_KIND.INITIAL : HIST_KIND.CHANGE,
+      });
+    }
+  }
+  logHistory_(hist, userEmail_(e));
+}
+
+// ═════════════ 05_Triggers.gs ═════════════
+/**
+ * 05_Triggers — автоматика при редактировании (устанавливаемый триггер onEdit).
+ *
+ *  - ставит ID задачам, строкам обзвона, контенту, библиотеке; дату, статус и неделю по умолчанию; автора;
  *  - ID объекта вводится вручную (из CRM): скрипт проверяет его и при исправлении обновляет во всех листах;
- *  - пишет изменения цены, статусов, стратегии, дедлайнов в 12_ИСТОРИЯ (старое значение не теряется);
- *  - задача со статусом «Перенесено» копируется на следующую неделю, исходная остаётся в истории;
- *  - при создании объекта добавляет ему строку в 02_СТРАТЕГИЯ.
+ *  - новый объект (ID + название) сразу получает свою вкладку «▸ Название (ID)»;
+ *  - пишет изменения в 09_ИСТОРИЯ: отслеживаемые поля журналов и все правки во вкладках объектов;
+ *  - задача со статусом «Перенесено» копируется на следующую неделю, исходная остаётся.
  */
 
 function onEditHandler(e) {
   if (!e || !e.range) return;
   const sh = e.range.getSheet();
+  if (isObjectTab_(sh)) {
+    try { handleObjectTabEdit_(e, sh); } catch (err) { toast_('История не записана: ' + err.message, 'Внимание', 8); }
+    return;
+  }
   const spec = specBySheetName_(sh.getName());
   if (!spec || spec.readonly) return;
   const rLast = e.range.getLastRow();
@@ -2154,7 +1896,7 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
   const editedKeys = spec.fields.slice(c0 - 1, cLast).map(f => f.key);
   const hist = [];
   const idCache = {};
-  const newObjects = [];
+  const tabSync = [];
   const renamed = [];
   for (let i = 0; i < n; i++) {
     const row = r0 + i;
@@ -2197,10 +1939,13 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
       });
     });
     if (Object.keys(upd).length) writeFields_(sh, code, row, upd);
-    if (code === 'OBJ' && isNew) newObjects.push(o.id);
-    if (code === 'PF' && !isNew && editedKeys.indexOf('status') >= 0 && dictClassOf_('task_status', o.status) === CLS.MOVED) {
+    if (code === 'OBJ' && o.id && o.name && (isNew || !o.tab_url || editedKeys.indexOf('id') >= 0 || editedKeys.indexOf('name') >= 0)) {
+      o._row = row;
+      tabSync.push(o);
+    }
+    if (code === 'TASK' && !isNew && editedKeys.indexOf('status') >= 0 && dictClassOf_('task_status', o.status) === CLS.MOVED) {
       const newId = moveTask_(o, hist);
-      if (newId) toast_('Задача ' + o.task_id + ' перенесена на следующую неделю как ' + newId + '. Исходная строка сохранена.');
+      if (newId) toast_('Задача ' + o.id + ' перенесена на следующую неделю как ' + newId + '. Исходная строка сохранена.');
     }
   }
   renamed.forEach(p => {
@@ -2208,7 +1953,10 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
     hist.push({ sheet: spec.name, record_id: p[1], obj_id: p[1], field: fieldTitle_('OBJ', 'id'), old: p[0], new: p[1], kind: HIST_KIND.CHANGE, note: 'ID обновлён во всех листах' });
     toast_('ID ' + p[0] + ' → ' + p[1] + ' обновлён во всех связанных листах.');
   });
-  if (newObjects.length) ensureStrategyRows_(newObjects);
+  tabSync.slice(0, 5).forEach(o => {
+    const r = syncObjectTab_(o, 'create');
+    if (r && r.built) toast_('Создана вкладка «' + r.sheet.getName() + '» — там стратегия объекта.', 'Новый объект', 8);
+  });
   logHistory_(hist, user);
 }
 
@@ -2220,38 +1968,27 @@ function applyDefaults_(code, o, upd, isNew, user, editedKeys) {
     set('created_at', today);
     if (!o.status) set('status', dictValues_('obj_status')[0] || '');
   }
-  if (code === 'OBJ' && editedKeys.indexOf('status') >= 0 && o.status) {
-    // «Дата закрытия»: ставится при продаже / снятии, снимается, если объект вернули в работу
-    const cls = dictClassOf_('obj_status', o.status);
-    const closed = cls === 'SOLD' || cls === 'REMOVED';
-    if (closed && !o.close_date) set('close_date', today);
-    if (!closed && o.close_date) set('close_date', '');
-  }
-  if (code === 'STR') {
-    const content = editedKeys.some(k => ['obj_id', 'obj_name', 'changed_at', 'changed_by', 'strategy_doc'].indexOf(k) < 0);
-    if (content) { set('changed_at', now); set('changed_by', user); }
-    if (!o.strategy_status) set('strategy_status', dictValues_('strategy_status')[0] || '');
-  }
-  if (code === 'ACT' && isNew) {
-    if (!o.date) set('date', today);
-    if (!o.status) set('status', dictFirstByClass_('task_status', CLS.DONE));
+  if (code === 'TASK' && isNew) {
+    if (!o.week) set('week', isoWeekKey_(today));
+    if (!o.status) set('status', dictFirstByClass_('task_status', CLS.OPEN));
+    if (!o.deadline) { const m = mondayOfWeekKey_(o.week); if (m) set('deadline', addDays_(m, 4)); }
     if (!o.owner) { const p = personByEmail_(user); if (p) set('owner', p); }
+    if (!o.source) set('source', 'Вручную');
     set('to_report', true);
     set('created_at', now);
     set('author', user);
   }
-  if (code === 'HYP' && isNew) {
-    if (!o.date_start) set('date_start', today);
-    if (!o.status) set('status', dictFirstByClass_('hyp_status', CLS.OPEN));
-    set('to_report', true);
+  if ((code === 'BASE' || code === 'CONT') && isNew) {
+    if (!o.owner) { const p = personByEmail_(user); if (p) set('owner', p); }
+    if (code === 'CONT' && !o.status) set('status', dictValues_('content_status')[0] || '');
     set('created_at', now);
+    set('author', user);
   }
-  if (code === 'PF' && isNew) {
-    if (!o.week) set('week', isoWeekKey_(today));
-    if (!o.status) set('status', dictFirstByClass_('task_status', CLS.OPEN));
-    if (!o.deadline) { const m = mondayOfWeekKey_(o.week); if (m) set('deadline', addDays_(m, 4)); }
-    set('to_report', true);
-    set('created_at', now);
+  if (code === 'BASE' && editedKeys.indexOf('response') >= 0 && o.response && !o.response_date) set('response_date', today);
+  if (code === 'CONT' && editedKeys.indexOf('status') >= 0 && dictClassOf_('content_status', o.status) === CLS.DONE && !o.pub_date) set('pub_date', today);
+  if (code === 'LIB') {
+    const content = editedKeys.some(k => ['kind', 'title', 'applies', 'text'].indexOf(k) >= 0);
+    if (content) { set('updated_at', now); set('author', user); }
   }
 }
 
@@ -2279,54 +2016,45 @@ function sameValue_(a, b) {
   return String(a) === String(b);
 }
 
-/** Исправили ID объекта в 01 → заменить старый ID в связанных листах и в именах папок Drive. */
+/** Исправили ID объекта в 01 → заменить старый ID в журналах, во вкладке объекта и в имени папки Drive. */
 function renameObjectId_(oldId, newId) {
-  ['STR', 'ACT', 'PF', 'ARCH', 'HYP'].forEach(code => {
+  ['TASK', 'BASE', 'CONT', 'ARCH', 'HIST'].forEach(code => {
     const sh = sheet_(code);
     const col = fieldIndex_(code, 'obj_id');
     sh.getRange(2, col, sh.getMaxRows() - 1, 1).createTextFinder(oldId).matchEntireCell(true).replaceAllWith(newId);
   });
-  ['FOLDER_OBJECTS_ID'].forEach(k => {
-    try {
-      const parent = folderById_(cfgGet_(k));
-      if (!parent) return;
-      const it = parent.getFolders();
-      const suffix = '(' + oldId + ')';
-      while (it.hasNext()) {
-        const f = it.next();
-        if (f.getName().slice(-suffix.length) === suffix) f.setName(f.getName().slice(0, -suffix.length) + '(' + newId + ')');
-      }
-    } catch (err) { /* папки переименуются вручную */ }
+  objectTabs_().forEach(t => {
+    if (String(t.getRange(TAB.ID).getValue()) === oldId) t.getRange(TAB.ID).setNumberFormat('@').setValue(newId);
   });
-}
-
-/** Строка в 02_СТРАТЕГИЯ для каждого нового объекта (если её ещё нет). */
-function ensureStrategyRows_(ids) {
-  const t = readTable_('STR');
-  const have = {};
-  t.rows.forEach(r => { have[r.obj_id] = true; });
-  const toAdd = ids.filter(id => !have[id]).map(id => ({ obj_id: id, strategy_status: dictValues_('strategy_status')[0] || '' }));
-  if (toAdd.length) appendRows_('STR', toAdd);
+  try {
+    const parent = folderById_(cfgGet_('FOLDER_OBJECTS_ID'));
+    if (!parent) return;
+    const it = parent.getFolders();
+    const suffix = '(' + oldId + ')';
+    while (it.hasNext()) {
+      const f = it.next();
+      if (f.getName().slice(-suffix.length) === suffix) f.setName(f.getName().slice(0, -suffix.length) + '(' + newId + ')');
+    }
+  } catch (err) { /* папку можно переименовать вручную */ }
 }
 
 /** Копия задачи на следующую неделю. Исходная строка остаётся со статусом «Перенесено». */
 function moveTask_(o, hist, targetWeek) {
-  const pf = readTable_('PF');
-  if (pf.rows.some(r => r.moved_from === o.task_id)) return null;
+  const t = readTable_('TASK');
+  if (t.rows.some(r => r.moved_from === o.id)) return null;
   const baseMon = mondayOfWeekKey_(o.week) || mondayOf_(today_());
   const nextKey = targetWeek || isoWeekKey_(addDays_(baseMon, 7));
   const nextMon = mondayOfWeekKey_(nextKey);
   const deadline = o.deadline instanceof Date ? addDays_(o.deadline, 7) : addDays_(nextMon, 4);
-  const newId = nextId_('PF');
-  appendRow_('PF', {
-    week: nextKey, obj_id: o.obj_id, week_goal: o.week_goal, task: o.task, type: o.type, owner: o.owner,
-    plan: o.plan, kpi_metric: o.kpi_metric, kpi_plan: o.kpi_plan,
-    status: dictFirstByClass_('task_status', CLS.OPEN), deadline: deadline,
-    to_report: o.to_report === '' ? true : o.to_report, task_id: newId, moved_from: o.task_id, created_at: new Date(),
+  const newId = nextId_('TASK');
+  appendRow_('TASK', {
+    id: newId, week: nextKey, obj_id: o.obj_id, block: o.block, task: o.task, owner: o.owner, unit: o.unit, plan: o.plan,
+    status: dictFirstByClass_('task_status', CLS.OPEN), deadline: deadline, to_report: o.to_report === '' ? true : o.to_report,
+    source: o.source, moved_from: o.id, created_at: new Date(), author: 'перенос',
   });
   hist.push({
-    sheet: SHEET_NAMES.PF, record_id: o.task_id, obj_id: o.obj_id, field: fieldTitle_('PF', 'week'),
-    old: o.week, new: nextKey, kind: HIST_KIND.MOVE, note: 'Создана копия ' + newId + ' (дедлайн ' + fmtDate_(deadline) + ')',
+    sheet: SHEET_NAMES.TASK, record_id: o.id, obj_id: o.obj_id, field: fieldTitle_('TASK', 'week'),
+    old: o.week, new: nextKey, kind: HIST_KIND.MOVE, note: 'Создана копия ' + newId + ' (срок ' + fmtDate_(deadline) + ')',
   });
   return newId;
 }
@@ -2343,12 +2071,15 @@ function appendRows_(code, objs) {
   return rows;
 }
 
-// ═════════════ 05_Reports.gs ═════════════
+// ═════════════ 06_Reports.gs ═════════════
 /**
- * 05_Reports — еженедельный отчёт клиенту: Google Doc + PDF + архив.
+ * 06_Reports — еженедельный отчёт клиенту: Google Doc + PDF + архив.
  *
- * Источник текста — лист 07_ОТЧЕТ (предпросмотр). Скрипт берёт оттуда только строки
- * с placeholder'ами, поэтому внутренние поля физически не могут попасть в документ.
+ * Формат — как в отчётах руководителя (шапка ИП, «Приложение №1 к Договору», таблица реквизитов,
+ * Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА, Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ, Раздел 3. ПЛАН РАБОТЫ).
+ * Источник — лист 05_ОТЧЁТ_КЛИЕНТУ (предпросмотр): скрипт берёт оттуда только поля с метками {{…}},
+ * поэтому внутренние данные (контакты, звонки, комментарии) в документ попасть не могут.
+ * Клиент доступа к таблице не получает — только PDF.
  */
 
 function createReport() {
@@ -2359,7 +2090,7 @@ function createReport() {
   const wk = String(rep.getRange('E4').getValue() || '');
   if (!id || !wk) {
     rep.activate();
-    ui.alert('Выберите объект и неделю в листе 07_ОТЧЕТ (ячейки B3 и B4), затем повторите.');
+    ui.alert('Выберите объект и неделю в листе ' + SHEET_NAMES.REP + ' (ячейки B3 и B4), затем повторите.');
     return;
   }
   const res = generateReport_(id, wk, { interactive: true });
@@ -2368,14 +2099,14 @@ function createReport() {
     { label: 'Google Doc: ' + res.name, url: res.docUrl },
     { label: 'PDF для клиента', url: res.pdfUrl },
     { label: 'Папка отчётов объекта', url: res.folderUrl },
-  ], 'Проверьте документ. Если поправите текст в Google Doc — нажмите «Создать PDF», чтобы обновить PDF.');
+  ], 'Проверьте документ. Если поправите текст в Google Doc — нажмите «Обновить PDF отчёта».');
 }
 
-/** Собирает отчёт для объекта/недели. Лист 07_ОТЧЕТ должен быть выставлен на этот объект и неделю. */
+/** Собирает отчёт. Лист 05_ОТЧЁТ_КЛИЕНТУ должен быть выставлен на этот объект и неделю. */
 function generateReport_(id, wk, opts) {
   opts = opts || {};
   const obj = objectById_(id);
-  if (!obj) throw new Error('Объект ' + id + ' не найден в 01_ОБЪЕКТЫ');
+  if (!obj) throw new Error('Объект ' + id + ' не найден в ' + SHEET_NAMES.OBJ);
   const values = readReportValues_();
   const arch = readTable_('ARCH');
   const existing = arch.rows.filter(r => r.obj_id === id && r.week === wk && r.status === REPORT_STATUS.ACTUAL);
@@ -2389,18 +2120,17 @@ function generateReport_(id, wk, opts) {
 
   const folder = ensureObjectFolder_(id, 'REPORTS');
   const tpl = DriveApp.getFileById(ensureReportTemplate_());
-  const period = values.PERIOD || weekPeriodLabel_(wk);
-  const name = obj.name + ' — Отчёт — ' + period;
+  const no = String(values.kv.REPORT_NO || '');
+  const name = 'Отчёт ' + (no.length < 2 ? '0' : '') + no + ' — ' + obj.name + ' — ' + values.kv.PERIOD;
   const copy = tpl.makeCopy(name, folder);
   const doc = DocumentApp.openById(copy.getId());
-  fillDoc_(doc, values, reportListKeys_());
+  fillReportDoc_(doc, values);
   doc.saveAndClose();
   const pdf = folder.createFile(copy.getAs(MimeType.PDF)).setName(name + '.pdf');
 
   appendRow_('ARCH', {
-    ts: new Date(), obj_id: id, obj_name: obj.name, week: wk, period: period,
+    ts: new Date(), obj_id: id, obj_name: obj.name, report_no: values.kv.REPORT_NO, week: wk, period: values.kv.PERIOD,
     doc_link: copy.getUrl(), pdf_link: pdf.getUrl(), author: userEmail_(), status: REPORT_STATUS.ACTUAL,
-    manager_comment: values.MANAGER_COMMENT === '—' ? '' : values.MANAGER_COMMENT,
   });
   writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { last_report_link: pdf.getUrl(), last_report_date: today_() });
   return { name: name, docId: copy.getId(), docUrl: copy.getUrl(), pdfId: pdf.getId(), pdfUrl: pdf.getUrl(), folderUrl: folder.getUrl() };
@@ -2416,7 +2146,7 @@ function createPdf() {
   const arch = readTable_('ARCH');
   const rows = arch.rows.filter(r => r.obj_id === id && r.week === wk && r.status === REPORT_STATUS.ACTUAL);
   if (!id || !wk || !rows.length) {
-    ui.alert('Для выбранного в 07_ОТЧЕТ объекта и недели ещё нет отчёта. Сначала нажмите «Создать отчёт».');
+    ui.alert('Для выбранного в ' + SHEET_NAMES.REP + ' объекта и недели ещё нет отчёта. Сначала «Создать отчёт клиенту».');
     return;
   }
   const r = rows[rows.length - 1];
@@ -2433,43 +2163,44 @@ function createPdf() {
   showLinks_('PDF обновлён', [{ label: pdf.getName(), url: pdf.getUrl() }], 'Старый PDF переименован с пометкой «устаревший» и остался в папке.');
 }
 
-function reportListKeys_() {
+/** Значения из 05_ОТЧЁТ_КЛИЕНТУ: {kv: {PH: текст}, tables: {PH: [[№, текст, текст]]}}. */
+function readReportValues_() {
+  const sh = sheet_('REP');
+  const L = reportLayout_();
+  const kv = {};
+  const vals = sh.getRange(REP_FIRST_ROW, 1, L.kvRows, 4).getDisplayValues();
+  vals.forEach(v => {
+    const m = /^\{\{([A-Z_]+)\}\}$/.exec(v[3]);
+    if (m) kv[m[1]] = v[1];
+  });
+  const tables = {};
+  Object.keys(L.tables).forEach(ph => {
+    const t = L.tables[ph];
+    tables[ph] = sh.getRange(t.first, 1, t.rows, 3).getDisplayValues().filter(r => r[0] !== '' || r[1] !== '');
+  });
+  return { kv: kv, tables: tables };
+}
+
+function lineKeys_() {
   const keys = {};
-  reportRows_().forEach(r => { if (r.list) keys[r.ph] = true; });
+  reportRows_().forEach(r => { if (r.lines) keys[r.ph] = true; });
   return keys;
 }
 
-/** Значения placeholder'ов из 07_ОТЧЕТ (отображаемый текст) + подпись из настроек. */
-function readReportValues_() {
-  const sh = sheet_('REP');
-  const rows = reportRows_();
-  const vals = sh.getRange(REP_FIRST_ROW, 2, rows.length, 2).getDisplayValues();
-  const out = {};
-  vals.forEach(v => {
-    const m = /^\{\{([A-Z_]+)\}\}$/.exec(v[1]);
-    if (m) out[m[1]] = v[0] === '' ? '—' : v[0];
+/** Подстановка: поля — replaceText, многострочные — абзацами, таблицы — строками таблицы. */
+function fillReportDoc_(doc, values) {
+  const body = doc.getBody();
+  Object.keys(values.tables).forEach(ph => fillTableRows_(body, ph, values.tables[ph]));
+  const lines = lineKeys_();
+  Object.keys(values.kv).forEach(k => {
+    const v = String(values.kv[k] || '').trim();
+    if (!v && (k === 'COMMENT' || k === 'SUMMARY')) { removeBlock_(body, k); return; }
+    if (lines[k]) replaceWithLines_(body, k, v.split(/\r?\n/).map(x => x.trim()).filter(Boolean));
   });
-  out.AGENCY = String(cfgGet_('AGENCY_NAME') || '');
-  out.MANAGER_NAME = String(cfgGet_('MANAGER_NAME') || '');
-  out.MANAGER_CONTACT = String(cfgGet_('MANAGER_CONTACT') || '');
-  out.REPORT_DATE = fmtDate_(new Date());
-  return out;
-}
-
-/** Подстановка значений: обычные — replaceText, списочные — маркированный список. */
-function fillDoc_(doc, values, listKeys) {
-  const sections = [doc.getBody()];
-  if (doc.getHeader()) sections.push(doc.getHeader());
-  if (doc.getFooter()) sections.push(doc.getFooter());
-  sections.forEach(sec => {
-    Object.keys(values).forEach(k => {
-      if (listKeys[k]) {
-        const lines = String(values[k]).split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-        replaceWithList_(sec, k, lines.length ? lines : ['—']);
-      }
-    });
-    Object.keys(values).forEach(k => {
-      if (!listKeys[k]) sec.replaceText(phPattern_(k), escapeReplacement_(String(values[k])));
+  [body, doc.getHeader(), doc.getFooter()].forEach(sec => {
+    if (!sec) return;
+    Object.keys(values.kv).forEach(k => {
+      if (!lines[k]) sec.replaceText(phPattern_(k), escapeReplacement_(String(values.kv[k] || '—')));
     });
     sec.replaceText('\\{\\{[A-Z_]+\\}\\}', '—');
   });
@@ -2478,34 +2209,59 @@ function fillDoc_(doc, values, listKeys) {
 function phPattern_(key) { return '\\{\\{' + key + '\\}\\}'; }
 function escapeReplacement_(s) { return s.replace(/\\/g, '\\\\').replace(/\$/g, '\\$'); }
 
-function replaceWithList_(container, key, lines) {
-  const pat = phPattern_(key);
-  let found = container.findText(pat);
-  let guard = 0;
-  while (found && guard++ < 30) {
-    const textEl = found.getElement().asText();
-    const para = textEl.getParent();
-    const parent = para.getParent();
-    const whole = para.asText().getText().trim() === '{{' + key + '}}';
-    if (!whole || typeof parent.insertListItem !== 'function') {
-      textEl.replaceText(pat, escapeReplacement_(lines.join('; ')));
-    } else {
-      const idx = parent.getChildIndex(para);
-      lines.forEach((ln, i) => {
-        const li = parent.insertListItem(idx + 1 + i, ln);
-        li.setGlyphType(DocumentApp.GlyphType.BULLET);
-        li.editAsText().setFontSize(11).setBold(false);
-        li.setSpacingAfter(2);
-      });
-      para.removeFromParent();
-    }
-    found = container.findText(pat);
+/** Абзац с {{KEY}} → по абзацу на строку (формат абзаца сохраняется). */
+function replaceWithLines_(body, key, lines) {
+  const found = body.findText(phPattern_(key));
+  if (!found) return;
+  const para = found.getElement().getParent();
+  if (para.getType() !== DocumentApp.ElementType.PARAGRAPH && para.getType() !== DocumentApp.ElementType.LIST_ITEM) {
+    found.getElement().asText().replaceText(phPattern_(key), escapeReplacement_(lines.join('; ')));
+    return;
   }
+  if (!lines.length) lines = ['—'];
+  para.asText().setText(lines[0]);
+  const parent = para.getParent();
+  let idx = parent.getChildIndex(para);
+  lines.slice(1).forEach(ln => {
+    const copy = para.copy();
+    copy.asText().setText(ln);
+    idx++;
+    if (copy.getType() === DocumentApp.ElementType.LIST_ITEM) parent.insertListItem(idx, copy);
+    else parent.insertParagraph(idx, copy);
+  });
+}
+
+/** Пустой раздел (комментарий, цифры): удалить абзац с меткой и заголовок над ним. */
+function removeBlock_(body, key) {
+  const found = body.findText(phPattern_(key));
+  if (!found) return;
+  const para = found.getElement().getParent();
+  const prev = para.getPreviousSibling();
+  para.removeFromParent();
+  if (prev && prev.getType() === DocumentApp.ElementType.PARAGRAPH && prev.asParagraph().getHeading() !== DocumentApp.ParagraphHeading.NORMAL) prev.removeFromParent();
+}
+
+/** Строка таблицы с {{KEY}} — образец: на каждую строку данных делается копия. */
+function fillTableRows_(body, key, rows) {
+  const found = body.findText(phPattern_(key));
+  if (!found) return;
+  let el = found.getElement();
+  while (el && el.getType() !== DocumentApp.ElementType.TABLE_ROW) el = el.getParent();
+  if (!el) return;
+  const tplRow = el.asTableRow();
+  const table = tplRow.getParentTable();
+  const idx = table.getChildIndex(tplRow);
+  if (!rows.length) rows = [['—', '—', '']];
+  rows.forEach((r, i) => {
+    const nr = table.insertTableRow(idx + 1 + i, tplRow.copy());
+    for (let c = 0; c < nr.getNumCells() && c < r.length; c++) nr.getCell(c).editAsText().setText(String(r[c]));
+  });
+  tplRow.removeFromParent();
 }
 
 /**
- * Одна папка на объект: 01_ОБЪЕКТЫ/«Название (ID из CRM)»/{Стратегия, Отчёты, Материалы}.
- * kind: 'ROOT' — сама папка объекта, 'STRATEGIES' / 'REPORTS' / 'MATERIALS' — подпапка.
+ * Одна папка на объект: 01_ОБЪЕКТЫ/«Название (ID из CRM)»/{Аналитика, КП и презентации, Отчёты, Фото и видео}.
+ * kind: 'ROOT' — сама папка объекта, 'ANALYTICS' / 'MATERIALS' / 'REPORTS' / 'MEDIA' — подпапка.
  * Ссылка на папку объекта записывается в 01_ОБЪЕКТЫ.
  */
 function ensureObjectFolder_(id, kind) {
@@ -2514,21 +2270,24 @@ function ensureObjectFolder_(id, kind) {
   const obj = objectById_(id);
   const suffix = '(' + id + ')';
   let root = null;
+  const linked = obj ? idFromUrl_(obj.folder_link) : '';
+  if (linked) root = folderById_(linked); // своя папка объекта, указанная вручную в 01_ОБЪЕКТЫ
   const it = parent.getFolders();
   while (it.hasNext() && !root) {
     const f = it.next();
     if (f.getName().slice(-suffix.length) === suffix) root = f;
   }
-  if (!root) {
-    root = parent.createFolder((obj ? obj.name : id) + ' ' + suffix);
-    Object.keys(SYS.OBJECT_SUBFOLDERS).forEach(k => childFolder_(root, SYS.OBJECT_SUBFOLDERS[k]));
-  }
+  if (!root) root = parent.createFolder((obj ? obj.name : id) + ' ' + suffix);
+  Object.keys(SYS.OBJECT_SUBFOLDERS).forEach(k => childFolder_(root, SYS.OBJECT_SUBFOLDERS[k]));
   if (obj && obj.folder_link !== root.getUrl()) writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { folder_link: root.getUrl() });
   if (!kind || kind === 'ROOT') return root;
   return childFolder_(root, SYS.OBJECT_SUBFOLDERS[kind]);
 }
 
-/** Шаблон «Еженедельный отчёт по продаже объекта» (создаётся один раз, дальше можно менять вёрстку в Google Docs). */
+/**
+ * Шаблон отчёта в формате руководителя. Создаётся один раз в 02_ШАБЛОНЫ; дальше вёрстку (шрифты, логотип,
+ * отступы) можно менять прямо в Google Docs — метки {{…}} не удаляйте.
+ */
 function ensureReportTemplate_() {
   const id = String(cfgGet_('TEMPLATE_REPORT_ID') || '');
   if (id) {
@@ -2536,53 +2295,35 @@ function ensureReportTemplate_() {
   }
   const doc = DocumentApp.create(SYS.REPORT_TEMPLATE_NAME);
   const b = doc.getBody();
-  b.setMarginTop(48).setMarginBottom(48).setMarginLeft(56).setMarginRight(56);
+  b.setMarginTop(42).setMarginBottom(42).setMarginLeft(56).setMarginRight(42);
   const base = {};
-  base[DocumentApp.Attribute.FONT_FAMILY] = 'Arial';
-  base[DocumentApp.Attribute.FONT_SIZE] = 11;
-  base[DocumentApp.Attribute.FOREGROUND_COLOR] = '#263238';
+  base[DocumentApp.Attribute.FONT_FAMILY] = 'Times New Roman';
+  base[DocumentApp.Attribute.FONT_SIZE] = 12;
   b.setAttributes(base);
   const H = DocumentApp.ParagraphHeading;
-  b.getParagraphs()[0].setText('Еженедельный отчёт о продаже объекта').setHeading(H.SUBTITLE);
-  b.appendParagraph('{{OBJECT}}').setHeading(H.TITLE);
-  const info = b.appendTable([
-    ['Адрес', '{{ADDRESS}}'], ['Период', '{{PERIOD}}'], ['Цена', '{{PRICE}}'], ['Дней в экспозиции', '{{DAYS_ON_MARKET}}'],
-  ]);
-  styleTable_(info, false);
-  const sec = (title, level) => b.appendParagraph(title).setHeading(level || H.HEADING2);
-  sec('1. Что сделано за неделю');
-  b.appendParagraph('Выполнено действий: {{ACTIONS}}. Основные каналы: {{CHANNELS}}.');
-  b.appendParagraph('{{DONE}}');
-  sec('2. Результаты недели');
-  const res = b.appendTable([
-    ['Показатель', 'Значение'],
-    ['Контакты с потенциальными покупателями', '{{CONTACTS}}'], ['Получили ответ', '{{RESPONSES}}'],
-    ['Проявили интерес (лиды)', '{{INTERESTED}}'], ['Презентации', '{{PRESENTATIONS}}'],
-    ['Показы', '{{SHOWINGS}}'], ['Переговоры', '{{NEGOTIATIONS}}'], ['Предложения', '{{OFFERS}}'],
-    ['Брони', '{{BOOKINGS}}'], ['Сделки', '{{DEALS}}'],
-  ]);
-  styleTable_(res, true);
-  sec('3. Воронка и конверсии');
-  b.appendParagraph('{{CONVERSIONS}}');
-  sec('4. Что показал рынок');
-  b.appendParagraph('{{MARKET_FEEDBACK}}');
-  sec('Возражения покупателей', H.HEADING3);
-  b.appendParagraph('{{OBJECTIONS}}');
-  sec('Что протестировали на рынке', H.HEADING3);
-  b.appendParagraph('{{TESTS}}');
-  sec('5. Выводы');
-  b.appendParagraph('{{CONCLUSIONS}}');
-  sec('Что изменили в стратегии', H.HEADING3);
-  b.appendParagraph('{{STRATEGY_CHANGES}}');
-  sec('6. План на следующую неделю');
-  b.appendParagraph('{{NEXT_WEEK}}');
-  sec('Целевые показатели следующей недели', H.HEADING3);
-  b.appendParagraph('{{NEXT_WEEK_KPI}}');
-  sec('7. Комментарий руководителя');
-  b.appendParagraph('{{MANAGER_COMMENT}}');
+  const A = DocumentApp.HorizontalAlignment;
+  const p0 = b.getParagraphs()[0];
+  p0.setText('{{EXEC_HEADER}}').setAlignment(A.RIGHT).editAsText().setFontSize(10);
   b.appendParagraph('');
-  b.appendParagraph('{{MANAGER_NAME}} {{MANAGER_CONTACT}} {{AGENCY}} · отчёт сформирован {{REPORT_DATE}}')
-    .editAsText().setFontSize(9).setForegroundColor('#80868B');
+  b.appendParagraph('Приложение №1 к Договору № {{CONTRACT_NO}} от {{CONTRACT_DATE}}').setAlignment(A.RIGHT).editAsText().setFontSize(11);
+  b.appendParagraph('Еженедельный отчёт').setHeading(H.HEADING2).setAlignment(A.CENTER);
+  const info = b.appendTable([
+    ['Наименование', 'Значение'], ['Отчет №', '{{REPORT_NO}}'], ['Период', '{{PERIOD}}'],
+    ['Объект', '{{OBJECT}}'], ['Заказчик', '{{CUSTOMER}}'], ['Исполнитель', '{{EXECUTOR}}'],
+  ]);
+  styleReportTable_(info, [170, 320]);
+  b.appendParagraph('Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА').setHeading(H.HEADING3);
+  styleReportTable_(b.appendTable([['№', 'Действие по плану на эту неделю', 'Статус (выполнено / нет)'], ['{{PLAN_ROWS}}', '', '']]), [40, 330, 120]);
+  b.appendParagraph('Итоги недели в цифрах').setHeading(H.HEADING4);
+  b.appendParagraph('{{SUMMARY}}');
+  b.appendParagraph('Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ').setHeading(H.HEADING3);
+  styleReportTable_(b.appendTable([['№', 'Заявка', 'Следующий шаг'], ['{{LEADS_ROWS}}', '', '']]), [40, 280, 170]);
+  b.appendParagraph('Раздел 3. ПЛАН РАБОТЫ').setHeading(H.HEADING3);
+  styleReportTable_(b.appendTable([['№', 'Действие', 'Дата выполнения'], ['{{NEXT_ROWS}}', '', '']]), [40, 300, 150]);
+  b.appendParagraph('Комментарий').setHeading(H.HEADING4);
+  b.appendParagraph('{{COMMENT}}');
+  b.appendParagraph('');
+  b.appendParagraph('Исполнитель: ______________________ {{SIGNATURE}}');
   doc.saveAndClose();
   const file = DriveApp.getFileById(doc.getId());
   const tplFolder = folderById_(cfgGet_('FOLDER_TEMPLATES_ID'));
@@ -2591,861 +2332,800 @@ function ensureReportTemplate_() {
   return doc.getId();
 }
 
-function styleTable_(t, withHeader) {
-  t.setBorderColor('#CFD8DC');
+function styleReportTable_(t, widths) {
+  t.setBorderColor('#000000');
   for (let r = 0; r < t.getNumRows(); r++) {
     const row = t.getRow(r);
-    row.getCell(0).setWidth(250);
     for (let c = 0; c < row.getNumCells(); c++) {
-      row.getCell(c).setPaddingTop(3).setPaddingBottom(3);
-      row.getCell(c).editAsText().setFontSize(10);
+      const cell = row.getCell(c);
+      if (widths[c]) cell.setWidth(widths[c]);
+      cell.setPaddingTop(3).setPaddingBottom(3);
+      cell.editAsText().setFontSize(11).setBold(r === 0);
+      const para = cell.getChild(0);
+      if (para && para.getType() === DocumentApp.ElementType.PARAGRAPH) para.asParagraph().setAlignment(c === 0 || r === 0 ? DocumentApp.HorizontalAlignment.CENTER : DocumentApp.HorizontalAlignment.LEFT);
     }
-    if (withHeader && r === 0) {
-      for (let c = 0; c < row.getNumCells(); c++) row.getCell(c).setBackgroundColor('#ECEFF1').editAsText().setBold(true);
-    } else if (!withHeader) {
-      row.getCell(0).editAsText().setForegroundColor('#80868B');
-    }
   }
-}
-
-// ═════════════ 06_Strategy.gs ═════════════
-/**
- * 06_Strategy — полная стратегия объекта в Google Doc.
- *
- * В 02_СТРАТЕГИЯ — короткая управленческая версия. Полный документ создаётся один раз
- * из шаблона (поля 02 подставляются как стартовый текст) и дальше ведётся в Google Docs.
- */
-
-function openStrategy() {
-  const ui = SpreadsheetApp.getUi();
-  let id = selectedObjectId_();
-  if (!id) {
-    const r = ui.prompt('Открыть стратегию', 'Введите ID объекта (ID из CRM) или встаньте на строку объекта:', ui.ButtonSet.OK_CANCEL);
-    if (r.getSelectedButton() !== ui.Button.OK) return;
-    id = r.getResponseText().trim();
-  }
-  const obj = objectById_(id);
-  if (!obj) { ui.alert('Объект ' + id + ' не найден.'); return; }
-  const res = ensureStrategyDoc_(id);
-  showLinks_('Стратегия: ' + obj.name, [{ label: res.name, url: res.url }], res.created ? 'Документ создан из шаблона и заполнен краткой версией из 02_СТРАТЕГИЯ.' : '');
-}
-
-function ensureStrategyDoc_(id) {
-  const obj = objectById_(id);
-  ensureStrategyRows_([id]);
-  const t = readTable_('STR');
-  const row = t.rows.find(r => r.obj_id === id);
-  const existingId = idFromUrl_(row.strategy_doc) || idFromUrl_(obj.strategy_link);
-  if (existingId) {
-    try {
-      const f = DriveApp.getFileById(existingId);
-      if (!f.isTrashed()) {
-        if (!row.strategy_doc) writeFields_(t.sh, 'STR', row._row, { strategy_doc: f.getUrl() });
-        if (!obj.strategy_link) writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { strategy_link: f.getUrl() });
-        return { url: f.getUrl(), name: f.getName(), created: false };
-      }
-    } catch (e) { /* документ удалён — создадим новый */ }
-  }
-  const folder = ensureObjectFolder_(id, 'STRATEGIES');
-  const tpl = DriveApp.getFileById(ensureStrategyTemplate_());
-  const name = obj.name + ' — Стратегия продажи';
-  const copy = tpl.makeCopy(name, folder);
-  const doc = DocumentApp.openById(copy.getId());
-  const values = { OBJECT: obj.name, OBJ_ID: id, ADDRESS: obj.address || '—', DATE: fmtDate_(new Date()) };
-  strategyDocFields_().forEach(f => {
-    const v = row[f.key];
-    values[f.key.toUpperCase()] = v instanceof Date ? fmtDate_(v) : (v === '' || v === null ? '—' : String(v));
-  });
-  fillDoc_(doc, values, {});
-  doc.saveAndClose();
-  writeFields_(t.sh, 'STR', row._row, { strategy_doc: copy.getUrl() });
-  writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { strategy_link: copy.getUrl() });
-  return { url: copy.getUrl(), name: name, created: true };
-}
-
-function strategyDocFields_() {
-  return sheetSpecs_().STR.fields.filter(f => ['text', 'money', 'dd', 'date'].indexOf(f.kind) >= 0 && f.key !== 'obj_id');
-}
-
-function ensureStrategyTemplate_() {
-  const id = String(cfgGet_('TEMPLATE_STRATEGY_ID') || '');
-  if (id) {
-    try { if (!DriveApp.getFileById(id).isTrashed()) return id; } catch (e) { /* создадим заново */ }
-  }
-  const doc = DocumentApp.create(SYS.STRATEGY_TEMPLATE_NAME);
-  const b = doc.getBody();
-  const base = {};
-  base[DocumentApp.Attribute.FONT_FAMILY] = 'Arial';
-  base[DocumentApp.Attribute.FONT_SIZE] = 11;
-  base[DocumentApp.Attribute.FOREGROUND_COLOR] = '#263238';
-  b.setAttributes(base);
-  const H = DocumentApp.ParagraphHeading;
-  b.getParagraphs()[0].setText('Стратегия продажи').setHeading(H.SUBTITLE);
-  b.appendParagraph('{{OBJECT}}').setHeading(H.TITLE);
-  b.appendParagraph('{{OBJ_ID}} · {{ADDRESS}} · документ создан {{DATE}}').editAsText().setFontSize(9).setForegroundColor('#80868B');
-  b.appendParagraph('ВНУТРЕННИЙ ДОКУМЕНТ. Клиенту не передаётся. Краткая версия и дата пересмотра — в листе 02_СТРАТЕГИЯ.')
-    .editAsText().setFontSize(9).setBold(true).setForegroundColor('#7F1D1D');
-  const groups = [
-    ['1. Цель и цена', ['strategy_status', 'goal', 'target_price', 'price_range']],
-    ['2. Позиционирование и аргументы', ['positioning', 'key_argument', 'advantages', 'weaknesses', 'not_public']],
-    ['3. Покупатель', ['ta1', 'ta2', 'ta3', 'motives', 'objections', 'answers']],
-    ['4. Рынок и конкуренты', ['competitors']],
-    ['5. Сценарий и каналы', ['scenario', 'channels', 'partner_channels', 'crm_base', 'content_strategy', 'outbound_strategy', 'promo_plan']],
-    ['6. Гипотезы и выводы', ['hypotheses', 'conclusion', 'next_hypothesis', 'review_date']],
-  ];
-  groups.forEach(g => {
-    b.appendParagraph(g[0]).setHeading(H.HEADING2);
-    g[1].forEach(k => {
-      b.appendParagraph(fieldTitle_('STR', k)).setHeading(H.HEADING3);
-      b.appendParagraph('{{' + k.toUpperCase() + '}}');
-    });
-  });
-  b.appendParagraph('7. Подробный анализ').setHeading(H.HEADING2);
-  b.appendParagraph('Здесь — глубокая проработка: анализ аналогов, расчёты, сценарии переговоров, материалы для контента.');
-  b.appendParagraph('8. Журнал решений').setHeading(H.HEADING2);
-  b.appendParagraph('Дата — решение — почему — кто утвердил.');
-  doc.saveAndClose();
-  const file = DriveApp.getFileById(doc.getId());
-  const tplFolder = folderById_(cfgGet_('FOLDER_TEMPLATES_ID'));
-  if (tplFolder) file.moveTo(tplFolder);
-  cfgSet_('TEMPLATE_STRATEGY_ID', doc.getId());
-  return doc.getId();
-}
-
-/** Меню: создать папки и документы стратегий для всех объектов, где их нет. */
-function createFoldersForAll() {
-  const objs = readTable_('OBJ').rows.filter(o => o.id);
-  let n = 0;
-  objs.forEach(o => {
-    ensureObjectFolder_(o.id, 'ROOT');
-    if (ensureStrategyDoc_(o.id).created) n++;
-  });
-  SpreadsheetApp.getUi().alert('Готово: папки проверены для ' + objs.length + ' объектов, создано документов стратегии: ' + n + '.');
 }
 
 // ═════════════ 07_Planning.gs ═════════════
 /**
- * 07_Planning — недельный цикл: план недели (понедельник) и перенос незакрытых задач.
+ * 07_Planning — «Создать план недели».
+ *
+ * Для каждого объекта в работе:
+ *  1) незакрытые задачи прошлых недель (по желанию) переносятся на выбранную неделю — исходные строки
+ *     получают статус «Перенесено» и остаются в истории;
+ *  2) добавляются задачи недели по умолчанию из 08_НАСТРОЙКИ (если такой задачи на эту неделю ещё нет).
+ * Исполнитель: звонки и КП — ассистент объекта, публикации — SMM объекта, остальное — ответственный.
  */
 
 function createWeekPlan() {
   const ui = SpreadsheetApp.getUi();
-  const t = today_();
-  const dow = t.getDay() || 7;
-  const def = isoWeekKey_(dow >= 5 ? addDays_(t, 7) : t); // с пятницы планируем следующую неделю
-  const r = ui.prompt('Создать план недели',
-    'Неделя в формате 2026-W40.\nПусто = ' + def + ' (' + weekPeriodLabel_(def) + ').\n\n' +
-    'Для каждого объекта в работе будут добавлены KPI по умолчанию (10_НАСТРОЙКИ), а незакрытые задачи прошлой недели можно перенести.',
-    ui.ButtonSet.OK_CANCEL);
-  if (r.getSelectedButton() !== ui.Button.OK) return;
-  const key = r.getResponseText().trim() || def;
-  if (!mondayOfWeekKey_(key)) { ui.alert('Неверный формат недели: ' + key + '. Нужно, например, 2026-W40.'); return; }
-  const res = buildWeekPlan_(key, { interactive: true });
-  sheet_('PF').activate();
-  ui.alert('План недели ' + key,
-    'Перенесено незакрытых задач: ' + res.moved + '\nДобавлено строк KPI: ' + res.created +
-    '\n\nДополните задачи недели (столбец «Задача»), ответственных и цели. Итоги — в блоке справа на листе 06_ПЛАН_ФАКТ.',
-    ui.ButtonSet.OK);
+  const today = today_();
+  const dow = today.getDay() || 7;
+  const defKey = isoWeekKey_(dow >= 5 ? addDays_(today, 7) : today);
+  const resp = ui.prompt('План недели',
+    'Неделя (формат 2026-W40). По умолчанию — ' + defKey + ' (' + weekPeriodLabel_(defKey) + ').', ui.ButtonSet.OK_CANCEL);
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  const wk = (resp.getResponseText() || '').trim() || defKey;
+  if (!mondayOfWeekKey_(wk)) { ui.alert('Неделя должна быть в формате 2026-W40.'); return; }
+  const carry = ui.alert('Перенос задач', 'Перенести незакрытые задачи прошлых недель на ' + wk + '?', ui.ButtonSet.YES_NO) === ui.Button.YES;
+  const res = buildWeekPlan_(wk, { carry: carry });
+  ui.alert('План недели ' + wk, 'Добавлено задач: ' + res.added + '\nПеренесено: ' + res.moved +
+    (res.skipped.length ? '\nБез ID / не в работе: ' + res.skipped.join(', ') : '') +
+    '\n\nДопишите в 02_ЗАДАЧИ задачи по стратегии (сценарии, аудитории, КП) — они попадут в отчёт клиенту.', ui.ButtonSet.OK);
 }
 
-function buildWeekPlan_(key, opts) {
+function buildWeekPlan_(wk, opts) {
   opts = opts || {};
-  const mon = mondayOfWeekKey_(key);
-  const prevKey = isoWeekKey_(addDays_(mon, -7));
-  const user = userEmail_();
+  const objs = readTable_('OBJ').rows.filter(o => o.id && o.name && o.in_work !== 'НЕТ');
+  const tasks = readTable_('TASK');
   const hist = [];
-  const objs = readTable_('OBJ').rows.filter(o => o.id && o.in_work === 'ДА');
-  const active = {};
-  objs.forEach(o => { active[o.id] = o; });
-
-  // 1. незакрытые задачи прошлой недели
-  const pf = readTable_('PF');
-  const openPrev = pf.rows.filter(r => r.week === prevKey && r.status_class === CLS.OPEN && active[r.obj_id]);
   let moved = 0;
-  if (openPrev.length) {
-    let go = true;
-    if (opts.interactive) {
-      const ui = SpreadsheetApp.getUi();
-      go = ui.alert('Незакрытые задачи', 'На неделе ' + prevKey + ' осталось незакрытых задач: ' + openPrev.length +
-        '.\nПеренести их на ' + key + '? Старые строки получат статус «Перенесено» и останутся в истории.', ui.ButtonSet.YES_NO) === ui.Button.YES;
-    }
-    if (go) {
-      const movedStatus = dictFirstByClass_('task_status', CLS.MOVED);
-      openPrev.forEach(r => {
-        writeFields_(pf.sh, 'PF', r._row, { status: movedStatus });
-        hist.push({ sheet: SHEET_NAMES.PF, record_id: r.task_id, obj_id: r.obj_id, field: fieldTitle_('PF', 'status'), old: r.status, new: movedStatus, kind: HIST_KIND.CHANGE, note: 'План недели ' + key });
-        if (moveTask_(r, hist, key)) moved++;
-      });
-    }
+  if (opts.carry) {
+    const movedName = dictFirstByClass_('task_status', CLS.MOVED);
+    tasks.rows.forEach(t => {
+      const cls = t.status ? dictClassOf_('task_status', t.status) : CLS.OPEN;
+      if (!t.obj_id || cls !== CLS.OPEN || !t.week || String(t.week) >= wk) return;
+      if (!objs.some(o => o.id === t.obj_id)) return;
+      const newId = moveTask_(t, hist, wk);
+      if (newId) {
+        writeFields_(tasks.sh, 'TASK', t._row, { status: movedName });
+        moved++;
+      }
+    });
   }
-
-  // 2. KPI по умолчанию для объектов, у которых на эту неделю KPI ещё нет
-  const kpis = defaultKpi_();
-  const now = readTable_('PF');
-  const openStatus = dictFirstByClass_('task_status', CLS.OPEN);
-  const idCache = {};
-  const rows = [];
+  const fresh = readTable_('TASK').rows;
+  const have = {};
+  fresh.forEach(t => { have[t.obj_id + '|' + t.week + '|' + String(t.task).trim()] = true; });
+  const defaults = defaultWeekTasks_();
+  const mon = mondayOfWeekKey_(wk);
+  const openName = dictFirstByClass_('task_status', CLS.OPEN);
+  const add = [];
+  const cache = {};
   objs.forEach(o => {
-    const has = now.rows.some(r => r.week === key && r.obj_id === o.id && r.kpi_metric);
-    if (has) return;
-    kpis.forEach(k => {
-      rows.push({
-        week: key, obj_id: o.id, owner: o.assistant || o.manager || '', plan: 'KPI недели', kpi_metric: k[0], kpi_plan: k[1],
-        status: openStatus, deadline: addDays_(mon, 4), to_report: true, task_id: nextId_('PF', idCache), created_at: new Date(),
+    defaults.forEach(d => {
+      if (have[o.id + '|' + wk + '|' + d.task]) return;
+      const unitCode = (unitDefs_().find(u => u[0] === d.unit) || [])[1] || '';
+      const owner = (unitCode === 'CALLS' || unitCode === 'KP' || unitCode === 'RESP') ? (o.assistant || o.manager) :
+        unitCode === 'PUB' ? (o.smm || o.manager) : o.manager;
+      add.push({
+        id: nextId_('TASK', cache), week: wk, obj_id: o.id, block: d.block, task: d.task, owner: owner || '', unit: d.unit, plan: d.plan,
+        deadline: addDays_(mon, 4), status: openName, to_report: true, source: 'План недели', created_at: new Date(), author: userEmail_(),
       });
     });
   });
-  appendRows_('PF', rows);
-  logHistory_(hist, user);
-  try {
-    const label = weekLabelByKey_(key);
-    if (label) sheet_('PF').getRange(pfBlockLayout_().selWeek).setValue(label);
-  } catch (e) { /* неделя вне справочника — фильтр не меняем */ }
-  return { key: key, moved: moved, created: rows.length };
+  appendRows_('TASK', add);
+  logHistory_(hist, userEmail_());
+  const skipped = readTable_('OBJ').rows.filter(o => (o.name && !o.id)).map(o => o.name);
+  return { added: add.length, moved: moved, skipped: skipped };
 }
 
-function defaultKpi_() {
-  const r = ss_().getRangeByName('CFG_DEFAULT_KPI');
-  if (!r) return DEFAULT_WEEK_KPI;
-  return r.getValues().filter(v => v[0] !== '' && v[1] !== '' && !isNaN(Number(v[1]))).map(v => [v[0], Number(v[1])]);
+function defaultWeekTasks_() {
+  const r = ss_().getRangeByName('CFG_DEFAULT_TASKS');
+  const rows = r ? r.getValues().filter(x => String(x[1]).trim() !== '') : DEFAULT_WEEK_TASKS;
+  return rows.map(x => ({ block: x[0], task: String(x[1]).trim(), unit: x[2], plan: x[3] === '' ? '' : Number(x[3]) }));
 }
 
 // ═════════════ 08_Control.gs ═════════════
 /**
- * 08_Control — просрочки, обновление статистики, ежедневная сводка.
- * Сами предупреждения считаются формулами в 11_КОНТРОЛЬ; здесь — показ и обслуживание.
+ * 08_Control — контроль и обслуживание: просрочки, обновление, дэшборд.
  */
 
-function readAlerts_() {
+/** Просроченные задачи по исполнителям (то же, что внизу дэшборда, но списком). */
+function checkOverdue() {
   SpreadsheetApp.flush();
-  const sh = sheet_('CTRL');
-  const n = sh.getMaxRows() - CTRL_FIRST + 1;
-  return sh.getRange(CTRL_FIRST, 1, n, 8).getDisplayValues().filter(r => r[1] !== '');
+  const rows = readTable_('TASK').rows.filter(t => t.overdue === 'ПРОСРОЧЕНО');
+  const ui = SpreadsheetApp.getUi();
+  if (!rows.length) { ui.alert('Просрочек нет', 'Все задачи с прошедшим сроком закрыты.', ui.ButtonSet.OK); return; }
+  const by = {};
+  rows.forEach(t => { const k = t.owner || '(без исполнителя)'; (by[k] = by[k] || []).push(t); });
+  const text = Object.keys(by).map(k => k + ' — ' + by[k].length + ':\n' + by[k].slice(0, 12).map(t =>
+    '   • ' + t.obj_name + ': ' + t.task + ' (срок ' + fmtDate_(t.deadline) + ', ' + t.id + ')').join('\n') +
+    (by[k].length > 12 ? '\n   …' : '')).join('\n\n');
+  ui.alert('Просроченные задачи: ' + rows.length, text + '\n\nЗакройте, перенесите («Перенесено») или отмените задачу в 02_ЗАДАЧИ.', ui.ButtonSet.OK);
 }
 
-function checkOverdue() {
-  const alerts = readAlerts_();
-  sheet_('CTRL').activate();
-  if (!alerts.length) {
-    SpreadsheetApp.getUi().alert('Просрочек и предупреждений нет ✓');
-    return;
+/**
+ * «Обновить»: проставляет ID и значения по умолчанию строкам, вставленным без триггера (копипаст большого блока),
+ * создаёт недостающие вкладки объектов, добавляет строки в журналы, если они заканчиваются.
+ */
+function refreshAll() {
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30000)) { toast_('Система занята, повторите через минуту.'); return; }
+  let fixed = 0;
+  try {
+    ['TASK', 'BASE', 'CONT', 'LIB'].forEach(code => {
+      const t = readTable_(code);
+      const cache = {};
+      t.rows.forEach(o => {
+        const hasInput = t.spec.fields.some(f => isInputKind_(f.kind) && f.kind !== 'cb' && o[f.key] !== '');
+        if (!hasInput || o[t.spec.idField]) return;
+        const upd = {};
+        upd[t.spec.idField] = nextId_(code, cache);
+        applyDefaults_(code, o, upd, true, userEmail_(), []);
+        writeFields_(t.sh, code, o._row, upd);
+        fixed++;
+      });
+      const last = lastDataRow_(t.sh, t.spec);
+      if (t.sh.getMaxRows() - last < 200) extendSheet_(code, 1000);
+    });
+    const objs = readTable_('OBJ');
+    objs.rows.forEach(o => {
+      if (o.id && o.name && !findObjectTab_(o)) { syncObjectTab_(o, 'create'); fixed++; }
+    });
+    orderSheets_();
+  } finally {
+    lock.releaseLock();
   }
-  const byType = {};
-  alerts.forEach(a => { byType[a[1]] = (byType[a[1]] || 0) + 1; });
-  const high = alerts.filter(a => a[0].charAt(0) === '1').length;
-  const summary = Object.keys(byType).sort((a, b) => byType[b] - byType[a]).map(k => '<li>' + htmlEscape_(k) + ': <b>' + byType[k] + '</b></li>').join('');
-  const rows = alerts.slice(0, 40).map(a => {
-    const color = a[0].charAt(0) === '1' ? '#F4CCCC' : a[0].charAt(0) === '2' ? '#FFF2CC' : '#FFFFFF';
-    return '<tr style="background:' + color + '"><td>' + htmlEscape_(a[1]) + '</td><td>' + htmlEscape_(a[3]) + '</td><td>' +
-      htmlEscape_(a[4]) + '</td><td>' + htmlEscape_(a[5]) + '</td><td>' + htmlEscape_(a[6]) + '</td></tr>';
-  }).join('');
-  const html = HtmlService.createHtmlOutput(
-    '<div style="font-family:Arial,sans-serif;font-size:13px">' +
-    '<p>Всего предупреждений: <b>' + alerts.length + '</b>, из них высокой критичности: <b>' + high + '</b></p>' +
-    '<ul>' + summary + '</ul>' +
-    '<table style="border-collapse:collapse;width:100%" border="1" cellpadding="4">' +
-    '<tr style="background:#ECEFF1"><th>Тип</th><th>Объект</th><th>Что случилось</th><th>Ответственный</th><th>Срок</th></tr>' + rows + '</table>' +
-    (alerts.length > 40 ? '<p>… полный список — лист 11_КОНТРОЛЬ</p>' : '') + '</div>').setWidth(900).setHeight(560);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Проверка просрочек');
+  SpreadsheetApp.flush();
+  toast_('Готово. Исправлено / создано: ' + fixed, 'Обновление', 6);
 }
 
 function openDashboard() { sheet_('DASH').activate(); }
 
+// ═════════════ 09_ExampleData.gs ═════════════
 /**
- * «Обновить статистику»: формулы пересчитываются сами, но эта команда
- * 1) проставляет недостающие ID/значения по умолчанию (если данные вставляли, а триггер не сработал);
- * 2) создаёт строки стратегии для новых объектов;
- * 3) добавляет строки в журналы, если они заканчиваются, и растягивает на них списки/чекбоксы;
- * 4) пересчитывает таблицу.
+ * 09_ExampleData — пример «ЖК Время · Лермонтовская 1» по реальным материалам руководителя
+ * (маркетинговый анализ, отчёт № 5, таблица медцентров, КП и презентации на Google Диске).
+ * ID объекта, заказчик и договор в примере условные — замените в 01_ОБЪЕКТЫ, всё обновится само.
+ * Контакты компаний и итоги звонков обобщены; ссылки на файлы — вставьте свои.
  */
-function refreshStats() {
-  const fixed = fillMissing_();
-  ['OBJ', 'STR', 'ACT', 'PF', 'HIST', 'ARCH', 'HYP'].forEach(code => {
-    const sh = sheet_(code);
-    const last = lastDataRow_(sh, sheetSpecs_()[code]);
-    if (sh.getMaxRows() - last < 200) extendSheet_(code, 1000);
+
+const EXAMPLE_ID = 'ВРЕМЯ-1';
+// Ссылки на файлы и данные заказчика в пример не включены (репозиторий публичный) — вносятся в таблице.
+const EXAMPLE_FILES = {
+  analysis: 'Google Диск: Аналитика / Маркетинговый анализ', consult: 'Google Диск: консультация по лицензии',
+  measurers: 'Google Диск: Замерщики и проектировщики', medTable: 'Google Диск: Медцентры для ЖК Время',
+  kpPartner: 'Google Диск: КП партнёру', kpClient: 'Google Диск: КП ЖК Время', presMed: 'Google Диск: презентация под медцентр',
+  presVet: 'Google Диск: презентация под ветклинику', analyticsPdf: 'Google Диск: Аналитика (PDF)', mailScript: 'Google Диск: текст рассылки',
+};
+
+function loadExampleData() {
+  const ui = SpreadsheetApp.getUi();
+  if (objectById_(EXAMPLE_ID)) { ui.alert('Пример уже загружен (объект ' + EXAMPLE_ID + ').'); return; }
+  const b = ui.alert('Пример «ЖК Время»', 'Добавить пример объекта с вкладкой стратегии, задачами, обзвоном медцентров и контентом? Реальные данные не затрагиваются.', ui.ButtonSet.OK_CANCEL);
+  if (b !== ui.Button.OK) return;
+  const sh = loadExample_();
+  sh.activate();
+  ui.alert('Готово', 'Откройте вкладку «' + sh.getName() + '», затем 05_ОТЧЁТ_КЛИЕНТУ: выберите объект и неделю 2026-W38 (14.09–18.09) — это отчёт за 14–18.09 в вашем формате (как отчёт № 5).', ui.ButtonSet.OK);
+}
+
+function d_(s) { return s ? new Date(s + 'T00:00:00') : ''; }
+
+function loadExample_() {
+  const F = EXAMPLE_FILES;
+  appendRow_('OBJ', {
+    id: EXAMPLE_ID, name: 'ЖК Время · Лермонтовская 1', kind: 'Коммерция', deal: 'Продажа',
+    address: 'г. Москва, ул. Лермонтовская, д.1 (помещение 1Н, 756,2 кв.м)', area: 756.2, price: 225500000,
+    status: 'В работе', manager: 'Наталья', assistant: 'Ассистент', smm: 'SMM', customer: 'ООО «Заказчик»',
+    contract_no: '000-000', contract_date: d_('2026-08-14'), date_sign: d_('2026-08-14'), created_at: today_(),
   });
   SpreadsheetApp.flush();
-  toast_('Статистика пересчитана. Исправлено строк без ID/значений по умолчанию: ' + fixed + '.');
-}
-
-function fillMissing_() {
-  let fixed = 0;
-  const user = userEmail_();
-  ['ACT', 'PF', 'HYP'].forEach(code => {
-    const t = readTable_(code);
-    const cache = {};
-    t.rows.forEach(o => {
-      const hasInput = t.spec.fields.some(f => isInputKind_(f.kind) && f.kind !== 'cb' && o[f.key] !== '');
-      if (!hasInput || o[t.spec.idField]) return;
-      const upd = {};
-      upd[t.spec.idField] = nextId_(code, cache);
-      o[t.spec.idField] = upd[t.spec.idField];
-      applyDefaults_(code, o, upd, true, user, []);
-      writeFields_(t.sh, code, o._row, upd);
-      fixed++;
-    });
-  });
-  const ids = readTable_('OBJ').rows.map(o => o.id).filter(Boolean);
-  ensureStrategyRows_(ids);
-  return fixed;
-}
-
-// ───────────── ежедневная сводка на email ─────────────
-
-function installDailyCheck() {
-  const ui = SpreadsheetApp.getUi();
-  const email = String(cfgGet_('DAILY_EMAIL') || '').trim();
-  if (!email) { ui.alert('Укажите email в 10_НАСТРОЙКИ → «Email для ежедневной сводки предупреждений».'); return; }
-  removeDailyCheck_();
-  ScriptApp.newTrigger('dailyCheck').timeBased().everyDays(1).atHour(9).create();
-  ui.alert('Ежедневная сводка включена: около 9:00 на ' + email + '.');
-}
-
-function uninstallDailyCheck() {
-  removeDailyCheck_();
-  SpreadsheetApp.getUi().alert('Ежедневная сводка выключена.');
-}
-
-function removeDailyCheck_() {
-  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyCheck') ScriptApp.deleteTrigger(t); });
-}
-
-function dailyCheck() {
-  const email = String(cfgGet_('DAILY_EMAIL') || '').trim();
-  if (!email) return;
-  const alerts = readAlerts_();
-  if (!alerts.length) return;
-  const lines = alerts.slice(0, 60).map(a => '• [' + a[0] + '] ' + a[1] + ' — ' + a[3] + ': ' + a[4] + (a[5] ? ' (' + a[5] + ')' : ''));
-  MailApp.sendEmail(email, 'Эксклюзивы: ' + alerts.length + ' предупреждений на ' + fmtDate_(new Date()),
-    lines.join('\n') + '\n\nТаблица: ' + ss_().getUrl());
-}
-
-// ═════════════ 09_Dialogs.gs ═════════════
-/**
- * 09_Dialogs — форма «Добавить действие» (быстрый ввод без поиска нужной колонки).
- */
-
-function addAction() {
-  const html = HtmlService.createHtmlOutputFromFile('AddActionDialog').setWidth(640).setHeight(760);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Добавить действие');
-}
-
-/** Данные для выпадающих списков формы. */
-function getActionFormData() {
-  const objs = readTable_('OBJ').rows.filter(o => o.id && o.in_work === 'ДА').map(o => ({ id: o.id, label: objLabel_(o.id, o.name) }));
-  const preselect = selectedObjectId_();
-  return {
-    objects: objs,
-    preselect: preselect,
-    types: dictValues_('action_types'),
-    channels: dictValues_('channels'),
-    people: dictValues_('people'),
-    statuses: dictValues_('task_status'),
-    defaultStatus: dictFirstByClass_('task_status', CLS.DONE),
-    refusals: dictValues_('refusal_reasons'),
-    defaultOwner: personByEmail_(userEmail_()),
-    today: fmtDate_(today_(), 'yyyy-MM-dd'),
-    counters: sheetSpecs_().ACT.fields.filter(f => f.kind === 'num' && f.key !== 'views').map(f => ({ key: f.key, title: f.title.replace('Количество ', '') })),
+  const obj = objectById_(EXAMPLE_ID);
+  const res = syncObjectTab_(obj, 'create');
+  const data = {
+    tables: {
+      ANALOG: [
+        ['Первомайская 42к4', 'ПСН', 848, 139000000, '', 'ЦИАН', 'Ближайший по площади'],
+        ['Никитинская 10', 'ПСН', 684.3, 239505000, '', 'ЦИАН', ''],
+        ['Никитинская 10', 'ГАБ (Пятёрочка)', 875.8, 227708000, '', 'ЦИАН', 'Арендный бизнес — не прямой аналог'],
+        ['BestPlace, район: ПСН 1 этаж', 'медиана района', '', '', '', 'BestPlace', 'Медиана ~295 000 ₽/м²; офисы 2+ этаж ~122 000 ₽/м²'],
+      ],
+      SCEN: [
+        ['Медицинский центр (в т.ч. стационар)', 'Медицина: помещение под лицензию', 'Отдельные входы, вентиляция, мокрые точки, мощность; техпаспорт и поэтажный план от УК', 'Консультанты по медицинскому лицензированию', 'Лицензия возможна, включая стационар — предлагаем сетям медцентров', 'Подтверждён', F.consult],
+        ['Апарт-отель', 'Апарт-комплекс', 'ВРИ, мокрые точки под юниты, пожарные требования; документы от УК', 'Замерщики и проектировщики — таблица исполнителей, запрошены КП', 'Ждём КП проектировщиков на концепцию', 'Проверяем', F.measurers],
+        ['Ветеринарная клиника', 'Ветклиника', 'Отдельный вход, вентиляция, правила УК', '', 'Подготовлена презентация под ветклиники', 'Проверяем', F.presVet],
+        ['Частная школа / детский центр', 'Образование / детский центр', 'Лицензия, СанПиН, естественный свет, эвакуация', '', 'Приоритет ★★★ по анализу', 'Идея', ''],
+        ['Фитнес / ГАБ (сетевой ритейл)', 'ГАБ / ритейл', 'Нагрузки на перекрытия, шум, режим работы', '', 'Приоритет ★★', 'Идея', ''],
+      ],
+      AUD: [
+        ['Сети медцентров', 'Компании', 'Ищут 500–1000 м² под многопрофильный филиал или стационар в новых районах', '2ГИС, Rusprofile, сайты сетей, франшизы', '★★★'],
+        ['Ветеринарные клиники', 'Компании', 'Жители ЖК — владельцы животных; лицензия не нужна', 'Сети ветклиник, 2ГИС', '★★'],
+        ['Частные школы и детские центры', 'Компании', 'Семейная аудитория ЖК, дефицит мест рядом', 'Реестр лицензий, франшизы, 2ГИС', '★★★'],
+        ['Красота и эстетика', 'Компании', 'Косметология / эстетическая медицина рядом с метро', 'Сайты клиник, агрегаторы', '★'],
+        ['Инвесторы в арендный бизнес', 'Инвесторы', 'Купить помещение под арендатора-медцентр ради доходности', 'Брокеры коммерции, клубы инвесторов', '★★'],
+        ['Операторы апарт-отелей', 'Компании', 'Апарт-формат у метро Преображенская площадь', 'Отраслевые каналы, УК апарт-отелей', '★'],
+      ],
+      KP: [
+        ['КП «ЖК Время, Лермонтовская 1»', 'КП клиенту', 'Все аудитории', F.kpClient, 'Сделано', ''],
+        ['КП для партнёров (без контактов)', 'КП партнёру', 'Брокеры, консультанты', F.kpPartner, 'Сделано', 'Для пересылки'],
+        ['Презентация: помещение под медцентр', 'Презентация под аудиторию', 'Сети медцентров', F.presMed, 'Сделано', ''],
+        ['Презентация: помещение под ветклинику', 'Презентация под аудиторию', 'Ветеринарные клиники', F.presVet, 'Сделано', ''],
+        ['Аналитика (PDF)', 'КП клиенту', 'Собственник', F.analyticsPdf, 'Сделано', 'Для разговора о цене'],
+        ['Текст рассылки по медцентрам', 'Письмо без вложения', 'Сети медцентров', F.mailScript, 'Сделано', ''],
+      ],
+      CHAN: [
+        ['Прямой обзвон и рассылка по сетям медцентров', 'Звонки, КП на почту, формы на сайтах', 'Ассистент', 'Регулярно', 'См. 03_ОБЗВОН_И_КП', F.medTable],
+        ['ЦИАН / Авито', 'Объявление, продвижение', 'Наталья', 'Регулярно', '', ''],
+        ['Консультанты по медицинскому лицензированию', 'Проверка сценария «стационар»', 'Наталья', 'Сделано', 'Лицензия возможна', F.consult],
+        ['Замерщики и проектировщики (апарт-формат)', 'Запрос КП', 'Ассистент', 'В работе', 'Запрошены КП', F.measurers],
+        ['Instagram / Telegram / YouTube Shorts / Threads', 'Рилс об объекте (3 цели)', 'SMM', 'В работе', '', ''],
+      ],
+      DEC: [
+        [d_('2026-09-10'), 'Приоритет: медицина и образование ★★★, фитнес / ГАБ ★★, офис ★ (маркетинговый анализ)', 'Наталья', 'Обзвон сетей медцентров, презентации под каждую аудиторию'],
+        [d_('2026-09-18'), 'Консультация: медицинская лицензия возможна, включая стационар', 'Наталья', 'КП по 8 целевым контактам, расширить базу медцентров'],
+        [d_('2026-09-21'), 'Лаборатории и аптеки — филиалы слишком малы (50–150 м²), не направляем', 'Ассистент', 'Фокус на сетях с филиалами 500–1000 м²'],
+      ],
+    },
+    kv: {
+      rec_price: 190000000, min_price: 170000000,
+      positioning: 'Двухуровневое помещение 756 м² в новом ЖК «Время» у метро Преображенская площадь: потолки 4,5 м, 152 кВт, 4 входа, 8 мокрых точек — готово под медицину и образование без переделки.',
+      price_note: 'Рекомендуемая цена 185–195 млн ₽, консервативно 165–170 млн, минимальная цена сделки 170–175 млн. Текущая цена 225,5 млн выше рынка — обсудить с собственником после первой волны откликов.',
+      analysis_link: F.analysis,
+    },
   };
-}
+  buildObjectTab_(res.sheet, EXAMPLE_ID, data);
 
-/** Сохраняет действие из формы. Возвращает ID. */
-function submitActionForm(d) {
-  if (!d.obj_id) throw new Error('Выберите объект');
-  const lock = LockService.getDocumentLock();
-  lock.waitLock(20000);
-  try {
-    const parts = String(d.date || '').split('-').map(Number);
-    const date = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : today_();
-    const nsParts = String(d.next_step_date || '').split('-').map(Number);
-    const obj = {
-      id: nextId_('ACT'), date: date, obj_id: d.obj_id, owner: d.owner || '', type: d.type || '', channel: d.channel || '',
-      goal: d.goal || '', plan: d.plan || '', fact: d.fact || '', status: d.status || dictFirstByClass_('task_status', CLS.DONE),
-      result: d.result || '', refusal: d.refusal || '', feedback: d.feedback || '', conclusion: d.conclusion || '',
-      next_step: d.next_step || '', next_step_date: nsParts.length === 3 ? new Date(nsParts[0], nsParts[1] - 1, nsParts[2]) : '',
-      comment: d.comment || '', views: num_(d.views), cost: num_(d.cost), to_report: d.to_report !== false,
-      created_at: new Date(), author: userEmail_(),
-    };
-    sheetSpecs_().ACT.fields.filter(f => f.kind === 'num' && f.key !== 'views').forEach(f => { obj[f.key] = num_(d[f.key]); });
-    const row = appendRow_('ACT', obj);
-    const hist = [{ sheet: SHEET_NAMES.ACT, record_id: obj.id, obj_id: obj.obj_id, field: fieldTitle_('ACT', 'status'), old: '', new: obj.status, kind: HIST_KIND.CREATE, note: 'Через форму' }];
-    logHistory_(hist, obj.author);
-    return { id: obj.id, row: row };
-  } finally {
-    lock.releaseLock();
-  }
-}
+  const cache = {};
+  const T = (week, block, task, owner, unit, plan, status, result, deadline) => ({
+    id: nextId_('TASK', cache), week: week, obj_id: EXAMPLE_ID, block: block, task: task, owner: owner, unit: unit, plan: plan,
+    status: status, result: result || '', deadline: d_(deadline), to_report: true, source: 'План недели', created_at: new Date(), author: 'пример',
+  });
+  appendRows_('TASK', [
+    T('2026-W38', 'База и рассылки', 'Произведён обзвон медицинских центров с предложением объекта', 'Ассистент', 'звонков', 8, 'Выполнено', '', '2026-09-18'),
+    T('2026-W38', 'База и рассылки', 'Направлены коммерческие предложения по медцентрам', 'Ассистент', 'КП', 2, 'Выполнено', 'Срок получения обратной связи — в течение недели, до 25.09', '2026-09-18'),
+    T('2026-W38', 'КП и материалы', 'Разработаны презентации под каждый вид бизнеса и целевую аудиторию', 'Наталья', '', '', 'Выполнено', 'Прикрепляем к отчёту', '2026-09-18'),
+    T('2026-W38', 'Сценарии использования', 'Выполнен поиск замерщиков под вид деятельности «апартаменты», по каждому исполнителю внесены данные в таблицу', 'Ассистент', '', '', 'Выполнено', '', '2026-09-18'),
+    T('2026-W38', 'Сценарии использования', 'Выполнен поиск проектировщиков под вид деятельности «апартаменты», запрошены коммерческие предложения', 'Ассистент', '', '', 'Выполнено', '', '2026-09-18'),
+    T('2026-W39', 'База и рассылки', 'Направить коммерческие предложения по медцентрам по 8 целевым контактам', 'Ассистент', 'КП', 8, 'В работе', '', '2026-09-25'),
+    T('2026-W39', 'База и рассылки', 'Прозвонить 10 медицинских центров с предложением объекта', 'Ассистент', 'звонков', 10, 'В работе', '', '2026-09-25'),
+    T('2026-W39', 'Контент', 'Рилс об объекте: помещение под медцентр у метро', 'SMM', 'публикаций', 1, 'В работе', '', '2026-09-25'),
+  ]);
 
-function num_(v) {
-  if (v === '' || v === null || v === undefined) return '';
-  const n = Number(String(v).replace(',', '.').replace(/\s/g, ''));
-  return isNaN(n) ? '' : n;
-}
-
-// ═════════════ 10_TestData.gs ═════════════
-/**
- * 10_TestData — тестовые объекты «Остров», «Аносино Парк», «Павловы Озёра».
- *
- * Даты строятся относительно текущей недели, поэтому тест воспроизводим в любой день:
- *   M = понедельник текущей недели, P = M − 7 (отчётная неделя), Q = P − 7.
- * Ожидаемые значения описаны в docs/08_ТЕСТИРОВАНИЕ.md и проверяются «Самопроверкой».
- */
-
-const TEST_NAMES = { OSTROV: 'Остров', ANOSINO: 'Аносино Парк', PAVLOVY: 'Павловы Озёра' };
-
-function loadTestData() {
-  const ui = SpreadsheetApp.getUi();
-  const exists = readTable_('OBJ').rows.some(o => o.name === TEST_NAMES.OSTROV);
-  if (exists) {
-    ui.alert('Тестовые данные уже загружены (есть объект «' + TEST_NAMES.OSTROV + '»).');
-    return;
-  }
-  const ok = ui.alert('Тестовые данные', 'Будут добавлены 3 тестовых объекта с действиями, задачами и историей цены. Продолжить?', ui.ButtonSet.OK_CANCEL);
-  if (ok !== ui.Button.OK) return;
-  const ids = loadTestData_();
-  ui.alert('Готово', 'Добавлены: ' + ids.OSTROV + ' Остров, ' + ids.ANOSINO + ' Аносино Парк, ' + ids.PAVLOVY + ' Павловы Озёра.\n\nТеперь запустите «Самопроверку».', ui.ButtonSet.OK);
-}
-
-function loadTestData_() {
-  const M = mondayOf_(today_());
-  const P = addDays_(M, -7);
-  const Q = addDays_(P, -7);
-  const d = (base, n) => addDays_(base, n);
-  const now = new Date();
-  const DONE = 'Выполнено', PLANNED = 'Запланировано', INWORK = 'В работе', FAILED = 'Не выполнено';
-  const BOSS = 'Руководитель', ASSIST = 'Ассистент';
-
-  // ── объекты
-  // ID объектов — как в CRM (вводятся вручную)
-  const ids = { OSTROV: '4501', ANOSINO: '4502', PAVLOVY: '4503' };
-  appendRows_('OBJ', [
+  const base = [
     {
-      id: ids.OSTROV, name: TEST_NAMES.OSTROV, address: 'Московская обл., Одинцовский г.о., КП «Остров», уч. 12', complex: 'Остров',
-      obj_type: 'Дом', category: 'Премиум', area: 450, rooms: 6, price: 185000000, deal_type: 'Продажа',
-      date_sign: d(M, -60), date_end: d(M, 120), status: 'Активная продажа', manager: BOSS, assistant: ASSIST,
-      crm_link: 'https://crm.example.com/object/1001', priority: 'A — высокий', temperature: 'HOT',
-      target_buyer: 'Семья с детьми, собственник бизнеса, бюджет 170–200 млн', main_channel: 'CRM-база',
-      manager_comment: 'ВНУТР: собственник готов обсуждать торг до 5%', created_at: d(M, -60),
+      "audience": "Сети медцентров",
+      "company": "Открытая клиника",
+      "site": "openclinics.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Не подходит",
+      "fit_note": "Ниже официальной нижней границы сети (у них от 1000 м², у вас 756,2 м²) — включено по вашему запросу, но по действующим условиям франшизы требует отдельных пере",
+      "call_date": "2026-09-15",
+      "call_result": "КП отправлено на общую почту / форму сайта",
+      "kp_date": "2026-09-21",
+      "kp_type": "КП клиенту",
+      "response": "Нет ответа",
+      "response_date": "",
+      "next_step": "Позвонить по общей линии, если не соединят — письмо на общую почту",
+      "owner": "Ассистент"
     },
     {
-      id: ids.ANOSINO, name: TEST_NAMES.ANOSINO, address: 'Московская обл., Истринский г.о., КП «Аносино Парк»', complex: 'Аносино Парк',
-      obj_type: 'Дом', category: 'Бизнес', area: 320, rooms: 5, price: 98000000, deal_type: 'Продажа',
-      date_sign: d(M, -40), date_end: d(M, 140), status: 'Переговоры', manager: BOSS, assistant: ASSIST,
-      priority: 'A — высокий', temperature: 'WARM', target_buyer: 'Семья, переезд из Москвы', main_channel: 'Партнёры', created_at: d(M, -40),
+      "audience": "Сети медцентров",
+      "company": "Чайка",
+      "site": "chaika.com / city.chaika.com",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Подходит",
+      "fit_note": "Хорошо по метражу — единственная крупная сеть, чей типовой филиал (700–1500 м²) прямо перекрывает площадь объекта, но нетипичное для сети расположение нужно обс",
+      "call_date": "2026-09-15",
+      "call_result": "Звонок: предложение передано",
+      "kp_date": "",
+      "kp_type": "",
+      "response": "",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
     },
     {
-      id: ids.PAVLOVY, name: TEST_NAMES.PAVLOVY, address: 'Московская обл., Истринский г.о., КП «Павловы Озёра»', complex: 'Павловы Озёра',
-      obj_type: 'Дом', category: 'Премиум', area: 280, rooms: 5, price: 72000000, deal_type: 'Продажа',
-      date_sign: d(M, -90), date_end: d(M, 10), status: 'Активная продажа', manager: BOSS, assistant: ASSIST,
-      priority: 'B — средний', temperature: 'COLD', target_buyer: 'Инвестор / второй дом', main_channel: 'Авито', created_at: d(M, -90),
+      "audience": "Сети медцентров",
+      "company": "Ниармедик",
+      "site": "nrmed.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Подходит",
+      "fit_note": "Хорошо, но обязательно уточнить актуальный минимальный метраж напрямую — три источника дают три разные цифры (150 / 300 / 500 м²)",
+      "call_date": "2026-09-16",
+      "call_result": "Колл-центр не соединяет с ЛПР — отправить КП на почту",
+      "kp_date": "",
+      "kp_type": "",
+      "response": "",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
     },
-  ]);
+    {
+      "audience": "Ветеринарные клиники",
+      "company": "Vetcity Clinic",
+      "site": "vet.city",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Подходит",
+      "fit_note": "Хорошо, но требует уточнения сразу по двум пунктам — тип здания и верхняя граница площади",
+      "call_date": "2026-09-16",
+      "call_result": "Колл-центр не соединяет с ЛПР — отправить КП на почту",
+      "kp_date": "",
+      "kp_type": "",
+      "response": "",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Сети медцентров",
+      "company": "Медси",
+      "site": "medsi.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Подходит",
+      "fit_note": "Отлично — подтверждено по всем параметрам: метраж, встроенность в жилой дом, отсутствие стационара",
+      "call_date": "2026-09-17",
+      "call_result": "Колл-центр не соединяет с ЛПР — отправить КП на почту",
+      "kp_date": "2026-09-17",
+      "kp_type": "Презентация под аудиторию",
+      "response": "Нет ответа",
+      "response_date": "",
+      "next_step": "Написать на общую почту + форма франчайзинга",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Сети медцентров",
+      "company": "Интан",
+      "site": "intan.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Подходит",
+      "fit_note": "Хорошо, но ниже нижней границы целевого диапазона и есть требование «первая линия» — уточнить обе позиции перед показом",
+      "call_date": "2026-09-17",
+      "call_result": "Дозвонились до отдела франчайзинга: не интересно",
+      "kp_date": "",
+      "kp_type": "",
+      "response": "Не интересно",
+      "response_date": "2026-09-17",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Сети медцентров",
+      "company": "Доктор рядом",
+      "site": "drclinics.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Подходит",
+      "fit_note": "Отлично — метраж и профиль почти дословно совпадают с параметрами объекта, ближайший по духу аналог к «Свой Доктор» и «Медси Смарт 300»",
+      "call_date": "2026-09-18",
+      "call_result": "Звонок: предложение передано",
+      "kp_date": "",
+      "kp_type": "",
+      "response": "",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Ветеринарные клиники",
+      "company": "Свой Доктор",
+      "site": "svoydoctor.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Подходит",
+      "fit_note": "Отлично — лучшее совокупное совпадение по всем 4 параметрам объекта (жилой дом, закрытый двор, 2-я линия, паркинг)",
+      "call_date": "2026-09-18",
+      "call_result": "Соединили с управляющей, предложение озвучено — ждёт презентацию",
+      "kp_date": "2026-09-17",
+      "kp_type": "Презентация под аудиторию",
+      "response": "Нет ответа",
+      "response_date": "",
+      "next_step": "Перезвонить управляющей после изучения презентации",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Сети медцентров",
+      "company": "Клиника Фомина. Рядом",
+      "site": "fomin-clinic.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Подходит",
+      "fit_note": "Хорошо — компактный формат ложится в блок, встроенность в жилой дом высоковероятна по профилю локаций сети",
+      "call_date": "",
+      "call_result": "КП отправлено на общую почту / форму сайта",
+      "kp_date": "2026-09-21",
+      "kp_type": "КП клиенту",
+      "response": "Нет ответа",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Сети медцентров",
+      "company": "WeClinic",
+      "site": "franshizaweclinic.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Уточнить",
+      "fit_note": "Средне — метраж формально подходит, но сеть небольшая и слабо подтверждена публичными кейсами в Москве; проверить актуальность франшизы перед контактом",
+      "call_date": "",
+      "call_result": "Сайт не открывается — не отправляли",
+      "kp_date": "",
+      "kp_type": "",
+      "response": "",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Сети медцентров",
+      "company": "KDL (Медскан)",
+      "site": "kdl.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Подходит",
+      "fit_note": "Хорошо — метраж и профиль подходят, встроенность в жилой дом уточнить напрямую",
+      "call_date": "",
+      "call_result": "КП отправлено на общую почту / форму сайта",
+      "kp_date": "2026-09-21",
+      "kp_type": "КП клиенту",
+      "response": "Нет ответа",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Сети медцентров",
+      "company": "LabQuest",
+      "site": "labquest.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Подходит",
+      "fit_note": "Хорошо — метраж подходит, встроенность в жилой дом уточнить напрямую",
+      "call_date": "",
+      "call_result": "Сайт не открывается — не отправляли",
+      "kp_date": "",
+      "kp_type": "",
+      "response": "",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Сети медцентров",
+      "company": "Гемотест",
+      "site": "gemotest.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Подходит",
+      "fit_note": "Хорошо — компактный блок-спутник, все параметры объекта совместимы",
+      "call_date": "",
+      "call_result": "Филиалы сети слишком малы для объекта — не направляли",
+      "kp_date": "",
+      "kp_type": "",
+      "response": "",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Красота и эстетика",
+      "company": "Точка Красоты (MONE)",
+      "site": "tochkafamily.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Подходит",
+      "fit_note": "Хорошо, но есть противоречие в источниках по трафику — уточнить актуальные условия перед показом",
+      "call_date": "",
+      "call_result": "Филиалы сети слишком малы для объекта — не направляли",
+      "kp_date": "",
+      "kp_type": "",
+      "response": "",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Сети медцентров",
+      "company": "Инвитро",
+      "site": "invitro.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Подходит",
+      "fit_note": "Хорошо, но уточнить требование «первая линия» — единственная явная нестыковка с параметрами объекта у этой компании",
+      "call_date": "",
+      "call_result": "Филиалы сети слишком малы для объекта — не направляли",
+      "kp_date": "",
+      "kp_type": "",
+      "response": "",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Ветеринарные клиники",
+      "company": "Зайцев+",
+      "site": "vetlabplus.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Подходит",
+      "fit_note": "Хорошо — самый компактный формат, встроенность в жилой дом уточнить напрямую",
+      "call_date": "",
+      "call_result": "Филиалы сети слишком малы для объекта — не направляли",
+      "kp_date": "",
+      "kp_type": "",
+      "response": "",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Сети медцентров",
+      "company": "Major Clinic",
+      "site": "major-clinic.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Уточнить",
+      "fit_note": "Площадь не подтверждена — требуется прямой запрос в компанию",
+      "call_date": "",
+      "call_result": "КП отправлено на общую почту / форму сайта",
+      "kp_date": "2026-09-21",
+      "kp_type": "КП клиенту",
+      "response": "Нет ответа",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Сети медцентров",
+      "company": "Медок",
+      "site": "mcmedok.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Уточнить",
+      "fit_note": "Площадь не подтверждена — требуется прямой запрос в компанию",
+      "call_date": "",
+      "call_result": "КП отправлено на общую почту / форму сайта",
+      "kp_date": "2026-09-21",
+      "kp_type": "КП клиенту",
+      "response": "Нет ответа",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Сети медцентров",
+      "company": "Семейная",
+      "site": "semeynaya.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Уточнить",
+      "fit_note": "Площадь не подтверждена — требуется прямой запрос в компанию",
+      "call_date": "",
+      "call_result": "КП отправлено на общую почту / форму сайта",
+      "kp_date": "2026-09-21",
+      "kp_type": "КП клиенту",
+      "response": "Нет ответа",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Сети медцентров",
+      "company": "СМ-Стоматология",
+      "site": "sm-stomatology.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Уточнить",
+      "fit_note": "Площадь не подтверждена — требуется прямой запрос в компанию",
+      "call_date": "",
+      "call_result": "КП отправлено на общую почту / форму сайта",
+      "kp_date": "2026-09-21",
+      "kp_type": "КП клиенту",
+      "response": "Нет ответа",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Красота и эстетика",
+      "company": "Estee Clinic / КИЭМ / МедЭстет / CodeBeautyMedicine",
+      "site": "msk.estee-clinic.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Уточнить",
+      "fit_note": "Площадь не подтверждена — требуется прямой запрос в компанию",
+      "call_date": "",
+      "call_result": "КП отправлено на общую почту / форму сайта",
+      "kp_date": "2026-09-21",
+      "kp_type": "КП клиенту",
+      "response": "Нет ответа",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    },
+    {
+      "audience": "Ветеринарные клиники",
+      "company": "Белый Клык / Зоовет / Беланта / Биоконтроль",
+      "site": "bkvet.ru",
+      "contact": "общая линия / форма на сайте",
+      "fit": "Уточнить",
+      "fit_note": "Площадь не подтверждена — требуется прямой запрос в компанию",
+      "call_date": "",
+      "call_result": "КП отправлено на общую почту / форму сайта",
+      "kp_date": "2026-09-21",
+      "kp_type": "КП клиенту",
+      "response": "Нет ответа",
+      "response_date": "",
+      "next_step": "",
+      "owner": "Ассистент"
+    }
+  ];
+  appendRows_('BASE', base.map(b => ({
+    id: nextId_('BASE', cache), obj_id: EXAMPLE_ID, audience: b.audience, company: b.company, site: b.site, contact: b.contact,
+    fit: b.fit, fit_note: b.fit_note, call_date: d_(b.call_date), call_result: b.call_result, kp_date: d_(b.kp_date), kp_type: b.kp_type,
+    response: b.response, response_date: d_(b.response_date), next_step: b.next_step, owner: b.owner, created_at: d_(b.call_date || b.kp_date || '2026-09-14'), author: 'пример',
+  })));
 
-  // ── стратегия (краткая версия)
-  ensureStrategyRows_([ids.OSTROV, ids.ANOSINO, ids.PAVLOVY]);
-  const str = readTable_('STR');
-  const strRow = id => str.rows.find(r => r.obj_id === id)._row;
-  writeFields_(str.sh, 'STR', strRow(ids.OSTROV), {
-    strategy_status: 'Утверждена', goal: 'Продать за 60 дней по цене не ниже 178 млн', target_price: 180000000,
-    price_range: '176–185 млн', positioning: 'Семейная резиденция у воды в охраняемом посёлке',
-    ta1: 'Семьи с детьми из Москвы', ta2: 'Собственники бизнеса', ta3: 'Клиенты Private Banking',
-    motives: 'Экология, безопасность, школа рядом', objections: 'Цена, стоимость обслуживания посёлка',
-    answers: 'Сравнение с аналогами, расчёт стоимости владения', competitors: '3 дома в соседних посёлках 170–210 млн',
-    advantages: 'Выход к воде, готовый ремонт, 30 соток', weaknesses: 'Высокий эксплуатационный платёж',
-    not_public: 'Собственник готов к торгу до 5%', key_argument: 'Единственный дом у воды с готовым ремонтом',
-    scenario: 'Закрытые показы по записи → повторный показ с семьёй → переговоры',
-    channels: 'CRM, ЦИАН, брокеры премиум-сегмента, Private Banking', partner_channels: 'Private Banking, брокеры',
-    crm_base: '420 контактов загородного премиум-сегмента', content_strategy: 'Reels-обзор, серия Stories',
-    outbound_strategy: 'Рассылка по базе + звонки брокерам', promo_plan: 'Неделя 1–2 база и брокеры, неделя 3–4 контент и PB',
-    hypotheses: 'Если снизить до 179 — ускорим переговоры', review_date: P, conclusion: 'Лучше всего работает база и брокерский канал',
-    next_hypothesis: 'Проверить закрытый показ для клиентов PB', changed_at: d(P, 2), changed_by: 'test',
-  });
-  writeFields_(str.sh, 'STR', strRow(ids.ANOSINO), {
-    strategy_status: 'Утверждена', goal: 'Довести переговоры до брони', positioning: 'Готовый дом для переезда семьи',
-    channels: 'Партнёры, брокеры', review_date: d(M, -20), changed_at: d(M, -20), changed_by: 'test',
-  });
-  writeFields_(str.sh, 'STR', strRow(ids.PAVLOVY), {
-    strategy_status: 'Черновик', goal: 'Найти покупателя-инвестора', positioning: 'Дом у озера для второго жилья',
-    channels: 'Авито, ЦИАН', review_date: d(M, -60), changed_at: d(M, -60), changed_by: 'test',
-  });
-
-  // ── действия
-  const ac = {};
-  const A = (date, obj, type, channel, fact, extra) => Object.assign({
-    id: nextId_('ACT', ac), date: date, obj_id: obj, owner: ASSIST, type: type, channel: channel, goal: '', fact: fact,
-    status: DONE, to_report: true, created_at: now, author: 'test',
-  }, extra || {});
-  appendRows_('ACT', [
-    A(d(Q, 1), ids.OSTROV, 'Рассылка', 'CRM-база', 'Рассылка по базе покупателей загородной недвижимости', { contacts: 40, responses: 4, interested: 2, presentations: 1 }),
-    A(d(Q, 3), ids.OSTROV, 'Показ', 'Брокеры', 'Показ объекта покупателю брокера', { showings: 1, feedback: 'Покупателю понравился участок, вопросы по стоимости' }),
-    A(d(P, 0), ids.OSTROV, 'Рассылка', 'CRM-база', 'Рассылка по базе покупателей загородной недвижимости премиум-сегмента',
-      { contacts: 30, responses: 5, interested: 2, presentations: 1, conclusion: 'Лучше всего откликаются клиенты, ранее искавшие дома от 400 м²' }),
-    A(d(P, 1), ids.OSTROV, 'ЦИАН', 'ЦИАН', 'Обновлено объявление: новые фото и описание', { views: 850, contacts: 8, responses: 2, cost: 15000 }),
-    A(d(P, 1), ids.OSTROV, 'Брокеры', 'Брокеры', 'Презентация объекта пулу брокеров премиум-сегмента',
-      { contacts: 12, responses: 1, interested: 1, presentations: 1, refusal: 'Цена' }),
-    A(d(P, 2), ids.OSTROV, 'Показ', 'Брокеры', 'Показ объекта семье покупателя',
-      { showings: 1, feedback: 'Нравится планировка и участок; вопрос — стоимость обслуживания посёлка', next_step: 'Повторный показ с семьёй', next_step_date: d(M, 3) }),
-    A(d(P, 3), ids.OSTROV, 'Переговоры', 'Брокеры', 'Первичные переговоры по условиям сделки',
-      { negotiations: 1, conclusion: 'Покупатель готов обсуждать сделку при корректировке цены в пределах 3–4%', comment: 'ВНУТР: собственник согласен на 5%, клиенту не раскрывать' }),
-    A(d(P, 3), ids.OSTROV, 'Reels', 'Instagram', '', { goal: 'Снять Reels-обзор объекта', status: PLANNED }),
-    A(d(P, 4), ids.OSTROV, 'CRM', 'CRM-база', 'Внутренняя чистка базы', { to_report: false }),
-    A(d(M, 0), ids.OSTROV, 'Рассылка', 'Private Banking', 'Рассылка через партнёров Private Banking', { contacts: 10, responses: 2 }),
-    A(d(P, 0), ids.ANOSINO, 'Партнёры', 'Партнёры', 'Презентация объекта партнёрам-агентствам', { contacts: 15, responses: 6, interested: 3, presentations: 2 }),
-    A(d(P, 2), ids.ANOSINO, 'Показ', 'Партнёры', 'Два показа, один покупатель перешёл к переговорам',
-      { showings: 2, negotiations: 1, offers: 1, feedback: 'Покупатели отмечают качество строительства' }),
-    A(d(M, 0), ids.ANOSINO, 'Переговоры', 'Партнёры', 'Переговоры по предложению покупателя', { negotiations: 1 }),
-    A(d(M, -21), ids.PAVLOVY, 'Авито', 'Авито', 'Размещено объявление на Авито', { views: 400, contacts: 3, responses: 1 }),
-    A(d(M, -20), ids.PAVLOVY, 'Звонок', 'Авито', 'Обработка откликов с Авито', { contacts: 2, responses: 2, refusal: 'Локация', feedback: 'Далеко от Москвы для постоянного проживания' }),
-    A(d(M, -19), ids.PAVLOVY, 'WhatsApp', 'Авито', 'Ответ на запрос по объявлению', { contacts: 1, responses: 1, refusal: 'Цена' }),
-    A(d(M, -19), ids.PAVLOVY, 'Звонок', 'Авито', 'Повторный звонок откликнувшимся', { repeat_contacts: 1, refusal: 'Цена' }),
+  appendRows_('CONT', [
+    { id: nextId_('CONT', cache), obj_id: EXAMPLE_ID, topic: 'Помещение 756 м² под медцентр: 4,5 м, 152 кВт, 4 входа', platform: 'Instagram', format: 'Рилс', goal: 'Все три', script: 'Хук: «Где открыть клинику без переделки?» → проход по этажам → цифры на экране → призыв написать', status: 'Сценарий', owner: 'SMM', created_at: new Date(), author: 'пример' },
+    { id: nextId_('CONT', cache), obj_id: EXAMPLE_ID, topic: 'Как мы ищем арендатора-медцентр: 23 сети за 2 недели', platform: 'Telegram', format: 'Пост', goal: 'Бренд агентства', status: 'Идея', owner: 'SMM', created_at: new Date(), author: 'пример' },
   ]);
-
-  // ── план-факт
-  const tc = {};
-  const wkP = isoWeekKey_(P), wkM = isoWeekKey_(M);
-  const T = (week, obj, extra) => Object.assign({
-    week: week, obj_id: obj, owner: ASSIST, status: PLANNED, to_report: true, task_id: nextId_('PF', tc), created_at: now,
-  }, extra || {});
-  appendRows_('PF', [
-    T(wkP, ids.OSTROV, { week_goal: 'Выйти на 2 показа', task: 'Контакты по базе и брокерам', kpi_metric: 'Контакты', kpi_plan: 50, status: DONE, deadline: d(P, 4), conclusion: 'План по контактам выполнен' }),
-    T(wkP, ids.OSTROV, { week_goal: 'Выйти на 2 показа', task: 'Организовать показы', owner: BOSS, kpi_metric: 'Показы', kpi_plan: 2, status: FAILED, fail_reason: 'Второй покупатель перенёс показ', deadline: d(P, 4) }),
-    T(wkP, ids.OSTROV, { week_goal: 'Выйти на 2 показа', task: 'Новые лиды', kpi_metric: 'Лиды', kpi_plan: 3, status: DONE, deadline: d(P, 4) }),
-    T(wkP, ids.OSTROV, { task: 'Снять Reels-обзор', type: 'Reels', status: INWORK, deadline: d(P, 4) }),
-    T(wkP, ids.OSTROV, { task: 'Обновить презентацию объекта', owner: '', status: PLANNED, deadline: d(P, 4) }),
-    T(wkP, ids.ANOSINO, { task: 'Презентация партнёрам', kpi_metric: 'Контакты', kpi_plan: 15, status: DONE, deadline: d(P, 4) }),
-    T(wkP, ids.ANOSINO, { task: 'Вывести покупателя на переговоры', owner: BOSS, kpi_metric: 'Переговоры', kpi_plan: 1, status: DONE, deadline: d(P, 4) }),
-    T(wkM, ids.OSTROV, { week_goal: 'Повторный показ и переговоры', task: 'Провести повторный показ для семьи Б.', owner: BOSS, kpi_metric: 'Показы', kpi_plan: 2, deadline: d(M, 4) }),
-    T(wkM, ids.OSTROV, { week_goal: 'Повторный показ и переговоры', task: 'Рассылка по клиентам Private Banking', kpi_metric: 'Контакты', kpi_plan: 40, deadline: d(M, 4) }),
-  ]);
-
-  // ── гипотезы
-  const hc = {};
-  const H = (obj, extra) => Object.assign({ id: nextId_('HYP', hc), obj_id: obj, to_report: true, created_at: now }, extra);
-  appendRows_('HYP', [
-    H(ids.OSTROV, { hypothesis: 'Если подключить брокеров премиум-сегмента, получим не меньше 2 новых лидов за 2 недели', channel: 'Брокеры', metric: 'Лиды', target: 2,
-      date_start: Q, date_end: d(P, 6), status: 'Не подтвердилась', conclusion: 'Брокерский канал даёт показы, но мало новых покупателей', decision: 'ВНУТР: перераспределить время на Private Banking' }),
-    H(ids.OSTROV, { hypothesis: 'Рассылка через Private Banking даст 30 контактов за неделю', channel: 'Private Banking', metric: 'Контакты', target: 30,
-      date_start: M, date_end: d(M, 6), status: 'В проверке' }),
-    H(ids.PAVLOVY, { hypothesis: 'Объявление на Авито с новыми фото даст 3 лида за месяц', channel: 'Авито', metric: 'Лиды', target: 3,
-      date_start: d(M, -40), date_end: d(M, -10), status: 'В проверке' }),
-  ]);
-
-  // ── история: цена и стратегия (как будто менялись через таблицу)
-  const priceTitle = fieldTitle_('OBJ', 'price');
-  appendRows_('HIST', [
-    { ts: d(M, -60), user: 'test', sheet: SHEET_NAMES.OBJ, record_id: ids.OSTROV, obj_id: ids.OSTROV, field: priceTitle, old: '', new: 195000000, kind: HIST_KIND.INITIAL },
-    { ts: d(P, 1), user: 'test', sheet: SHEET_NAMES.OBJ, record_id: ids.OSTROV, obj_id: ids.OSTROV, field: priceTitle, old: 195000000, new: 185000000, kind: HIST_KIND.CHANGE },
-    { ts: d(P, 2), user: 'test', sheet: SHEET_NAMES.STR, record_id: ids.OSTROV, obj_id: ids.OSTROV, field: fieldTitle_('STR', 'channels'), old: 'CRM, ЦИАН', new: 'CRM, ЦИАН, брокеры премиум-сегмента, Private Banking', kind: HIST_KIND.CHANGE },
-    { ts: d(P, 2), user: 'test', sheet: SHEET_NAMES.STR, record_id: ids.OSTROV, obj_id: ids.OSTROV, field: fieldTitle_('STR', 'not_public'), old: '', new: 'Собственник готов к торгу до 5%', kind: HIST_KIND.INITIAL },
-    { ts: d(M, -90), user: 'test', sheet: SHEET_NAMES.OBJ, record_id: ids.PAVLOVY, obj_id: ids.PAVLOVY, field: priceTitle, old: '', new: 72000000, kind: HIST_KIND.INITIAL },
-  ]);
+  logHistory_([{ sheet: SHEET_NAMES.OBJ, record_id: EXAMPLE_ID, obj_id: EXAMPLE_ID, field: 'Пример', old: '', new: 'Загружен пример ЖК Время', kind: HIST_KIND.CREATE }], userEmail_());
   SpreadsheetApp.flush();
-  return ids;
+  return res.sheet;
 }
 
-// ═════════════ 11_SelfTest.gs ═════════════
+// ═════════════ 10_SelfTest.gs ═════════════
 /**
- * 11_SelfTest — автоматическая проверка системы на тестовых данных (раздел 24 ТЗ).
- * Результат — лист 99_САМОПРОВЕРКА и диалог со сводкой. Фильтры, изменённые тестом, возвращаются.
+ * 10_SelfTest — самопроверка: листы, именованные диапазоны, ошибки в формулах,
+ * а при загруженном примере — цифры план-факта, отчёта и заполненности стратегии.
+ * Результат — лист 99_САМОПРОВЕРКА (зелёный ✓ / красный ✗).
  */
+
+const SELFTEST_SHEET = '99_САМОПРОВЕРКА';
 
 function runSelfTest() {
   const ui = SpreadsheetApp.getUi();
-  if (!readTable_('OBJ').rows.some(o => o.name === TEST_NAMES.OSTROV)) {
-    ui.alert('Сначала загрузите тестовые данные (меню → Сервис → Загрузить тестовые данные).');
-    return;
-  }
-  const withDrive = ui.alert('Самопроверка',
-    'Проверить также создание отчёта (Google Doc + PDF + ссылка) и документа стратегии?\nБудут созданы файлы для объекта «Остров».',
-    ui.ButtonSet.YES_NO) === ui.Button.YES;
-  const results = selfTest_(withDrive);
-  const failed = results.filter(r => !r.ok);
-  writeTestSheet_(results);
-  ui.alert('Самопроверка: ' + (results.length - failed.length) + ' из ' + results.length + ' проверок пройдено',
-    failed.length ? 'Не прошли:\n' + failed.slice(0, 15).map(r => '✗ ' + r.name + ' — ожидалось ' + r.expected + ', получено ' + r.actual).join('\n') + '\n\nПодробно — лист 99_САМОПРОВЕРКА.'
-      : 'Все проверки пройдены ✓ Подробно — лист 99_САМОПРОВЕРКА.', ui.ButtonSet.OK);
+  const withDoc = ui.alert('Самопроверка', 'Проверить также создание отчёта (Google Doc + PDF) по примеру? Будет создан тестовый отчёт в папке примера.', ui.ButtonSet.YES_NO) === ui.Button.YES;
+  const res = selfTest_({ withDoc: withDoc });
+  const bad = res.filter(r => !r[1]).length;
+  ui.alert('Самопроверка', bad ? '✗ Ошибок: ' + bad + '. Подробности — лист ' + SELFTEST_SHEET + '.' : '✓ Все проверки пройдены (' + res.length + ').', ui.ButtonSet.OK);
 }
 
-function selfTest_(withDrive) {
-  const R = [];
-  const eq = (name, actual, expected, tol) => {
-    let ok;
-    if (typeof expected === 'number') ok = Math.abs(Number(actual) - expected) <= (tol || 0.0001);
-    else ok = String(actual) === String(expected);
-    R.push({ name: name, ok: ok, expected: expected, actual: actual });
+function selfTest_(opts) {
+  opts = opts || {};
+  const out = [];
+  const check = (name, ok, info) => out.push([name, !!ok, info === undefined ? '' : String(info)]);
+  const ss = ss_();
+  SpreadsheetApp.flush();
+
+  Object.keys(SHEET_NAMES).forEach(k => check('Лист ' + SHEET_NAMES[k], ss.getSheetByName(SHEET_NAMES[k])));
+  cfgDefs_().filter(d => d.key).forEach(d => check('Настройка CFG_' + d.key, ss.getRangeByName('CFG_' + d.key)));
+  check('Задачи недели по умолчанию', ss.getRangeByName('CFG_DEFAULT_TASKS'));
+  check('Триггер onEdit', ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'onEditHandler'), 'если ✗ — «Установить / обновить систему»');
+
+  const errRe = /^#(REF|ERROR|NAME|VALUE|DIV\/0|NUM)[!?]?/;
+  const scan = (sh, rows, cols) => {
+    const n = Math.min(rows, sh.getMaxRows()), m = Math.min(cols, sh.getMaxColumns());
+    const vals = sh.getRange(1, 1, n, m).getDisplayValues();
+    const bad = [];
+    vals.forEach((r, i) => r.forEach((v, j) => { if (errRe.test(v)) bad.push(colLetter_(j + 1) + (i + 1) + ' ' + v); }));
+    return bad;
   };
-  const has = (name, text, part, negate) => {
-    const ok = negate ? String(text).indexOf(part) < 0 : String(text).indexOf(part) >= 0;
-    R.push({ name: name, ok: ok, expected: (negate ? 'не содержит ' : 'содержит ') + '«' + part + '»', actual: String(text).slice(0, 120) });
-  };
-  const truthy = (name, cond, actual) => R.push({ name: name, ok: !!cond, expected: 'да', actual: actual === undefined ? String(!!cond) : actual });
+  ['OBJ', 'TASK', 'BASE', 'CONT'].forEach(code => {
+    const b = scan(sheet_(code), 300, sheetSpecs_()[code].fields.length);
+    check('Нет ошибок в формулах ' + SHEET_NAMES[code], !b.length, b.slice(0, 5).join('; '));
+  });
+  [['DASH', 200, 26], ['REP', 120, 5], ['DICT', 60, 80]].forEach(p => {
+    const b = scan(sheet_(p[0]), p[1], p[2]);
+    check('Нет ошибок в формулах ' + SHEET_NAMES[p[0]], !b.length, b.slice(0, 5).join('; '));
+  });
+  objectTabs_().forEach(sh => {
+    const b = scan(sh, sh.getMaxRows(), TAB.LAST_COL);
+    check('Нет ошибок во вкладке ' + sh.getName(), !b.length, b.slice(0, 5).join('; '));
+  });
+  check('Недели в справочнике', dictRows_('weeks').length > 0, dictRows_('weeks').length + ' недель');
+  check('Библиотека заполнена', readTable_('LIB').rows.length >= 10, readTable_('LIB').rows.length + ' записей');
 
-  SpreadsheetApp.flush();
-  const M = mondayOf_(today_());
-  const P = addDays_(M, -7);
-  const wkP = isoWeekKey_(P);
-  const objs = readTable_('OBJ').rows;
-  const byName = n => objs.find(o => o.name === n);
-  const ost = byName(TEST_NAMES.OSTROV), ano = byName(TEST_NAMES.ANOSINO), pav = byName(TEST_NAMES.PAVLOVY);
-  const days = (a, b) => Math.round((a - b) / 86400000);
+  // проверки на примере
+  const ex = objectById_(EXAMPLE_ID);
+  if (ex) {
+    const tab = findObjectTab_(ex);
+    check('Пример: вкладка объекта', tab, tab ? tab.getName() : '');
+    if (tab) check('Пример: стратегия заполнена на 100%', Number(tab.getRange(TAB.PCT).getValue()) === 1, tab.getRange(TAB.PCT).getDisplayValue());
+    check('Пример: ссылка на вкладку и % в 01', String(ex.tab_url).indexOf('#gid=') === 0 && ex.strategy_pct !== '', ex.tab_url + ' / ' + ex.strategy_pct);
+    const tasks = readTable_('TASK').rows.filter(t => t.obj_id === EXAMPLE_ID);
+    const factOf = (wk, unit) => { const t = tasks.find(x => x.week === wk && x.unit === unit); return t ? t.fact_auto : 'нет задачи'; };
+    check('Пример: звонков за 2026-W38 = 8 (авто)', factOf('2026-W38', 'звонков') === 8, factOf('2026-W38', 'звонков'));
+    check('Пример: КП за 2026-W38 = 2 (авто)', factOf('2026-W38', 'КП') === 2, factOf('2026-W38', 'КП'));
+    check('Пример: КП за 2026-W39 = 9 (авто)', factOf('2026-W39', 'КП') === 9, factOf('2026-W39', 'КП'));
 
-  // 1. Реестр объектов: формулы строки
-  eq('01: ID из CRM сохранён как введён', ost.id, '4501');
-  eq('01: проверка ID — без замечаний', ost.id_check, '');
-  eq('01: цена за м² (Остров)', ost.price_m2, Math.round(185000000 / 450));
-  eq('01: дней в продаже (Остров)', ost.days_on_market, days(today_(), addDays_(M, -60)));
-  eq('01: дней без активности (Павловы)', pav.days_idle, days(today_(), addDays_(M, -19)));
-  eq('01: флаг RISK (Павловы)', pav.risk_flag, 'RISK');
-  has('01: последнее действие (Остров)', ost.last_action, 'Рассылка');
-  truthy('01: следующее действие заполнено (Остров)', ost.next_action && ost.next_action !== '—', ost.next_action);
-
-  // 2. Неделя действия считается из даты
-  const acts = readTable_('ACT').rows;
-  const a3 = acts.find(a => a.obj_id === ost.id && a.fact.indexOf('премиум-сегмента') > 0 && a.type === 'Рассылка');
-  eq('03: неделя из даты', a3 ? a3.week : '', wkP);
-
-  // 3. Воронка 04 (из журнала действий) с фильтром по объекту и неделе
-  const fun = sheet_('FUN');
-  const FB = funnelLayout_();
-  const keepFB = [fun.getRange(FB.selObj).getValue(), fun.getRange(FB.selWeek).getValue()];
-  fun.getRange(FB.selObj).setValue(objLabel_(ost.id, ost.name));
-  fun.getRange(FB.selWeek).setValue(weekLabelByKey_(wkP));
-  SpreadsheetApp.flush();
-  const fv = a1 => fun.getRange(a1).getValue();
-  eq('04: контакты (Остров, неделя P)', fv(FB.at.contacts), 50);
-  eq('04: ответы', fv(FB.at.responses), 8);
-  eq('04: лиды (заинтересовались)', fv(FB.at.leads), 3);
-  eq('04: презентации', fv(FB.at.pres), 2);
-  eq('04: показы', fv(FB.at.show), 1);
-  eq('04: переговоры', fv(FB.at.neg), 1);
-  eq('04: отказы', fv(FB.at.refusals), 1);
-  eq('04: конверсия контакт → ответ', fv(FB.conv['Контакт → ответ']), 0.16);
-  eq('04: конверсия ответ → интерес', fv(FB.conv['Ответ → интерес (лид)']), 0.375);
-  eq('04: стоимость лида', fv(FB.conv['Стоимость лида']), 5000);
-  const chRows = fun.getRange(8, FUN_CH_COL, 40, Object.keys(FB.chLetter).length).getValues();
-  const chHdr = Object.keys(FB.chLetter);
-  const br = chRows.find(r => r[0] === 'Брокеры') || [];
-  eq('04: канал Брокеры — лиды', br[chHdr.indexOf('Лиды')], 1);
-  eq('04: канал Брокеры — показы', br[chHdr.indexOf('Показы')], 1);
-  const refTbl = fun.getRange(FB.refRow + 1, 1, 5, 2).getValues();
-  truthy('04: причины отказов — «Цена» 1 раз', refTbl.some(r => r[0] === 'Цена' && Number(r[1]) === 1), JSON.stringify(refTbl.slice(0, 3)));
-  fun.getRange(FB.selObj).setValue('Все');
-  fun.getRange(FB.selWeek).setValue('Все время');
-  SpreadsheetApp.flush();
-  eq('04: все объекты, всё время — лиды', fv(FB.at.leads), 8);
-  fun.getRange(FB.selObj).setValue(keepFB[0] || 'Все');
-  fun.getRange(FB.selWeek).setValue(keepFB[1] || 'Все время');
-
-  // 4. План-факт
-  const pf = sheet_('PF');
-  const PB = pfBlockLayout_();
-  const keepPB = [pf.getRange(PB.selWeek).getValue(), pf.getRange(PB.selObj).getValue()];
-  pf.getRange(PB.selWeek).setValue(weekLabelByKey_(wkP));
-  pf.getRange(PB.selObj).setValue(objLabel_(ost.id, ost.name));
-  SpreadsheetApp.flush();
-  const pv = a1 => pf.getRange(a1).getValue();
-  eq('06: задач в плане (Остров, P)', pv(PB.at.total), 5);
-  eq('06: выполнено', pv(PB.at.done), 2);
-  eq('06: % выполнения плана', pv(PB.at.pct), 0.4);
-  eq('06: просрочено', pv(PB.at.overdue), 2);
-  const kr = t => PB.kpiRows[t];
-  eq('06: план контактов', pv(PB.cols.B + kr('Контакты')), 50);
-  eq('06: факт контактов', pv(PB.cols.C + kr('Контакты')), 50);
-  eq('06: план показов', pv(PB.cols.B + kr('Показы')), 2);
-  eq('06: факт показов', pv(PB.cols.C + kr('Показы')), 1);
-  eq('06: факт лидов', pv(PB.cols.C + kr('Лиды')), 3);
-  pf.getRange(PB.selObj).setValue('Все');
-  SpreadsheetApp.flush();
-  eq('06: все объекты — факт контактов', pv(PB.cols.C + kr('Контакты')), 65);
-  pf.getRange(PB.selWeek).setValue(keepPB[0]);
-  pf.getRange(PB.selObj).setValue(keepPB[1] || 'Все');
-  const tasks = readTable_('PF').rows;
-  const t2 = tasks.find(t => t.obj_id === ost.id && t.week === wkP && t.kpi_metric === 'Показы');
-  eq('06: фактический KPI в строке задачи', t2 ? t2.kpi_fact : '', 1);
-  eq('06: % KPI в строке задачи', t2 ? t2.kpi_pct : '', 0.5);
-
-  // 5. Статистика
-  const st = sheet_('STAT');
-  const keepSt = st.getRange('B2').getValue();
-  st.getRange('B2').setValue('Все');
-  SpreadsheetApp.flush();
-  const sec = (dim, key) => statRow_(st, dim, key);
-  const so = sec('object', ost.id);
-  eq('05: объект — действия', so['Действия'], 9);
-  eq('05: объект — контакты', so['Контакты'], 100);
-  eq('05: объект — ответы', so['Ответы'], 14);
-  eq('05: объект — лиды (заинтересованные)', so['Лиды'], 5);
-  eq('05: объект — показы', so['Показы'], 2);
-  eq('05: объект — первая цена', so['Первая цена'], 195000000);
-  eq('05: объект — изменение цены', so['Изменение цены, ₽'], -10000000);
-  eq('05: объект — изменений цены', so['Изменений цены'], 1);
-  const sc = sec('channel', 'ЦИАН');
-  eq('05: канал ЦИАН — просмотры', sc['Просмотры объявлений'], 850);
-  eq('05: канал ЦИАН — контакты', sc['Контакты'], 8);
-  eq('05: канал ЦИАН — лиды', sc['Лиды'], 0);
-  eq('05: канал ЦИАН — объявление → контакт', sc['Объявление → контакт'], 8 / 850);
-  const sw = sec('week', wkP);
-  eq('05: неделя P — контакты (все объекты)', sw['Контакты'], 65);
-  eq('05: неделя P — лиды', sw['Лиды'], 6);
-  const stt = sec('total', 'Итого');
-  eq('05: итого — контакты', stt['Контакты'], 121);
-  st.getRange('B2').setValue(objLabel_(ost.id, ost.name));
-  SpreadsheetApp.flush();
-  eq('05: фильтр по объекту — итого контакты', sec('total', 'Итого')['Контакты'], 100);
-  eq('05: фильтр по объекту — число недель', statKeys_(st, 'week').length, 3);
-  st.getRange('B2').setValue(keepSt || 'Все');
-
-  // 6. Отчёт
-  const rep = sheet_('REP');
-  const keepRep = ['B3', 'B4', 'B5'].map(a => rep.getRange(a).getValue());
-  rep.getRange('B3').setValue(objLabel_(ost.id, ost.name));
-  rep.getRange('B4').setValue(weekLabelByKey_(wkP));
-  rep.getRange('B5').setValue('Тестовый комментарий');
-  SpreadsheetApp.flush();
-  const v = readReportValues_();
-  eq('07: период', v.PERIOD, fmtDate_(P, 'dd.MM') + '–' + fmtDate_(addDays_(P, 6), 'dd.MM.yyyy'));
-  eq('07: действий', v.ACTIONS, '5');
-  eq('07: контакты', v.CONTACTS, '50');
-  eq('07: ответы', v.RESPONSES, '8');
-  eq('07: заинтересовались (лиды)', v.INTERESTED, '3');
-  eq('07: показы', v.SHOWINGS, '1');
-  eq('07: переговоры', v.NEGOTIATIONS, '1');
-  eq('07: предложения', v.OFFERS, '0');
-  eq('07: дней в экспозиции', v.DAYS_ON_MARKET, String(days(addDays_(P, 6), addDays_(M, -60))));
-  eq('07: строк «что сделано»', v.DONE.split('\n').length, 5);
-  has('07: внутреннее действие скрыто', v.DONE, 'Внутренняя чистка', true);
-  has('07: воронка', v.CONVERSIONS, 'Воронка недели: контакты 50 → ответы 8 → заинтересовались 3');
-  has('07: конверсия контакт → ответ', v.CONVERSIONS, 'Контакт → ответ: 16%');
-  has('07: обратная связь рынка', v.MARKET_FEEDBACK, 'планировка');
-  has('07: возражения с подсчётом', v.OBJECTIONS, 'Цена — 1');
-  has('07: изменения стратегии', v.STRATEGY_CHANGES, 'Каналы продвижения');
-  has('07: изменение цены', v.STRATEGY_CHANGES, 'Цена скорректирована');
-  has('07: план следующей недели', v.NEXT_WEEK, 'повторный показ');
-  has('07: KPI следующей недели', v.NEXT_WEEK_KPI, 'Контакты: 40');
-  eq('07: комментарий руководителя', v.MANAGER_COMMENT, 'Тестовый комментарий');
-  const allClient = Object.keys(v).map(k => v[k]).join('\n');
-  has('07: нет внутренних комментариев', allClient, 'ВНУТР', true);
-  has('07: нет «что нельзя публиковать»', allClient, 'торгу до 5%', true);
-
-  // 7. Предупреждения
-  const alerts = readAlerts_();
-  const hasAlert = (type, id) => alerts.some(a => a[1] === type && a[2] === id);
-  truthy('11: нет активности — Павловы', hasAlert(ALERT.IDLE_HIGH, pav.id));
-  truthy('11: много отказов — Павловы', hasAlert(ALERT.MANY_LOST, pav.id));
-  truthy('11: нет новых лидов — Павловы', hasAlert(ALERT.NO_LEADS, pav.id));
-  truthy('11: стратегия не пересматривалась — Павловы', hasAlert(ALERT.STRATEGY_OLD, pav.id));
-  truthy('11: эксклюзив заканчивается — Павловы', hasAlert(ALERT.EXCL_END, pav.id));
-  truthy('11: просроченная задача — Остров', hasAlert(ALERT.TASK_OVERDUE, ost.id));
-  truthy('11: просроченное действие — Остров', hasAlert(ALERT.ACTION_OVERDUE, ost.id));
-  truthy('11: задача без ответственного — Остров', hasAlert(ALERT.NO_OWNER, ost.id));
-  truthy('11: нет ложной тревоги «нет активности» — Остров', !hasAlert(ALERT.IDLE_HIGH, ost.id));
-
-  // 7b. Гипотезы: факт считается из 03 за период проверки
-  const hyps = readTable_('HYP').rows;
-  const hBr = hyps.find(h => h.obj_id === ost.id && h.channel === 'Брокеры');
-  const hPb = hyps.find(h => h.obj_id === ost.id && h.channel === 'Private Banking');
-  eq('14: гипотеза «брокеры» — факт лидов', hBr ? hBr.fact : '', 1);
-  eq('14: гипотеза «брокеры» — % от цели', hBr ? hBr.fact_pct : '', 0.5);
-  eq('14: гипотеза «Private Banking» — факт контактов', hPb ? hPb.fact : '', 10);
-  truthy('11: гипотеза с истёкшим сроком — Павловы', hasAlert(ALERT.HYP_DUE, pav.id));
-  has('07: что протестировали — гипотеза недели', v.TESTS, 'брокеров премиум-сегмента');
-  has('07: что протестировали — будущая гипотеза не попала', v.TESTS, 'Private Banking даст', true);
-  has('07: внутреннее решение по гипотезе скрыто', v.TESTS, 'перераспределить', true);
-
-  // 8. Дэшборд
-  const dashIds = dashIds_();
-  truthy('09: все тестовые объекты в таблице дэшборда', [ost.id, ano.id, pav.id].every(id => dashIds.indexOf(id) >= 0), dashIds.join(', '));
-
-  // 9. Масштабирование: новый объект подхватывается без правки формул
-  const objSh = sheet_('OBJ');
-  const newId = 'TEST-9999';
-  const row = appendRow_('OBJ', { id: newId, name: 'Тест масштабирования', price: 1000000, area: 50, status: 'Новый', date_sign: addDays_(today_(), -1) });
-  SpreadsheetApp.flush();
-  const nObj = readTable_('OBJ').rows.find(o => o.id === newId);
-  eq('Масштаб: цена за м² нового объекта', nObj ? nObj.price_m2 : '', 20000);
-  truthy('Масштаб: объект в списке выбора', dictValues_('obj_labels').indexOf(objLabel_(newId, 'Тест масштабирования')) >= 0);
-  truthy('Масштаб: объект в статистике', statKeys_(sheet_('STAT'), 'object').indexOf(newId) >= 0 || sheet_('STAT').getRange('B2').getValue() !== 'Все');
-  truthy('Масштаб: объект на дэшборде', dashIds_().indexOf(newId) >= 0);
-  const ctrlIds = sheet_('CTRL').getRange(CTRL_FIRST, CTRL_MON_START, sheet_('CTRL').getMaxRows() - CTRL_FIRST + 1, 1).getValues().map(r => r[0]);
-  truthy('Масштаб: объект в мониторинге 11_КОНТРОЛЬ', ctrlIds.indexOf(newId) >= 0);
-  objSh.deleteRow(row);
-  SpreadsheetApp.flush();
-
-  // 9b. Дата закрытия: у проданного объекта дни в продаже перестают расти
-  const clRow = appendRow_('OBJ', { id: 'TEST-9998', name: 'Тест закрытия', price: 1000000, area: 50, status: 'Продан', date_sign: addDays_(today_(), -30), close_date: addDays_(today_(), -10) });
-  SpreadsheetApp.flush();
-  const clObj = readTable_('OBJ').rows.find(o => o.id === 'TEST-9998');
-  eq('Закрытие: дни в продаже считаются до даты закрытия', clObj ? clObj.days_on_market : '', 20);
-  truthy('Закрытие: проданный объект не на дэшборде «в работе»', dashIds_().indexOf('TEST-9998') < 0);
-  objSh.deleteRow(clRow);
-  SpreadsheetApp.flush();
-
-  // 10. Отчёт в Google Docs + PDF + ссылка (по желанию)
-  if (withDrive) {
-    try {
-      const res = generateReport_(ost.id, wkP, { interactive: false });
-      truthy('Drive: Google Doc создан', !!DriveApp.getFileById(res.docId), res.docUrl);
-      truthy('Drive: PDF создан', DriveApp.getFileById(res.pdfId).getMimeType() === MimeType.PDF, res.pdfUrl);
-      eq('Drive: имя отчёта', res.name, TEST_NAMES.OSTROV + ' — Отчёт — ' + v.PERIOD);
-      const doc = DocumentApp.openById(res.docId).getBody().getText();
-      has('Drive: в документе нет незаполненных {{...}}', doc, '{{', true);
-      has('Drive: в документе нет внутренних комментариев', doc, 'ВНУТР', true);
-      const ostNow = readTable_('OBJ').rows.find(o => o.id === ost.id);
-      eq('Drive: ссылка на отчёт записана в 01', ostNow.last_report_link, res.pdfUrl);
-      const arch = readTable_('ARCH').rows;
-      truthy('Drive: запись в архиве отчётов', arch.some(a => a.obj_id === ost.id && a.week === wkP && a.pdf_link === res.pdfUrl && a.status === REPORT_STATUS.ACTUAL));
-      const objFolder = ensureObjectFolder_(ost.id, 'ROOT');
-      const subs = []; const it = objFolder.getFolders(); while (it.hasNext()) subs.push(it.next().getName());
-      truthy('Drive: одна папка объекта с подпапками Стратегия / Отчёты / Материалы',
-        ['STRATEGIES', 'REPORTS', 'MATERIALS'].every(k => subs.indexOf(SYS.OBJECT_SUBFOLDERS[k]) >= 0), subs.join(', '));
-      eq('Drive: ссылка на папку объекта в 01', readTable_('OBJ').rows.find(o => o.id === ost.id).folder_link, objFolder.getUrl());
-      const sd = ensureStrategyDoc_(ost.id);
-      truthy('Drive: документ стратегии создан и связан', !!sd.url && readTable_('OBJ').rows.find(o => o.id === ost.id).strategy_link === sd.url, sd.url);
-    } catch (err) {
-      R.push({ name: 'Drive: создание отчёта', ok: false, expected: 'без ошибок', actual: err.message });
+    const rep = sheet_('REP');
+    const keep = ['B3', 'B4'].map(a => rep.getRange(a).getValue());
+    rep.getRange('B3').setValue(objLabel_(EXAMPLE_ID, ex.name));
+    rep.getRange('B4').setValue(weekLabelByKey_('2026-W38'));
+    SpreadsheetApp.flush();
+    const v = readReportValues_();
+    check('Отчёт: период 14.09.2026 – 18.09.2026', v.kv.PERIOD === '14.09.2026 – 18.09.2026', v.kv.PERIOD);
+    check('Отчёт: № договора из 01_ОБЪЕКТЫ', v.kv.CONTRACT_NO === '000-000', v.kv.CONTRACT_NO);
+    check('Отчёт: 5 пунктов в «Выполнение плана»', v.tables.PLAN_ROWS.length === 5, v.tables.PLAN_ROWS.length);
+    check('Отчёт: 3 пункта в «План работы»', v.tables.NEXT_ROWS.length === 3, v.tables.NEXT_ROWS.length);
+    check('Отчёт: в тексте нет контактов из обзвона', JSON.stringify(v).indexOf('+7') < 0);
+    if (opts.withDoc) {
+      try {
+        const r = generateReport_(EXAMPLE_ID, '2026-W38', { interactive: false });
+        const text = DocumentApp.openById(r.docId).getBody().getText();
+        check('Отчёт: Google Doc и PDF созданы', r.pdfUrl, r.docUrl);
+        check('Отчёт: в документе не осталось меток {{…}}', !/\{\{[A-Z_]+\}\}/.test(text));
+        check('Отчёт: в документе «Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА»', text.indexOf('Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА') >= 0);
+      } catch (e) {
+        check('Отчёт: Google Doc и PDF созданы', false, e.message);
+      }
     }
+    restoreSel_(rep, 'B3', keep[0]);
+    restoreSel_(rep, 'B4', keep[1]);
+  } else {
+    check('Пример не загружен — расчётные проверки пропущены', true, 'Сервис → Загрузить пример');
   }
-  ['B3', 'B4', 'B5'].forEach((a, i) => rep.getRange(a).setValue(keepRep[i]));
-  return R;
-}
 
-/** Значения строки таблицы статистики по ключу (объект/канал/неделя/…) как {заголовок: значение}. */
-function statRow_(sh, dim, key) {
-  const s = STAT_SECTIONS[dim];
-  const width = sh.getLastColumn();
-  const hdr = sh.getRange(s.header, 1, 1, width).getValues()[0];
-  const last = s.last || sh.getMaxRows();
-  const vals = sh.getRange(s.first, 1, last - s.first + 1, width).getValues();
-  const row = vals.find(r => r[0] === key) || [];
-  const out = {};
-  hdr.forEach((h, i) => { if (h) out[h] = row[i]; });
+  let sh = ss.getSheetByName(SELFTEST_SHEET);
+  if (!sh) sh = ss.insertSheet(SELFTEST_SHEET);
+  sh.clear();
+  sh.getRange(1, 1, 1, 3).setValues([['Проверка', 'Результат', 'Детали']]).setFontWeight('bold');
+  sh.getRange(1, 4).setValue('Запуск: ' + fmtDate_(new Date(), 'dd.MM.yyyy HH:mm'));
+  const rows = out.map(r => [r[0], r[1] ? '✓' : '✗', r[2]]);
+  sh.getRange(2, 1, rows.length, 3).setValues(rows);
+  sh.getRange(2, 2, rows.length, 1).setBackgrounds(out.map(r => [r[1] ? COLORS.GREEN_BG : COLORS.RED_BG]));
+  sh.setColumnWidth(1, 380); sh.setColumnWidth(2, 90); sh.setColumnWidth(3, 480);
+  sh.activate();
   return out;
 }
 
-function statKeys_(sh, dim) {
-  const s = STAT_SECTIONS[dim];
-  const last = s.last || sh.getMaxRows();
-  return sh.getRange(s.first, 1, last - s.first + 1, 1).getValues().map(r => r[0]).filter(Boolean);
+// ═════════════ 11_Library.gs ═════════════
+/**
+ * 11_Library — стартовое наполнение 06_БИБЛИОТЕКА: чек-листы сценариев, промпты для Claude, регламенты, скрипты.
+ * Добавляются только записи, которых ещё нет (по названию), — правки команды не перезаписываются.
+ * Названия чек-листов появляются в выпадающем списке раздела «Сценарии использования» во вкладке объекта.
+ */
+
+function libraryDefaults_() {
+  const CL = 'Чек-лист', PR = 'Промпт', RG = 'Регламент', SC = 'Скрипт';
+  return [
+    [CL, 'Медицина: помещение под лицензию', 'Коммерция: медцентр, клиника, стационар, стоматология, лаборатория',
+      '1) Назначение помещения и ВРИ участка допускают медицину; нет запрета в договоре с УК / ТСЖ.\n2) Отдельный вход (желательно 2: пациенты и служебный), путь эвакуации, пандус / доступность МГН.\n3) Высота потолков, вентиляция (приток-вытяжка отдельно от жилого дома), возможность шахты.\n4) Мокрые точки: количество и где стоят; канализация; нагрузки на перекрытия под оборудование (КТ/МРТ).\n5) Электромощность (кВт), категория надёжности, резерв.\n6) СанПиН 2.1.3678-20: площади кабинетов, естественный свет, инсоляция квартир над помещением.\n7) Стационар: отдельно — требования к палатам, пищеблоку, дезинфекции; подтвердить у консультанта по лицензированию.\n8) Документы от УК / собственника: техпаспорт БТИ, поэтажный план и экспликация, выписка ЕГРН, ТУ на мощность, схема вентиляции, акт ввода дома.\n9) Консультант по лицензированию: письменный вывод «лицензия возможна / при каких условиях».\n10) Вывод для КП: какие виды медицинской деятельности подтверждены — писать в КП только подтверждённое.'],
+    [CL, 'Апарт-комплекс', 'Коммерция под апартаменты / апарт-отель, перевод в жильё',
+      '1) ВРИ и назначение: можно ли апарт-формат / гостиница; ограничения жилого дома.\n2) Нагрузки и мокрые точки под санузлы в каждом юните; стояки, уклоны канализации.\n3) Окна и инсоляция, высота потолков (антресоли при 4,5 м).\n4) Пожарные требования, эвакуация, отдельные входы.\n5) Электромощность на количество юнитов.\n6) Документы от УК: техпаспорт, планы, ТУ, согласие ТСЖ при необходимости.\n7) Замерщики: обмер, фиксация по каждому исполнителю (цена, срок, контакты).\n8) Проектировщики: КП на концепцию нарезки (кол-во юнитов, площади, бюджет), срок.\n9) Экономика: стоимость реконструкции, доходность аренды юнитов, срок окупаемости — для КП инвестору.'],
+    [CL, 'Ветклиника', 'Коммерция под ветеринарную клинику',
+      '1) Отдельный вход, желательно с улицы / не через двор ЖК.\n2) Вентиляция, шумоизоляция, мокрые точки, стационар для животных — согласовать с УК.\n3) Лицензия на ветдеятельность не требуется (кроме фармдеятельности) — проверить актуальность.\n4) Отношение жителей ЖК / правила УК о животных.\n5) Трафик владельцев животных: количество квартир, наличие конкурентов в радиусе 1 км.'],
+    [CL, 'Образование / детский центр', 'Коммерция под частную школу, детсад, кружки',
+      '1) Лицензия на образовательную деятельность: требования к помещению, СанПиН 2.4.3648-20.\n2) Естественное освещение, площадь на ребёнка, санузлы по количеству детей.\n3) Отдельный вход, безопасная зона высадки, прогулочная площадка (для детсада).\n4) Эвакуация, пожарная сигнализация.\n5) Аудитория: количество семей с детьми в ЖК и районе, конкуренты.'],
+    [CL, 'Общепит', 'Коммерция под кафе / ресторан',
+      '1) Разрешено ли в жилом доме (вытяжка через кровлю, запахи, шум).\n2) Мощность, газ / электроплиты, жироуловитель, мокрые точки.\n3) Вход, витрина, летняя веранда.\n4) Документы УК, согласие на вытяжку.\n5) Трафик: пешеходный поток, офисы рядом.'],
+    [CL, 'ГАБ / ритейл', 'Готовый арендный бизнес, сетевой ритейл',
+      '1) Действующий арендатор, срок и условия договора, индексация, гарантийный платёж.\n2) Ставка аренды к рынку, окупаемость, доходность.\n3) Требования сетей: площадь, погрузка, парковка, первая линия.\n4) Документы: договор аренды, акты, ЕГРН, выписка по платежам.'],
+    [CL, 'Жильё для семьи', 'Квартиры: семейная аудитория',
+      '1) Школы, детсады, поликлиника, парки рядом — фото и расстояния.\n2) Планировка: детские, кладовые, санузлы.\n3) Ипотека / семейная ипотека: подходит ли объект, аккредитация банков.\n4) Документы собственника: основание, обременения, согласия.'],
+    [CL, 'Загородный дом', 'Загородные дома и особняки',
+      '1) Коммуникации: газ, электричество (кВт), вода, канализация — документы.\n2) Земля: категория, ВРИ, межевание, обременения.\n3) Дорога круглый год, охрана, инфраструктура посёлка, УК и платежи.\n4) Состояние дома: кровля, фундамент, отопление; отчёт осмотра.\n5) Съёмка: сезонность, дрон, вечерние фото.'],
+    [PR, 'Анализ цены по аналогам', 'Раздел «Аналитика и цена» вкладки объекта',
+      'Ты — аналитик коммерческой / жилой недвижимости Москвы. Объект: {адрес, площадь, этаж, назначение, особенности}. Текущая цена: {цена}. Аналоги с ЦИАН: {таблица аналогов из вкладки}.\nСделай: 1) медиану и разброс цены за м² по сопоставимым аналогам (отдельно отбрось несопоставимые и объясни почему); 2) поправки на этаж, вход, высоту, мощность, готовность под бизнес; 3) рекомендованный диапазон цены, консервативную цену и минимальную цену сделки; 4) 3 аргумента для собственника, если цена выше рынка. Ответ — таблица + короткий вывод.'],
+    [PR, 'Сценарии использования и неочевидные аудитории', 'Разделы «Сценарии» и «Аудитории»',
+      'Объект: {описание, площадь, этажи, потолки, мощность, входы, мокрые точки, окружение: метро, бизнес-центры, школы, посольства, вокзалы, аэропорт}. Предложи 8–10 сценариев использования (продажа / аренда), включая неочевидные. Для каждого: кому (конкретные типы компаний или людей), почему объект им подходит, что проверить до предложения (документы, лицензии, технические требования), риски, приоритет ★–★★★. Отдельно — 3 идеи, которые обычный брокер не заметит.'],
+    [PR, 'Портрет целевой аудитории', 'Раздел «Аудитории»',
+      'Аудитория: {например, сети медцентров}. Объект: {кратко}. Опиши: кто принимает решение (должность), чего он боится и что ему важно в помещении, какие цифры он захочет увидеть в КП, где искать контакты (реестры, 2ГИС, сайты, ассоциации, Telegram-каналы), как лучше выйти на ЛПР. Дай список из 20 конкретных компаний Москвы с сайтами, если уверен в них (помечай, что проверить).'],
+    [PR, 'КП клиенту и партнёру', 'Раздел «КП и материалы»',
+      'Подготовь текст КП для {аудитория} по объекту {описание}. Структура: заголовок-выгода, 5 ключевых фактов (цифры), почему подходит именно под их бизнес, экономика (ставка / цена / окупаемость), следующий шаг. Версия 1 — клиенту (с контактами агентства). Версия 2 — партнёру для пересылки: без контактов агентства и собственника, нейтральный тон.'],
+    [PR, 'Скрипт звонка и письма', 'Работа с базой (03_ОБЗВОН_И_КП)',
+      'Составь для ассистента: 1) скрипт звонка в колл-центр / приёмную сети {аудитория} с целью выйти на отдел развития (3 варианта обхода «секретаря»); 2) короткое письмо с КП (до 700 знаков) с просьбой переслать ЛПР; 3) текст для формы обратной связи на сайте; 4) ответы на 5 типовых возражений. Объект: {кратко}.'],
+    [PR, 'Сценарий рилс', 'Контент (04_КОНТЕНТ)',
+      'Сценарий вертикального видео 30–45 сек по объекту {описание}. Три цели: найти покупателя / арендатора ({аудитория}), показать собственнику работу, бренд агентства. Дай: хук на 2 секунды, раскадровку по 5–7 планам (что снимать, текст на экране, закадровый текст), призыв к действию, подпись к посту и 10 хэштегов. Варианты для Instagram, Telegram, YouTube Shorts, Threads.'],
+    [PR, 'Оперативка → задачи', 'Расшифровка Zoom / заметки встречи',
+      'Вот расшифровка оперативки: {текст}. Выдели по каждому объекту: решения, задачи (что сделать, кто, срок, единица и план — звонков / КП / публикаций), открытые вопросы. Ответ — таблица с колонками: ID объекта | Блок стратегии | Задача | Исполнитель | Единица | План | Срок. Формулировки задач — так, чтобы их можно было показать клиенту.'],
+    [RG, 'Регламент недели', 'Вся команда',
+      'Пн — оперативка (Zoom), «Создать план недели», задачи по объектам в 02_ЗАДАЧИ.\nЕжедневно — ассистент ведёт 03_ОБЗВОН_И_КП (каждый звонок и КП — строкой, в тот же день); SMM — 04_КОНТЕНТ.\nПт — закрыть статусы задач, внести ручной факт; проверить просрочки.\nПн утром — «Отчёт клиенту» по каждому объекту → проверить → PDF клиенту.\nВ CRM переносим только реально заинтересованных (галочка «Передан в CRM»).'],
+    [RG, 'Правила заполнения', 'Вся команда',
+      'Один объект — одна вкладка, ID как в CRM. Аудитория в 03_ОБЗВОН_И_КП пишется так же, как во вкладке объекта. Задачи формулируем для клиента. КП партнёру — без наших контактов. Ничего не удаляем: неактуальное — статус «Отменено» / «Отказались». Формульные (серые) столбцы не трогаем.'],
+    [SC, 'Письмо-рассылка по медцентрам (образец)', 'ЖК «Время», сети медцентров',
+      'Здравствуйте! Предлагаю помещение для нового филиала клиники: 756 м², два этажа, метро Преображенская площадь — потолки 4,5 м, 152 кВт, 8 мокрых точек, 4 входа — соответствует требованиям СанПиН, переделка не требуется — 4000+ потенциальных пациентов в радиусе 500 м. Отправляю презентацию с планировками и расчётами. Если предложение интересно, напишите контактное лицо и телефон. Если вопрос не в вашей компетенции, перешлите письмо руководителю или директору по развитию.'],
+  ];
 }
 
-function dashIds_() {
-  const sh = sheet_('DASH');
-  return sh.getRange(DASH_OBJ_FIRST, 1, sh.getMaxRows() - DASH_OBJ_FIRST + 1, 1).getValues().map(r => r[0]).filter(Boolean);
-}
-
-function writeTestSheet_(results) {
-  const ss = ss_();
-  let sh = ss.getSheetByName('99_САМОПРОВЕРКА');
-  if (!sh) sh = ss.insertSheet('99_САМОПРОВЕРКА');
-  sh.clear();
-  const rows = [['Результат', 'Проверка', 'Ожидалось', 'Получено']].concat(results.map(r => [r.ok ? '✓' : '✗', r.name, String(r.expected), String(r.actual)]));
-  sh.getRange(1, 1, rows.length, 4).setValues(rows);
-  sh.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground(COLORS.HDR_FORMULA_BG);
-  results.forEach((r, i) => sh.getRange(i + 2, 1, 1, 4).setBackground(r.ok ? COLORS.GREEN_BG : COLORS.RED_BG));
-  sh.getRange(rows.length + 2, 1).setValue('Запуск: ' + fmtDate_(new Date(), 'dd.MM.yyyy HH:mm'));
-  sh.setColumnWidth(1, 80); sh.setColumnWidth(2, 380); sh.setColumnWidth(3, 260); sh.setColumnWidth(4, 360);
-  sh.activate();
+function seedLibrary_() {
+  const t = readTable_('LIB');
+  const have = {};
+  t.rows.forEach(r => { have[String(r.title).trim()] = true; });
+  const cache = {};
+  const add = libraryDefaults_().filter(d => !have[d[1]]).map(d => ({
+    id: nextId_('LIB', cache), kind: d[0], title: d[1], applies: d[2], text: d[3], updated_at: new Date(), author: 'система',
+  }));
+  appendRows_('LIB', add);
+  return add.length;
 }
 
 // ═════════════ 12_Utils.gs ═════════════
@@ -3617,7 +3297,7 @@ function appendRow_(code, obj) {
   return row;
 }
 
-/** Следующий ID: ACT-0012, TASK-0031 … (максимум существующих + 1). */
+/** Следующий ID: TASK-0031, BASE-0012 … (максимум существующих + 1). */
 function nextId_(code, cache) {
   const spec = sheetSpecs_()[code];
   if (cache && cache[code] !== undefined) { cache[code]++; return formatId_(spec, cache[code]); }
@@ -3661,7 +3341,7 @@ function applyColumnRules_(sh, spec, fromRow, n) {
   });
 }
 
-/** Запись в 12_ИСТОРИЯ. entries: [{sheet, record_id, obj_id, field, old, new, kind, note}] */
+/** Запись в 09_ИСТОРИЯ. entries: [{sheet, record_id, obj_id, field, old, new, kind, note}] */
 function logHistory_(entries, user) {
   if (!entries.length) return;
   const sh = sheet_('HIST');
@@ -3679,7 +3359,7 @@ function idFromUrl_(url) {
   return m ? m[0] : '';
 }
 
-/** Выбранный объект: активная строка листа с ID объекта, иначе выбор в 07_ОТЧЕТ. */
+/** Выбранный объект: вкладка объекта, строка листа с ID объекта, строка дэшборда, иначе выбор в 05_ОТЧЁТ_КЛИЕНТУ. */
 function selectedObjectId_() {
   const sh = SpreadsheetApp.getActiveSheet();
   const spec = specBySheetName_(sh.getName());
@@ -3691,8 +3371,12 @@ function selectedObjectId_() {
       if (v) return String(v);
     }
   }
-  if (sh.getName() === SHEET_NAMES.DASH && row >= DASH_OBJ_FIRST) {
-    const v = sh.getRange(row, 1).getValue();
+  if (sh.getName() === SHEET_NAMES.DASH && row >= DASH.OBJ_FIRST && row <= DASH.OBJ_LAST) {
+    const v = sh.getRange(row, 2).getValue();
+    if (v) return String(v);
+  }
+  if (isObjectTab_(sh)) {
+    const v = sh.getRange(TAB.ID).getValue();
     if (v) return String(v);
   }
   const rep = sheet_('REP').getRange('E3').getValue();
@@ -3723,28 +3407,27 @@ function showLinks_(title, links, text) {
 
 // ═════════════ 13_Menu.gs ═════════════
 /**
- * 13_Menu — меню «УПРАВЛЕНИЕ ЭКСКЛЮЗИВАМИ».
+ * 13_Menu — меню «МАРКЕТИНГ ОБЪЕКТОВ».
  */
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu(SYS.MENU)
-    .addItem('➜ Создать отчёт', 'createReport')
-    .addItem('➜ Создать PDF', 'createPdf')
-    .addItem('➜ Открыть стратегию', 'openStrategy')
-    .addItem('➜ Добавить действие', 'addAction')
+    .addItem('➜ Открыть вкладку объекта', 'openObjectTab')
+    .addItem('➜ Создать вкладки для новых объектов', 'createObjectTabs')
     .addItem('➜ Создать план недели', 'createWeekPlan')
-    .addItem('➜ Обновить статистику', 'refreshStats')
     .addItem('➜ Проверить просрочки', 'checkOverdue')
-    .addItem('➜ Открыть Dashboard', 'openDashboard')
+    .addSeparator()
+    .addItem('➜ Создать отчёт клиенту', 'createReport')
+    .addItem('➜ Обновить PDF отчёта', 'createPdf')
+    .addSeparator()
+    .addItem('➜ Дэшборд', 'openDashboard')
+    .addItem('➜ Обновить (ID, вкладки, строки)', 'refreshAll')
     .addSeparator()
     .addSubMenu(ui.createMenu('Сервис')
       .addItem('⚙ Установить / обновить систему', 'setupSystem')
-      .addItem('Создать папки и стратегии для всех объектов', 'createFoldersForAll')
-      .addItem('Включить ежедневную сводку на email', 'installDailyCheck')
-      .addItem('Выключить ежедневную сводку', 'uninstallDailyCheck')
-      .addSeparator()
-      .addItem('Загрузить тестовые данные', 'loadTestData')
+      .addItem('Обновить все вкладки объектов', 'rebuildObjectTabs')
+      .addItem('Загрузить пример (ЖК Время · Лермонтовская 1)', 'loadExampleData')
       .addItem('Запустить самопроверку', 'runSelfTest')
       .addItem('О системе', 'aboutSystem'))
     .addToUi();
@@ -3752,9 +3435,11 @@ function onOpen() {
 
 function aboutSystem() {
   SpreadsheetApp.getUi().alert(SYS.TITLE + ' v' + SYS.VERSION,
-    'Логика: ОБЪЕКТ → ДЕЙСТВИЕ → РЕЗУЛЬТАТ → СТАТИСТИКА → ВЫВОД → СЛЕДУЮЩИЙ ШАГ.\n\n' +
-    'Вводим данные: 01 (объекты), 02 (стратегия), 03 (действия), 06 (план недели), 14 (гипотезы).\n' +
-    'Считается само: 04 (воронка), 05, 07, 09, 11. Историю ведёт скрипт: 12, 13.\n\n' +
+    'Не CRM: клиенты, показы и сделки — в CRM. Здесь — маркетинговая стратегия и работа команды по каждому эксклюзиву.\n\n' +
+    '• 01_ОБЪЕКТЫ — реестр; у каждого объекта своя вкладка «▸ Название (ID)» со стратегией: аналитика и цена → сценарии → аудитории → КП → каналы → решения.\n' +
+    '• 02_ЗАДАЧИ — план-факт по неделям; 03_ОБЗВОН_И_КП — работа ассистента с базой; 04_КОНТЕНТ — публикации SMM.\n' +
+    '• 00_ДЭШБОРД, 05_ОТЧЁТ_КЛИЕНТУ и разделы 8–9 вкладок считаются сами.\n' +
+    '• 06_БИБЛИОТЕКА — чек-листы, промпты, регламенты. 09_ИСТОРИЯ — кто что изменил.\n\n' +
     'Цвет заголовка: тёмный — вводится вручную; серо-голубой — формула; светло-серый — заполняет скрипт.',
     SpreadsheetApp.getUi().ButtonSet.OK);
 }

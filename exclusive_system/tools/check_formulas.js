@@ -1,10 +1,12 @@
 // Генерирует все формулы системы и проверяет их структуру.
 const { loadGs } = require('./load_gs.js');
-const x = loadGs();
+const { makeSS } = require('./mock_ss.js');
+const M = makeSS();
+const x = loadGs({ SpreadsheetApp: M.SpreadsheetApp });
 
 const KNOWN = new Set(('ARRAYFORMULA IF IFERROR LEN VLOOKUP SORT FILTER TEXT LEFT TODAY WEEKDAY ROUND YEAR ISOWEEKNUM MONTH ' +
   'SUMIF COUNTIF SUMIFS COUNTIFS LET SEQUENCE MAX ROUNDUP UNIQUE REGEXEXTRACT OR HYPERLINK INDEX TEXTJOIN QUERY ISNUMBER MATCH ' +
-  'MIN N AVERAGEIFS SUMPRODUCT ROWS ROW SUM CHAR MAP LAMBDA LOWER').split(' '));
+  'MIN N AVERAGEIFS SUMPRODUCT ROWS ROW SUM CHAR MAP LAMBDA LOWER ARRAY_CONSTRAIN MEDIAN COUNTA SUBSTITUTE INT').split(' '));
 
 function allFormulas() {
   const out = [];
@@ -13,12 +15,14 @@ function allFormulas() {
     if (f.kind === 'f') out.push({ where: `${S[code].name}!${x.colLetter_(x.fieldIndex_(code, f.key))}1 «${f.title}»`, f: x.headerFormula_(S[code], f) });
   }));
   const gen = x.dictGeneratedFormulas_();
-  Object.keys(gen).forEach(k => out.push({ where: `08_СПРАВОЧНИКИ ${k}`, f: x.resolveF_(gen[k]) }));
-  const blocks = [
-    ['05_СТАТИСТИКА', x.statsLayout_(0).cells], ['04_ВОРОНКА', x.funnelLayout_().cells], ['06 блок', x.pfBlockLayout_().cells],
-    ['07_ОТЧЕТ', x.reportLayout_().cells], ['11_КОНТРОЛЬ', x.ctrlLayout_().cells], ['09_ДЭШБОРД', x.dashLayout_().cells],
-  ];
+  Object.keys(gen).forEach(k => out.push({ where: `07_СПРАВОЧНИКИ ${k}`, f: x.resolveF_(gen[k]) }));
+  const blocks = [['05_ОТЧЁТ_КЛИЕНТУ', x.reportLayout_().cells], ['00_ДЭШБОРД', x.dashLayout_().cells]];
   blocks.forEach(([name, cells]) => cells.forEach(c => { if (c.f) out.push({ where: `${name}!${c.a1}`, f: x.resolveF_(c.f) }); }));
+  // вкладка объекта: строим на заглушке и собираем все формулы
+  Object.keys(x.SHEET_NAMES).forEach(k => M.sheetObj(x.SHEET_NAMES[k]));
+  const tab = M.sheetObj('▸ Пример (1)');
+  x.buildObjectTab_(tab, '1', null);
+  Object.entries(M.book['▸ Пример (1)'].cells).forEach(([a1, c]) => { if (c.f) out.push({ where: `ВКЛАДКА_ОБЪЕКТА!${a1}`, f: c.f }); });
   return out;
 }
 

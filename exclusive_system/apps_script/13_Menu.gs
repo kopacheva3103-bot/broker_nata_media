@@ -1,26 +1,25 @@
 /**
- * 13_Menu — меню «УПРАВЛЕНИЕ ЭКСКЛЮЗИВАМИ».
+ * 13_Menu — меню «МАРКЕТИНГ ОБЪЕКТОВ».
  */
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu(SYS.MENU)
-    .addItem('➜ Создать отчёт', 'createReport')
-    .addItem('➜ Создать PDF', 'createPdf')
-    .addItem('➜ Открыть стратегию', 'openStrategy')
-    .addItem('➜ Добавить действие', 'addAction')
+    .addItem('➜ Открыть вкладку объекта', 'openObjectTab')
+    .addItem('➜ Создать вкладки для новых объектов', 'createObjectTabs')
     .addItem('➜ Создать план недели', 'createWeekPlan')
-    .addItem('➜ Обновить статистику', 'refreshStats')
     .addItem('➜ Проверить просрочки', 'checkOverdue')
-    .addItem('➜ Открыть Dashboard', 'openDashboard')
+    .addSeparator()
+    .addItem('➜ Создать отчёт клиенту', 'createReport')
+    .addItem('➜ Обновить PDF отчёта', 'createPdf')
+    .addSeparator()
+    .addItem('➜ Дэшборд', 'openDashboard')
+    .addItem('➜ Обновить (ID, вкладки, строки)', 'refreshAll')
     .addSeparator()
     .addSubMenu(ui.createMenu('Сервис')
       .addItem('⚙ Установить / обновить систему', 'setupSystem')
-      .addItem('Создать папки и стратегии для всех объектов', 'createFoldersForAll')
-      .addItem('Включить ежедневную сводку на email', 'installDailyCheck')
-      .addItem('Выключить ежедневную сводку', 'uninstallDailyCheck')
-      .addSeparator()
-      .addItem('Загрузить тестовые данные', 'loadTestData')
+      .addItem('Обновить все вкладки объектов', 'rebuildObjectTabs')
+      .addItem('Загрузить пример (ЖК Время · Лермонтовская 1)', 'loadExampleData')
       .addItem('Запустить самопроверку', 'runSelfTest')
       .addItem('О системе', 'aboutSystem'))
     .addToUi();
@@ -28,9 +27,11 @@ function onOpen() {
 
 function aboutSystem() {
   SpreadsheetApp.getUi().alert(SYS.TITLE + ' v' + SYS.VERSION,
-    'Логика: ОБЪЕКТ → ДЕЙСТВИЕ → РЕЗУЛЬТАТ → СТАТИСТИКА → ВЫВОД → СЛЕДУЮЩИЙ ШАГ.\n\n' +
-    'Вводим данные: 01 (объекты), 02 (стратегия), 03 (действия), 06 (план недели), 14 (гипотезы).\n' +
-    'Считается само: 04 (воронка), 05, 07, 09, 11. Историю ведёт скрипт: 12, 13.\n\n' +
+    'Не CRM: клиенты, показы и сделки — в CRM. Здесь — маркетинговая стратегия и работа команды по каждому эксклюзиву.\n\n' +
+    '• 01_ОБЪЕКТЫ — реестр; у каждого объекта своя вкладка «▸ Название (ID)» со стратегией: аналитика и цена → сценарии → аудитории → КП → каналы → решения.\n' +
+    '• 02_ЗАДАЧИ — план-факт по неделям; 03_ОБЗВОН_И_КП — работа ассистента с базой; 04_КОНТЕНТ — публикации SMM.\n' +
+    '• 00_ДЭШБОРД, 05_ОТЧЁТ_КЛИЕНТУ и разделы 8–9 вкладок считаются сами.\n' +
+    '• 06_БИБЛИОТЕКА — чек-листы, промпты, регламенты. 09_ИСТОРИЯ — кто что изменил.\n\n' +
     'Цвет заголовка: тёмный — вводится вручную; серо-голубой — формула; светло-серый — заполняет скрипт.',
     SpreadsheetApp.getUi().ButtonSet.OK);
 }

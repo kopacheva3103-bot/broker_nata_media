@@ -166,7 +166,7 @@ function appendRow_(code, obj) {
   return row;
 }
 
-/** Следующий ID: ACT-0012, TASK-0031 … (максимум существующих + 1). */
+/** Следующий ID: TASK-0031, BASE-0012 … (максимум существующих + 1). */
 function nextId_(code, cache) {
   const spec = sheetSpecs_()[code];
   if (cache && cache[code] !== undefined) { cache[code]++; return formatId_(spec, cache[code]); }
@@ -210,7 +210,7 @@ function applyColumnRules_(sh, spec, fromRow, n) {
   });
 }
 
-/** Запись в 12_ИСТОРИЯ. entries: [{sheet, record_id, obj_id, field, old, new, kind, note}] */
+/** Запись в 09_ИСТОРИЯ. entries: [{sheet, record_id, obj_id, field, old, new, kind, note}] */
 function logHistory_(entries, user) {
   if (!entries.length) return;
   const sh = sheet_('HIST');
@@ -228,7 +228,7 @@ function idFromUrl_(url) {
   return m ? m[0] : '';
 }
 
-/** Выбранный объект: активная строка листа с ID объекта, иначе выбор в 07_ОТЧЕТ. */
+/** Выбранный объект: вкладка объекта, строка листа с ID объекта, строка дэшборда, иначе выбор в 05_ОТЧЁТ_КЛИЕНТУ. */
 function selectedObjectId_() {
   const sh = SpreadsheetApp.getActiveSheet();
   const spec = specBySheetName_(sh.getName());
@@ -240,8 +240,12 @@ function selectedObjectId_() {
       if (v) return String(v);
     }
   }
-  if (sh.getName() === SHEET_NAMES.DASH && row >= DASH_OBJ_FIRST) {
-    const v = sh.getRange(row, 1).getValue();
+  if (sh.getName() === SHEET_NAMES.DASH && row >= DASH.OBJ_FIRST && row <= DASH.OBJ_LAST) {
+    const v = sh.getRange(row, 2).getValue();
+    if (v) return String(v);
+  }
+  if (isObjectTab_(sh)) {
+    const v = sh.getRange(TAB.ID).getValue();
     if (v) return String(v);
   }
   const rep = sheet_('REP').getRange('E3').getValue();

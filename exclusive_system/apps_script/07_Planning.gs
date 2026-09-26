@@ -1,85 +1,77 @@
 /**
- * 07_Planning — недельный цикл: план недели (понедельник) и перенос незакрытых задач.
+ * 07_Planning — «Создать план недели».
+ *
+ * Для каждого объекта в работе:
+ *  1) незакрытые задачи прошлых недель (по желанию) переносятся на выбранную неделю — исходные строки
+ *     получают статус «Перенесено» и остаются в истории;
+ *  2) добавляются задачи недели по умолчанию из 08_НАСТРОЙКИ (если такой задачи на эту неделю ещё нет).
+ * Исполнитель: звонки и КП — ассистент объекта, публикации — SMM объекта, остальное — ответственный.
  */
 
 function createWeekPlan() {
   const ui = SpreadsheetApp.getUi();
-  const t = today_();
-  const dow = t.getDay() || 7;
-  const def = isoWeekKey_(dow >= 5 ? addDays_(t, 7) : t); // с пятницы планируем следующую неделю
-  const r = ui.prompt('Создать план недели',
-    'Неделя в формате 2026-W40.\nПусто = ' + def + ' (' + weekPeriodLabel_(def) + ').\n\n' +
-    'Для каждого объекта в работе будут добавлены KPI по умолчанию (10_НАСТРОЙКИ), а незакрытые задачи прошлой недели можно перенести.',
-    ui.ButtonSet.OK_CANCEL);
-  if (r.getSelectedButton() !== ui.Button.OK) return;
-  const key = r.getResponseText().trim() || def;
-  if (!mondayOfWeekKey_(key)) { ui.alert('Неверный формат недели: ' + key + '. Нужно, например, 2026-W40.'); return; }
-  const res = buildWeekPlan_(key, { interactive: true });
-  sheet_('PF').activate();
-  ui.alert('План недели ' + key,
-    'Перенесено незакрытых задач: ' + res.moved + '\nДобавлено строк KPI: ' + res.created +
-    '\n\nДополните задачи недели (столбец «Задача»), ответственных и цели. Итоги — в блоке справа на листе 06_ПЛАН_ФАКТ.',
-    ui.ButtonSet.OK);
+  const today = today_();
+  const dow = today.getDay() || 7;
+  const defKey = isoWeekKey_(dow >= 5 ? addDays_(today, 7) : today);
+  const resp = ui.prompt('План недели',
+    'Неделя (формат 2026-W40). По умолчанию — ' + defKey + ' (' + weekPeriodLabel_(defKey) + ').', ui.ButtonSet.OK_CANCEL);
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  const wk = (resp.getResponseText() || '').trim() || defKey;
+  if (!mondayOfWeekKey_(wk)) { ui.alert('Неделя должна быть в формате 2026-W40.'); return; }
+  const carry = ui.alert('Перенос задач', 'Перенести незакрытые задачи прошлых недель на ' + wk + '?', ui.ButtonSet.YES_NO) === ui.Button.YES;
+  const res = buildWeekPlan_(wk, { carry: carry });
+  ui.alert('План недели ' + wk, 'Добавлено задач: ' + res.added + '\nПеренесено: ' + res.moved +
+    (res.skipped.length ? '\nБез ID / не в работе: ' + res.skipped.join(', ') : '') +
+    '\n\nДопишите в 02_ЗАДАЧИ задачи по стратегии (сценарии, аудитории, КП) — они попадут в отчёт клиенту.', ui.ButtonSet.OK);
 }
 
-function buildWeekPlan_(key, opts) {
+function buildWeekPlan_(wk, opts) {
   opts = opts || {};
-  const mon = mondayOfWeekKey_(key);
-  const prevKey = isoWeekKey_(addDays_(mon, -7));
-  const user = userEmail_();
+  const objs = readTable_('OBJ').rows.filter(o => o.id && o.name && o.in_work !== 'НЕТ');
+  const tasks = readTable_('TASK');
   const hist = [];
-  const objs = readTable_('OBJ').rows.filter(o => o.id && o.in_work === 'ДА');
-  const active = {};
-  objs.forEach(o => { active[o.id] = o; });
-
-  // 1. незакрытые задачи прошлой недели
-  const pf = readTable_('PF');
-  const openPrev = pf.rows.filter(r => r.week === prevKey && r.status_class === CLS.OPEN && active[r.obj_id]);
   let moved = 0;
-  if (openPrev.length) {
-    let go = true;
-    if (opts.interactive) {
-      const ui = SpreadsheetApp.getUi();
-      go = ui.alert('Незакрытые задачи', 'На неделе ' + prevKey + ' осталось незакрытых задач: ' + openPrev.length +
-        '.\nПеренести их на ' + key + '? Старые строки получат статус «Перенесено» и останутся в истории.', ui.ButtonSet.YES_NO) === ui.Button.YES;
-    }
-    if (go) {
-      const movedStatus = dictFirstByClass_('task_status', CLS.MOVED);
-      openPrev.forEach(r => {
-        writeFields_(pf.sh, 'PF', r._row, { status: movedStatus });
-        hist.push({ sheet: SHEET_NAMES.PF, record_id: r.task_id, obj_id: r.obj_id, field: fieldTitle_('PF', 'status'), old: r.status, new: movedStatus, kind: HIST_KIND.CHANGE, note: 'План недели ' + key });
-        if (moveTask_(r, hist, key)) moved++;
-      });
-    }
+  if (opts.carry) {
+    const movedName = dictFirstByClass_('task_status', CLS.MOVED);
+    tasks.rows.forEach(t => {
+      const cls = t.status ? dictClassOf_('task_status', t.status) : CLS.OPEN;
+      if (!t.obj_id || cls !== CLS.OPEN || !t.week || String(t.week) >= wk) return;
+      if (!objs.some(o => o.id === t.obj_id)) return;
+      const newId = moveTask_(t, hist, wk);
+      if (newId) {
+        writeFields_(tasks.sh, 'TASK', t._row, { status: movedName });
+        moved++;
+      }
+    });
   }
-
-  // 2. KPI по умолчанию для объектов, у которых на эту неделю KPI ещё нет
-  const kpis = defaultKpi_();
-  const now = readTable_('PF');
-  const openStatus = dictFirstByClass_('task_status', CLS.OPEN);
-  const idCache = {};
-  const rows = [];
+  const fresh = readTable_('TASK').rows;
+  const have = {};
+  fresh.forEach(t => { have[t.obj_id + '|' + t.week + '|' + String(t.task).trim()] = true; });
+  const defaults = defaultWeekTasks_();
+  const mon = mondayOfWeekKey_(wk);
+  const openName = dictFirstByClass_('task_status', CLS.OPEN);
+  const add = [];
+  const cache = {};
   objs.forEach(o => {
-    const has = now.rows.some(r => r.week === key && r.obj_id === o.id && r.kpi_metric);
-    if (has) return;
-    kpis.forEach(k => {
-      rows.push({
-        week: key, obj_id: o.id, owner: o.assistant || o.manager || '', plan: 'KPI недели', kpi_metric: k[0], kpi_plan: k[1],
-        status: openStatus, deadline: addDays_(mon, 4), to_report: true, task_id: nextId_('PF', idCache), created_at: new Date(),
+    defaults.forEach(d => {
+      if (have[o.id + '|' + wk + '|' + d.task]) return;
+      const unitCode = (unitDefs_().find(u => u[0] === d.unit) || [])[1] || '';
+      const owner = (unitCode === 'CALLS' || unitCode === 'KP' || unitCode === 'RESP') ? (o.assistant || o.manager) :
+        unitCode === 'PUB' ? (o.smm || o.manager) : o.manager;
+      add.push({
+        id: nextId_('TASK', cache), week: wk, obj_id: o.id, block: d.block, task: d.task, owner: owner || '', unit: d.unit, plan: d.plan,
+        deadline: addDays_(mon, 4), status: openName, to_report: true, source: 'План недели', created_at: new Date(), author: userEmail_(),
       });
     });
   });
-  appendRows_('PF', rows);
-  logHistory_(hist, user);
-  try {
-    const label = weekLabelByKey_(key);
-    if (label) sheet_('PF').getRange(pfBlockLayout_().selWeek).setValue(label);
-  } catch (e) { /* неделя вне справочника — фильтр не меняем */ }
-  return { key: key, moved: moved, created: rows.length };
+  appendRows_('TASK', add);
+  logHistory_(hist, userEmail_());
+  const skipped = readTable_('OBJ').rows.filter(o => (o.name && !o.id)).map(o => o.name);
+  return { added: add.length, moved: moved, skipped: skipped };
 }
 
-function defaultKpi_() {
-  const r = ss_().getRangeByName('CFG_DEFAULT_KPI');
-  if (!r) return DEFAULT_WEEK_KPI;
-  return r.getValues().filter(v => v[0] !== '' && v[1] !== '' && !isNaN(Number(v[1]))).map(v => [v[0], Number(v[1])]);
+function defaultWeekTasks_() {
+  const r = ss_().getRangeByName('CFG_DEFAULT_TASKS');
+  const rows = r ? r.getValues().filter(x => String(x[1]).trim() !== '') : DEFAULT_WEEK_TASKS;
+  return rows.map(x => ({ block: x[0], task: String(x[1]).trim(), unit: x[2], plan: x[3] === '' ? '' : Number(x[3]) }));
 }

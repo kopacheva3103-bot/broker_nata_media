@@ -2,9 +2,9 @@
  * 03_Setup — установка и обновление системы.
  *
  * «Установить / обновить систему» можно запускать повторно:
- *  - данные в журналах (01–04, 06, 12, 13) и значения настроек/справочников сохраняются;
+ *  - данные журналов (01–04, 06, 09, 10), вкладок объектов, значения настроек и справочников сохраняются;
  *  - заголовки, формулы, списки, форматирование и защита пересоздаются по схеме;
- *  - расчётные листы (05, 07, 09, 11) пересобираются, выбранные фильтры сохраняются.
+ *  - дэшборд и лист отчёта пересобираются (выбранные фильтры сохраняются).
  */
 
 function setupSystem() {
@@ -20,26 +20,30 @@ function setupSystem() {
   }
   const ok = ui.alert(
     'Установка / обновление системы',
-    'Будут созданы или обновлены все листы, формулы, выпадающие списки, папки Google Drive, шаблоны документов и триггеры.\n\n' +
-    'Данные в журналах не удаляются. Продолжить?',
+    'Будут созданы или обновлены все листы, формулы, выпадающие списки, папки Google Drive, шаблон отчёта и триггер.\n\n' +
+    'Данные в журналах и во вкладках объектов не удаляются. Продолжить?',
     ui.ButtonSet.OK_CANCEL);
   if (ok !== ui.Button.OK) return;
   const log = [];
   runSetup_(log);
-  let driveMsg = '';
+  let warn = '';
   try {
     ensureDrive_();
-    log.push('Google Drive: папки и шаблоны готовы');
+    log.push('Google Drive: папки и шаблон отчёта готовы');
   } catch (err) {
-    driveMsg = '\n\n⚠ Drive: ' + err.message + '\nПапки можно создать позже повторным запуском установки.';
+    warn = '\n\n⚠ Drive: ' + err.message + '\nПапки можно создать позже повторным запуском установки.';
   }
   try {
     installTriggers_();
-    log.push('Триггер onEdit установлен');
+    log.push('Триггер «при изменении» установлен');
   } catch (err) {
-    driveMsg += '\n\n⚠ Триггер: ' + err.message;
+    warn += '\n\n⚠ Триггер: ' + err.message;
   }
-  ui.alert('Готово', log.join('\n') + driveMsg + '\n\nДальше: «Загрузить тестовые данные» → «Самопроверка», либо сразу добавляйте реальные объекты в 01_ОБЪЕКТЫ.', ui.ButtonSet.OK);
+  const tabs = objectTabs_().length;
+  ui.alert('Готово', log.join('\n') + warn +
+    (tabs ? '\n\nВкладок объектов: ' + tabs + '. Чтобы применить к ним новую версию — «Сервис → Обновить все вкладки объектов».' :
+      '\n\nДальше: внесите объекты в 01_ОБЪЕКТЫ (ID из CRM + название) — вкладка объекта создастся сама. Для примера: «Сервис → Загрузить пример (Лермонтовский)».'),
+    ui.ButtonSet.OK);
 }
 
 /** Строит листы (без Drive и триггеров). */
@@ -52,15 +56,12 @@ function runSetup_(log) {
   sheetSpecs_.cache = null;
 
   SHEET_ORDER.forEach(code => ensureSheet_(code));
-  buildSettings_(); log.push('10_НАСТРОЙКИ');
-  buildDict_(); log.push('08_СПРАВОЧНИКИ');
-  ['OBJ', 'STR', 'ACT', 'PF', 'HIST', 'ARCH', 'HYP'].forEach(code => { buildDataSheet_(code); log.push(SHEET_NAMES[code]); });
-  buildPfBlock_();
+  buildSettings_(); log.push(SHEET_NAMES.CFG);
+  buildDict_(); log.push(SHEET_NAMES.DICT);
+  ['OBJ', 'TASK', 'BASE', 'CONT', 'LIB', 'HIST', 'ARCH'].forEach(code => { buildDataSheet_(code); log.push(SHEET_NAMES[code]); });
   SpreadsheetApp.flush();
-  buildFunnel_(); log.push(SHEET_NAMES.FUN);
-  buildStats_(); log.push(SHEET_NAMES.STAT);
+  seedLibrary_();
   buildReportSheet_(); log.push(SHEET_NAMES.REP);
-  buildCtrl_(); log.push(SHEET_NAMES.CTRL);
   buildDash_(); log.push(SHEET_NAMES.DASH);
   orderSheets_();
   removeDefaultSheet_();
@@ -75,10 +76,13 @@ function ensureSheet_(code) {
   return sh;
 }
 
+/** Порядок: 00_ДЭШБОРД, 01_ОБЪЕКТЫ, вкладки объектов, затем журналы и служебные листы. */
 function orderSheets_() {
   const ss = ss_();
-  SHEET_ORDER.forEach((code, i) => {
-    const sh = ss.getSheetByName(SHEET_NAMES[code]);
+  const order = [ss.getSheetByName(SHEET_NAMES.DASH), ss.getSheetByName(SHEET_NAMES.OBJ)]
+    .concat(objectTabs_())
+    .concat(SHEET_ORDER.slice(2).map(code => ss.getSheetByName(SHEET_NAMES[code])));
+  order.forEach((sh, i) => {
     ss.setActiveSheet(sh);
     ss.moveActiveSheet(i + 1);
   });
@@ -89,7 +93,7 @@ function removeDefaultSheet_() {
   const ss = ss_();
   const ours = Object.keys(SHEET_NAMES).map(k => SHEET_NAMES[k]);
   ss.getSheets().forEach(sh => {
-    if (ours.indexOf(sh.getName()) < 0 && sh.getLastRow() === 0 && sh.getLastColumn() === 0 && ss.getSheets().length > 1) {
+    if (ours.indexOf(sh.getName()) < 0 && !isObjectTab_(sh) && sh.getLastRow() === 0 && sh.getLastColumn() === 0 && ss.getSheets().length > 1) {
       ss.deleteSheet(sh);
     }
   });
@@ -112,7 +116,10 @@ function protectWarn_(range, what) {
   range.protect().setDescription(SYS.PROTECT_PREFIX + what).setWarningOnly(true);
 }
 
-// ───────────────────────── 10_НАСТРОЙКИ ─────────────────────────
+// ───────────────────────── 08_НАСТРОЙКИ ─────────────────────────
+
+const CFG_TASKS_COL = 6;   // F: задачи недели по умолчанию (Блок, Задача, Единица, План)
+const CFG_TASKS_ROWS = 15;
 
 function buildSettings_() {
   const sh = sheet_('CFG');
@@ -120,21 +127,21 @@ function buildSettings_() {
   if (sh.getLastRow() > 1) {
     sh.getRange(1, 1, sh.getLastRow(), 3).getValues().forEach(r => { if (r[0]) existing[r[0]] = r[2]; });
   }
-  const kpiExisting = [];
-  if (sh.getLastRow() > 1 && sh.getMaxColumns() >= 7) {
-    sh.getRange(2, 6, 20, 2).getValues().forEach(r => { if (r[0] !== '') kpiExisting.push(r); });
+  let tasksExisting = [];
+  if (sh.getLastRow() > 1 && sh.getMaxColumns() >= CFG_TASKS_COL + 3 && sh.getRange(1, CFG_TASKS_COL).getValue() === 'Блок стратегии') {
+    tasksExisting = sh.getRange(2, CFG_TASKS_COL, CFG_TASKS_ROWS, 4).getValues().filter(r => r[1] !== '');
   }
   removeSysProtections_(sh);
   sh.clear();
   sh.clearConditionalFormatRules();
-  ensureSize_(sh, 60, 8);
-  sh.getRange('A:H').clearDataValidations();
+  ensureSize_(sh, 60, CFG_TASKS_COL + 4);
+  sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).clearDataValidations();
 
   const defs = cfgDefs_();
   const rows = [['Ключ', 'Параметр', 'Значение', 'Описание']];
   defs.forEach(d => {
     if (d.group) { rows.push(['', d.group, '', '']); return; }
-    let v = (d.key in existing && existing[d.key] !== '' && !(d.key === 'SYSTEM_VERSION')) ? existing[d.key] : d.value;
+    let v = (d.key in existing && existing[d.key] !== '' && d.key !== 'SYSTEM_VERSION') ? existing[d.key] : d.value;
     if (d.date && typeof v === 'string' && v) v = new Date(v + 'T00:00:00');
     rows.push([d.key, d.label, v, d.sys ? 'заполняет скрипт' : '']);
   });
@@ -149,27 +156,31 @@ function buildSettings_() {
       ss_().setNamedRange('CFG_' + d.key, cell);
       if (d.fmt) cell.setNumberFormat(d.fmt);
       if (d.sys) sh.getRange(r, 1, 1, 4).setFontColor(COLORS.GREY_FG);
-      else cell.setBackground(COLORS.SELECT_BG);
+      else cell.setBackground(COLORS.SELECT_BG).setWrap(true);
     }
     r++;
   });
   sh.getRange(1, 1, r, 1).setFontColor(COLORS.GREY_FG).setFontSize(9);
-  sh.setColumnWidth(1, 170); sh.setColumnWidth(2, 420); sh.setColumnWidth(3, 200); sh.setColumnWidth(4, 140);
+  sh.setColumnWidth(1, 170); sh.setColumnWidth(2, 360); sh.setColumnWidth(3, 260); sh.setColumnWidth(4, 120);
 
-  // KPI по умолчанию для «Создать план недели»
-  sh.getRange('F1:G1').setValues([['KPI по умолчанию', 'План на объект в неделю']]);
-  styleHeaderRow_(sh.getRange('F1:G1'), 'input');
-  const kpi = kpiExisting.length ? kpiExisting : DEFAULT_WEEK_KPI;
-  sh.getRange(2, 6, kpi.length, 2).setValues(kpi);
-  sh.getRange('F2:F21').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInRange(rangeFromToken_('D.kpi_metrics'), true).setAllowInvalid(false).build());
-  sh.getRange('F2:G21').setBackground(COLORS.SELECT_BG);
-  ss_().setNamedRange('CFG_DEFAULT_KPI', sh.getRange('F2:G21'));
-  sh.setColumnWidth(6, 170); sh.setColumnWidth(7, 170);
+  // задачи недели по умолчанию («Создать план недели»)
+  const c = CFG_TASKS_COL;
+  sh.getRange(1, c, 1, 4).setValues([['Блок стратегии', 'Задача недели по умолчанию', 'Единица', 'План на объект']]);
+  styleHeaderRow_(sh.getRange(1, c, 1, 4), 'input');
+  const tasks = tasksExisting.length ? tasksExisting : DEFAULT_WEEK_TASKS;
+  sh.getRange(2, c, tasks.length, 4).setValues(tasks);
+  const DV = SpreadsheetApp.newDataValidation;
+  sh.getRange(2, c, CFG_TASKS_ROWS, 1).setDataValidation(DV().requireValueInRange(rangeFromToken_('D.task_blocks'), true).build());
+  sh.getRange(2, c + 2, CFG_TASKS_ROWS, 1).setDataValidation(DV().requireValueInRange(rangeFromToken_('D.units'), true).build());
+  sh.getRange(2, c, CFG_TASKS_ROWS, 4).setBackground(COLORS.SELECT_BG);
+  ss_().setNamedRange('CFG_DEFAULT_TASKS', sh.getRange(2, c, CFG_TASKS_ROWS, 4));
+  sh.getRange(1, c).setNote('Эти задачи «Создать план недели» ставит каждому объекту в работе. Факт по звонкам / КП / ответам / публикациям считается сам.');
+  sh.setColumnWidth(c - 1, 24); sh.setColumnWidth(c, 160); sh.setColumnWidth(c + 1, 260); sh.setColumnWidth(c + 2, 110); sh.setColumnWidth(c + 3, 110);
   sh.setFrozenRows(1);
   sh.hideColumns(1);
 }
 
-// ───────────────────────── 08_СПРАВОЧНИКИ ─────────────────────────
+// ───────────────────────── 07_СПРАВОЧНИКИ ─────────────────────────
 
 function buildDict_() {
   const sh = sheet_('DICT');
@@ -216,8 +227,7 @@ function buildDataSheet_(code) {
   const spec = sheetSpecs_()[code];
   const sh = sheet_(code);
   const n = spec.fields.length;
-  const extraCols = code === 'PF' ? 5 : 0;
-  ensureSize_(sh, SYS.DATA_ROWS, n + extraCols);
+  ensureSize_(sh, SYS.DATA_ROWS, n);
   checkHeaders_(sh, spec);
   removeSysProtections_(sh);
   const maxRows = sh.getMaxRows();
@@ -285,7 +295,7 @@ function fieldNote_(f) {
   const flags = [];
   if (f.client) flags.push('может попасть в отчёт клиенту');
   if (f.internal) flags.push('ВНУТРЕННЕЕ — клиенту не показывается');
-  if (f.track) flags.push('изменения пишутся в 12_ИСТОРИЯ');
+  if (f.track) flags.push('изменения пишутся в 09_ИСТОРИЯ');
   return [how, f.d || '', flags.length ? '(' + flags.join('; ') + ')' : ''].filter(Boolean).join('\n');
 }
 
@@ -344,46 +354,35 @@ function applyDataCF_(code, sh) {
   const colRange = k => sh.getRange(2, fieldIndex_(code, k), max - 1, 1);
   const row = sh.getRange(2, 1, max - 1, n);
   const R = [];
-  const red = [COLORS.RED_BG, COLORS.RED_FG], yel = [COLORS.YELLOW_BG, COLORS.YELLOW_FG], grn = [COLORS.GREEN_BG, COLORS.GREEN_FG];
+  const red = [COLORS.RED_BG, COLORS.RED_FG], yel = [COLORS.YELLOW_BG, COLORS.YELLOW_FG], grn = [COLORS.GREEN_BG, COLORS.GREEN_FG], grey = [null, COLORS.GREY_FG];
   const add = (f, rng, c) => R.push(cfRule_(f, rng, c[0], c[1]));
   if (code === 'OBJ') {
     add('=$' + col('id_check') + '2<>""', colRange('id'), red);
-    add('=$' + col('risk_flag') + '2="RISK"', row, red);
-    add('=$' + col('risk_flag') + '2="ВНИМАНИЕ"', row, yel);
-    add('=($' + col('status_class') + '2="SOLD")+($' + col('status_class') + '2="DEAL")', colRange('status'), grn);
-    add('=($' + col('status_class') + '2="PAUSED")+($' + col('status_class') + '2="REMOVED")', row, [null, COLORS.GREY_FG]);
-    add('=$' + col('temperature') + '2="HOT"', colRange('temperature'), grn);
-    add('=$' + col('temperature') + '2="WARM"', colRange('temperature'), yel);
-    add('=$' + col('temperature') + '2="RISK"', colRange('temperature'), red);
-    add('=($' + col('next_action_deadline') + '2<>"")*($' + col('next_action_deadline') + '2<TODAY())', colRange('next_action_deadline'), red);
-    add('=($' + col('next_report') + '2<>"")*($' + col('next_report') + '2<=TODAY())*($' + col('in_work') + '2="ДА")', colRange('next_report'), yel);
-    add('=($' + col('date_end') + '2<>"")*($' + col('date_end') + '2-TODAY()<=INDIRECT("CFG_EXCL_END_WARN_DAYS"))', colRange('date_end'), red);
+    add('=$' + col('in_work') + '2="НЕТ"', row, grey);
+    add('=($' + col('strategy_pct') + '2<>"")*($' + col('strategy_pct') + '2>=1)', colRange('strategy_pct'), grn);
+    add('=($' + col('strategy_pct') + '2<>"")*($' + col('strategy_pct') + '2<0.5)', colRange('strategy_pct'), red);
+    add('=($' + col('strategy_pct') + '2<>"")*($' + col('strategy_pct') + '2<1)', colRange('strategy_pct'), yel);
   }
-  if (code === 'STR') {
-    add('=$' + col('need_change') + '2=TRUE', colRange('need_change'), red);
-    add('=($' + col('obj_id') + '2<>"")*($' + col('review_date') + '2="")', colRange('review_date'), yel);
-    add('=($' + col('days_since_review') + '2<>"")*($' + col('days_since_review') + '2>INDIRECT("CFG_STRATEGY_REVIEW_DAYS"))', colRange('days_since_review'), yel);
-    add('=$' + col('strategy_status') + '2="Утверждена"', colRange('strategy_status'), grn);
-  }
-  if (code === 'ACT') {
-    add('=($' + col('status_class') + '2="OPEN")*($' + col('date') + '2<>"")*($' + col('date') + '2<TODAY())', row, red);
-    add('=$' + col('status_class') + '2="DONE"', colRange('status'), grn);
-    add('=($' + col('id') + '2<>"")*($' + col('to_report') + '2=FALSE)', colRange('to_report'), [null, COLORS.GREY_FG]);
-  }
-  if (code === 'HYP') {
-    add('=$' + col('due') + '2="ДА"', row, yel);
-    add('=$' + col('status_class') + '2="DONE"', colRange('status'), grn);
-    add('=$' + col('status_class') + '2="FAIL"', colRange('status'), red);
-    add('=($' + col('fact_pct') + '2<>"")*($' + col('fact_pct') + '2>=1)', colRange('fact_pct'), grn);
-  }
-  if (code === 'PF') {
+  if (code === 'TASK') {
     add('=$' + col('overdue') + '2="ПРОСРОЧЕНО"', row, red);
     add('=$' + col('status_class') + '2="DONE"', colRange('status'), grn);
     add('=$' + col('status_class') + '2="FAIL"', colRange('status'), red);
-    add('=$' + col('status_class') + '2="MOVED"', row, [null, COLORS.GREY_FG]);
-    add('=($' + col('kpi_pct') + '2<>"")*($' + col('kpi_pct') + '2>=1)', colRange('kpi_pct'), grn);
-    add('=($' + col('kpi_pct') + '2<>"")*($' + col('kpi_pct') + '2<1)', colRange('kpi_pct'), yel);
+    add('=($' + col('status_class') + '2="MOVED")+($' + col('status_class') + '2="CANCEL")', row, grey);
+    add('=($' + col('pct') + '2<>"")*($' + col('pct') + '2>=1)', colRange('pct'), grn);
+    add('=($' + col('pct') + '2<>"")*($' + col('pct') + '2<1)', colRange('pct'), yel);
     add('=($' + col('obj_id') + '2<>"")*($' + col('owner') + '2="")', colRange('owner'), yel);
+  }
+  if (code === 'BASE') {
+    add('=$' + col('resp_class') + '2="YES"', colRange('response'), grn);
+    add('=$' + col('resp_class') + '2="NO"', row, grey);
+    add('=$' + col('to_crm') + '2=TRUE', colRange('company'), grn);
+    add('=$' + col('fit') + '2="Не подходит"', colRange('fit'), red);
+    add('=($' + col('next_date') + '2<>"")*($' + col('next_date') + '2<TODAY())*($' + col('to_crm') + '2=FALSE)', colRange('next_date'), red);
+  }
+  if (code === 'CONT') {
+    add('=$' + col('status_class') + '2="DONE"', colRange('status'), grn);
+    add('=$' + col('status_class') + '2="CANCEL"', row, grey);
+    add('=($' + col('status_class') + '2="DONE")*($' + col('link') + '2="")', colRange('link'), yel);
   }
   sh.setConditionalFormatRules(R);
 }
@@ -423,45 +422,6 @@ function styleCell_(sh, r, c) {
   }
 }
 
-/** 04_ВОРОНКА — расчётный лист (воронка, конверсии, каналы, причины отказов) из 03_ДЕЙСТВИЯ. */
-function buildFunnel_() {
-  const sh = sheet_('FUN');
-  const L = funnelLayout_();
-  const keep = [safeGet_(sh, L.selObj), safeGet_(sh, L.selWeek)];
-  resetSheet_(sh);
-  ensureSize_(sh, 300, FUN_CH_COL + 14);
-  applyCells_(sh, L.cells);
-  L.formats.forEach(f => sh.getRange(f.range).setNumberFormat(nf_(f.fmt)));
-  restoreSel_(sh, L.selObj, keep[0]);
-  restoreSel_(sh, L.selWeek, keep[1]);
-  sh.setColumnWidth(1, 290); sh.setColumnWidth(2, 130); sh.setColumnWidth(3, 110); sh.setColumnWidth(4, 24);
-  sh.setColumnWidth(FUN_CH_COL, 190);
-  for (let c = FUN_CH_COL + 1; c < FUN_CH_COL + 14; c++) sh.setColumnWidth(c, 100);
-  sh.setRowHeight(7, 40);
-  protectWarn_(sh.getRange(4, 1, sh.getMaxRows() - 3, sh.getMaxColumns()), 'Воронка считается автоматически');
-}
-
-/** Блок «План-факт недели» справа от журнала задач. */
-function buildPfBlock_() {
-  const sh = sheet_('PF');
-  const L = pfBlockLayout_();
-  const keepW = safeGet_(sh, L.selWeek), keepO = safeGet_(sh, L.selObj);
-  const rng = sh.getRange(1, L.startCol, 40, 4);
-  rng.clear(); rng.clearDataValidations();
-  applyCells_(sh, L.cells);
-  restoreSel_(sh, L.selWeek, keepW);
-  restoreSel_(sh, L.selObj, keepO);
-  sh.setColumnWidth(L.startCol - 1, 24);
-  sh.setColumnWidth(L.startCol, 230);
-  for (let i = 1; i < 4; i++) sh.setColumnWidth(L.startCol + i, 110);
-  const pctCell = sh.getRange(L.at.pct);
-  const rules = sh.getConditionalFormatRules();
-  rules.push(cfRule_('=(' + L.at.pct + '<>"")*(' + L.at.pct + '>=1)', pctCell, COLORS.GREEN_BG, COLORS.GREEN_FG));
-  rules.push(cfRule_('=(' + L.at.pct + '<>"")*(' + L.at.pct + '<1)', pctCell, COLORS.YELLOW_BG, COLORS.YELLOW_FG));
-  sh.setConditionalFormatRules(rules);
-  protectWarn_(sh.getRange(4, L.startCol, 37, 4), 'Расчёт план-факта');
-}
-
 function safeGet_(sh, a1) { try { return sh.getRange(a1).getValue(); } catch (e) { return ''; } }
 function restoreSel_(sh, a1, v) { if (v !== '' && v !== null && v !== undefined) { try { sh.getRange(a1).setValue(v); } catch (e) { /* значение больше не допустимо */ } } }
 
@@ -476,119 +436,72 @@ function resetSheet_(sh) {
   sh.setFrozenRows(0); sh.setFrozenColumns(0);
 }
 
-// ───────────────────────── 05_СТАТИСТИКА ─────────────────────────
-
-function buildStats_() {
-  const sh = sheet_('STAT');
-  const keep = safeGet_(sh, 'B2');
-  resetSheet_(sh);
-  ensureSize_(sh, SYS.STAT_ROWS, 50);
-  const L = statsLayout_(sh.getSheetId());
-  applyCells_(sh, L.cells);
-  L.formats.forEach(f => sh.getRange(f.range).setNumberFormat(nf_(f.fmt)));
-  restoreSel_(sh, 'B2', keep);
-  Object.keys(STAT_SECTIONS).forEach(k => sh.setRowHeight(STAT_SECTIONS[k].header, 44));
-  sh.setColumnWidth(1, 150); sh.setColumnWidth(2, 170);
-  for (let c = 3; c <= 50; c++) sh.setColumnWidth(c, 96);
-  sh.setFrozenColumns(2);
-  protectWarn_(sh.getRange(3, 1, sh.getMaxRows() - 2, sh.getMaxColumns()), 'Статистика считается автоматически');
-}
-
-// ───────────────────────── 07_ОТЧЕТ ─────────────────────────
+// ───────────────────────── 05_ОТЧЁТ_КЛИЕНТУ ─────────────────────────
 
 function buildReportSheet_() {
   const sh = sheet_('REP');
   const keep = ['B3', 'B4', 'B5'].map(a => safeGet_(sh, a));
   resetSheet_(sh);
-  ensureSize_(sh, 60, 6);
+  try { sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).breakApart(); } catch (e) { /* нечего разъединять */ }
   const L = reportLayout_();
+  ensureSize_(sh, L.lastRow + 5, 6);
   applyCells_(sh, L.cells);
   ['B3', 'B4', 'B5'].forEach((a, i) => restoreSel_(sh, a, keep[i]));
   if (!keep[1]) {
-    // по умолчанию — текущая неделя
     SpreadsheetApp.flush();
-    const label = weekLabelByKey_(isoWeekKey_(new Date()));
+    const label = weekLabelByKey_(isoWeekKey_(addDays_(today_(), -7)));
     if (label) sh.getRange('B4').setValue(label);
   }
-  sh.setColumnWidth(1, 250); sh.setColumnWidth(2, 620); sh.setColumnWidth(3, 170); sh.setColumnWidth(4, 130); sh.setColumnWidth(5, 110);
-  sh.getRange('B5').setWrap(true);
-  sh.setFrozenRows(0);
+  for (let i = 0; i < L.kvRows; i++) sh.getRange(REP_FIRST_ROW + i, 2, 1, 2).merge();
+  Object.keys(L.tables).forEach(k => {
+    const t = L.tables[k];
+    sh.getRange(t.first, 1, t.rows, 3).setWrap(true).setVerticalAlignment('top');
+    sh.getRange(t.first, 1, t.rows, 1).setHorizontalAlignment('center');
+  });
+  sh.setColumnWidth(1, 210); sh.setColumnWidth(2, 520); sh.setColumnWidth(3, 190); sh.setColumnWidth(4, 130); sh.setColumnWidth(5, 110);
+  sh.getRange('B5:C5').merge().setWrap(true);
+  sh.setRowHeight(5, 48);
   protectWarn_(sh.getRange(REP_FIRST_ROW, 1, L.lastRow - REP_FIRST_ROW + 1, 5), 'Отчёт собирается автоматически');
   protectWarn_(sh.getRange('D2:E8'), 'Служебные параметры отчёта');
 }
 
-// ───────────────────────── 11_КОНТРОЛЬ ─────────────────────────
-
-function buildCtrl_() {
-  const sh = sheet_('CTRL');
-  resetSheet_(sh);
-  ensureSize_(sh, SYS.DATA_ROWS, CTRL_MON_START + ctrlMonitorCols_().length + 1);
-  const L = ctrlLayout_();
-  applyCells_(sh, L.cells);
-  sh.setFrozenRows(2);
-  const widths = [110, 190, 90, 150, 380, 130, 95, 130];
-  widths.forEach((w, i) => sh.setColumnWidth(i + 1, w));
-  sh.setColumnWidth(9, 24); sh.setColumnWidth(10, 24);
-  for (let c = CTRL_MON_START; c < CTRL_MON_START + ctrlMonitorCols_().length; c++) sh.setColumnWidth(c, 105);
-  sh.setRowHeight(2, 44);
-  const body = sh.getRange(CTRL_FIRST, 1, sh.getMaxRows() - CTRL_FIRST + 1, 8);
-  sh.setConditionalFormatRules([
-    cfRule_('=LEFT($A' + CTRL_FIRST + ')="1"', body, COLORS.RED_BG, COLORS.RED_FG),
-    cfRule_('=LEFT($A' + CTRL_FIRST + ')="2"', body, COLORS.YELLOW_BG, COLORS.YELLOW_FG),
-  ]);
-  protectWarn_(sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()), 'Контроль считается автоматически');
-}
-
-// ───────────────────────── 09_ДЭШБОРД ─────────────────────────
+// ───────────────────────── 00_ДЭШБОРД ─────────────────────────
 
 function buildDash_() {
   const sh = sheet_('DASH');
-  const keep = safeGet_(sh, 'C2');
+  const keep = safeGet_(sh, 'B2');
   resetSheet_(sh);
-  ensureSize_(sh, 300, DASH_CHART_COL + 8);
+  ensureSize_(sh, DASH.OVERDUE_FIRST + 150, 26);
   const L = dashLayout_();
   applyCells_(sh, L.cells);
-  restoreSel_(sh, 'C2', keep);
-  sh.setColumnWidth(1, 200); sh.setColumnWidth(2, 170);
-  for (let c = 3; c <= 17; c++) sh.setColumnWidth(c, 105);
-  sh.setColumnWidth(13, 230); sh.setColumnWidth(14, 230);
+  restoreSel_(sh, 'B2', keep);
+  sh.setColumnWidth(1, 210);
+  for (let c = 2; c <= 17; c++) sh.setColumnWidth(c, 100);
+  sh.setColumnWidth(2, 150);
   sh.setRowHeight(5, 36); sh.setRowHeight(6, 34);
+  sh.setRowHeight(DASH.OBJ_HDR, 40); sh.setRowHeight(DASH.PEOPLE_HDR, 40);
   sh.setFrozenRows(2);
   sh.hideColumns(25, 2); // Y:Z — параметры
-  sh.hideColumns(DASH_CHART_COL, 6); // данные графика
 
-  const oc = L.objCol;
-  const first = DASH_OBJ_FIRST;
-  const max = sh.getMaxRows();
-  const colR = L => sh.getRange(L + first + ':' + L + max);
-  const idle = oc['Дней без активности'], dl = oc['Дедлайн'], tmp = oc['Темп.'];
-  const row = sh.getRange('A' + first + ':Q' + max);
+  const oc = L.objLetter;
+  const oF = DASH.OBJ_FIRST, oL = DASH.OBJ_LAST;
+  const idle = oc['Дней без работы'], pct = oc['% плана'], str = oc['Стратегия'], od = oc['Просрочено'];
+  const rowR = sh.getRange('A' + oF + ':Q' + oL);
+  const colR = L => sh.getRange(L + oF + ':' + L + oL);
+  const pF = DASH.PEOPLE_FIRST, pL = DASH.PEOPLE_LAST;
   const rules = [
-    cfRule_('=($' + idle + first + '<>"")*($' + idle + first + '>$Z$3)', row, COLORS.RED_BG, COLORS.RED_FG),
-    cfRule_('=($' + idle + first + '<>"")*($' + idle + first + '>$Z$4)', row, COLORS.YELLOW_BG, COLORS.YELLOW_FG),
-    cfRule_('=($' + dl + first + '<>"")*($' + dl + first + '<TODAY())', colR(dl), COLORS.RED_BG, COLORS.RED_FG),
-    cfRule_('=$' + tmp + first + '="HOT"', colR(tmp), COLORS.GREEN_BG, COLORS.GREEN_FG),
-    cfRule_('=$' + tmp + first + '="RISK"', colR(tmp), COLORS.RED_BG, COLORS.RED_FG),
-    cfRule_('=B6>0', sh.getRange('B6:C6'), COLORS.RED_BG, COLORS.RED_FG),
-    cfRule_('=H6>0', sh.getRange('H6'), COLORS.YELLOW_BG, COLORS.YELLOW_FG),
-    cfRule_('=B12>0', sh.getRange('B12:I12'), null, COLORS.GREEN_FG),
-    cfRule_('=B12<0', sh.getRange('B12:I12'), null, COLORS.RED_FG),
+    cfRule_('=($' + idle + oF + '<>"")*($' + idle + oF + '>$Z$2)', rowR, COLORS.RED_BG, COLORS.RED_FG),
+    cfRule_('=($' + pct + oF + '<>"")*($' + pct + oF + '>=1)', colR(pct), COLORS.GREEN_BG, COLORS.GREEN_FG),
+    cfRule_('=($' + pct + oF + '<>"")*($' + pct + oF + '<0.7)', colR(pct), COLORS.YELLOW_BG, COLORS.YELLOW_FG),
+    cfRule_('=($' + str + oF + '<>"")*($' + str + oF + '<0.5)', colR(str), COLORS.RED_BG, COLORS.RED_FG),
+    cfRule_('=($' + str + oF + '<>"")*($' + str + oF + '>=1)', colR(str), COLORS.GREEN_BG, COLORS.GREEN_FG),
+    cfRule_('=$' + od + oF + '>0', colR(od), COLORS.RED_BG, COLORS.RED_FG),
+    cfRule_('=($D' + pF + '<>"")*($D' + pF + '<0.7)', sh.getRange('A' + pF + ':I' + pL), COLORS.YELLOW_BG, COLORS.YELLOW_FG),
+    cfRule_('=$E' + pF + '>0', sh.getRange('E' + pF + ':E' + pL), COLORS.RED_BG, COLORS.RED_FG),
+    cfRule_('=E6>0', sh.getRange('E6'), COLORS.RED_BG, COLORS.RED_FG),
   ];
   sh.setConditionalFormatRules(rules);
-
-  const chart = sh.newChart()
-    .setChartType(Charts.ChartType.COLUMN)
-    .addRange(sh.getRange(L.chartRange))
-    .setNumHeaders(1)
-    .setHiddenDimensionStrategy(Charts.ChartHiddenDimensionStrategy.SHOW_BOTH)
-    .setPosition(4, 11, 0, 0)
-    .setOption('title', 'Динамика за 12 недель')
-    .setOption('legend', { position: 'bottom' })
-    .setOption('colors', ['#90A4AE', '#546E7A', '#26A69A', '#1565C0'])
-    .setOption('width', 620).setOption('height', 300)
-    .build();
-  sh.insertChart(chart);
-  protectWarn_(sh.getRange(3, 1, max - 2, sh.getMaxColumns()), 'Дэшборд считается автоматически');
+  protectWarn_(sh.getRange(3, 1, sh.getMaxRows() - 2, sh.getMaxColumns()), 'Дэшборд считается автоматически');
 }
 
 // ───────────────────────── Google Drive ─────────────────────────
@@ -616,11 +529,12 @@ function ensureDrive_() {
   while (parents.hasNext()) if (parents.next().getId() === sub.MASTER.getId()) inMaster = true;
   if (!inMaster) file.moveTo(sub.MASTER);
   ensureReportTemplate_();
-  ensureStrategyTemplate_();
-  const email = String(cfgGet_('ASSISTANT_EMAIL') || '').trim();
-  if (email) {
+  // доступ сотрудникам из справочника (email): таблица + папка системы
+  dictRows_('people').forEach(p => {
+    const email = String(p[2] || '').trim();
+    if (!email) return;
     try { root.addEditor(email); ss.addEditor(email); } catch (e) { /* email может быть недоступен для шаринга */ }
-  }
+  });
   return sub;
 }
 

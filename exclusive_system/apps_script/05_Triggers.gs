@@ -1,17 +1,20 @@
 /**
- * 04_Triggers — автоматика при редактировании (устанавливаемый триггер onEdit).
+ * 05_Triggers — автоматика при редактировании (устанавливаемый триггер onEdit).
  *
- * Что делает при вводе данных:
- *  - ставит ID действиям и задачам (ACT-0001, TASK-0001), дату, статус по умолчанию, автора;
+ *  - ставит ID задачам, строкам обзвона, контенту, библиотеке; дату, статус и неделю по умолчанию; автора;
  *  - ID объекта вводится вручную (из CRM): скрипт проверяет его и при исправлении обновляет во всех листах;
- *  - пишет изменения цены, статусов, стратегии, дедлайнов в 12_ИСТОРИЯ (старое значение не теряется);
- *  - задача со статусом «Перенесено» копируется на следующую неделю, исходная остаётся в истории;
- *  - при создании объекта добавляет ему строку в 02_СТРАТЕГИЯ.
+ *  - новый объект (ID + название) сразу получает свою вкладку «▸ Название (ID)»;
+ *  - пишет изменения в 09_ИСТОРИЯ: отслеживаемые поля журналов и все правки во вкладках объектов;
+ *  - задача со статусом «Перенесено» копируется на следующую неделю, исходная остаётся.
  */
 
 function onEditHandler(e) {
   if (!e || !e.range) return;
   const sh = e.range.getSheet();
+  if (isObjectTab_(sh)) {
+    try { handleObjectTabEdit_(e, sh); } catch (err) { toast_('История не записана: ' + err.message, 'Внимание', 8); }
+    return;
+  }
   const spec = specBySheetName_(sh.getName());
   if (!spec || spec.readonly) return;
   const rLast = e.range.getLastRow();
@@ -38,7 +41,7 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
   const editedKeys = spec.fields.slice(c0 - 1, cLast).map(f => f.key);
   const hist = [];
   const idCache = {};
-  const newObjects = [];
+  const tabSync = [];
   const renamed = [];
   for (let i = 0; i < n; i++) {
     const row = r0 + i;
@@ -81,10 +84,13 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
       });
     });
     if (Object.keys(upd).length) writeFields_(sh, code, row, upd);
-    if (code === 'OBJ' && isNew) newObjects.push(o.id);
-    if (code === 'PF' && !isNew && editedKeys.indexOf('status') >= 0 && dictClassOf_('task_status', o.status) === CLS.MOVED) {
+    if (code === 'OBJ' && o.id && o.name && (isNew || !o.tab_url || editedKeys.indexOf('id') >= 0 || editedKeys.indexOf('name') >= 0)) {
+      o._row = row;
+      tabSync.push(o);
+    }
+    if (code === 'TASK' && !isNew && editedKeys.indexOf('status') >= 0 && dictClassOf_('task_status', o.status) === CLS.MOVED) {
       const newId = moveTask_(o, hist);
-      if (newId) toast_('Задача ' + o.task_id + ' перенесена на следующую неделю как ' + newId + '. Исходная строка сохранена.');
+      if (newId) toast_('Задача ' + o.id + ' перенесена на следующую неделю как ' + newId + '. Исходная строка сохранена.');
     }
   }
   renamed.forEach(p => {
@@ -92,7 +98,10 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
     hist.push({ sheet: spec.name, record_id: p[1], obj_id: p[1], field: fieldTitle_('OBJ', 'id'), old: p[0], new: p[1], kind: HIST_KIND.CHANGE, note: 'ID обновлён во всех листах' });
     toast_('ID ' + p[0] + ' → ' + p[1] + ' обновлён во всех связанных листах.');
   });
-  if (newObjects.length) ensureStrategyRows_(newObjects);
+  tabSync.slice(0, 5).forEach(o => {
+    const r = syncObjectTab_(o, 'create');
+    if (r && r.built) toast_('Создана вкладка «' + r.sheet.getName() + '» — там стратегия объекта.', 'Новый объект', 8);
+  });
   logHistory_(hist, user);
 }
 
@@ -104,38 +113,27 @@ function applyDefaults_(code, o, upd, isNew, user, editedKeys) {
     set('created_at', today);
     if (!o.status) set('status', dictValues_('obj_status')[0] || '');
   }
-  if (code === 'OBJ' && editedKeys.indexOf('status') >= 0 && o.status) {
-    // «Дата закрытия»: ставится при продаже / снятии, снимается, если объект вернули в работу
-    const cls = dictClassOf_('obj_status', o.status);
-    const closed = cls === 'SOLD' || cls === 'REMOVED';
-    if (closed && !o.close_date) set('close_date', today);
-    if (!closed && o.close_date) set('close_date', '');
-  }
-  if (code === 'STR') {
-    const content = editedKeys.some(k => ['obj_id', 'obj_name', 'changed_at', 'changed_by', 'strategy_doc'].indexOf(k) < 0);
-    if (content) { set('changed_at', now); set('changed_by', user); }
-    if (!o.strategy_status) set('strategy_status', dictValues_('strategy_status')[0] || '');
-  }
-  if (code === 'ACT' && isNew) {
-    if (!o.date) set('date', today);
-    if (!o.status) set('status', dictFirstByClass_('task_status', CLS.DONE));
+  if (code === 'TASK' && isNew) {
+    if (!o.week) set('week', isoWeekKey_(today));
+    if (!o.status) set('status', dictFirstByClass_('task_status', CLS.OPEN));
+    if (!o.deadline) { const m = mondayOfWeekKey_(o.week); if (m) set('deadline', addDays_(m, 4)); }
     if (!o.owner) { const p = personByEmail_(user); if (p) set('owner', p); }
+    if (!o.source) set('source', 'Вручную');
     set('to_report', true);
     set('created_at', now);
     set('author', user);
   }
-  if (code === 'HYP' && isNew) {
-    if (!o.date_start) set('date_start', today);
-    if (!o.status) set('status', dictFirstByClass_('hyp_status', CLS.OPEN));
-    set('to_report', true);
+  if ((code === 'BASE' || code === 'CONT') && isNew) {
+    if (!o.owner) { const p = personByEmail_(user); if (p) set('owner', p); }
+    if (code === 'CONT' && !o.status) set('status', dictValues_('content_status')[0] || '');
     set('created_at', now);
+    set('author', user);
   }
-  if (code === 'PF' && isNew) {
-    if (!o.week) set('week', isoWeekKey_(today));
-    if (!o.status) set('status', dictFirstByClass_('task_status', CLS.OPEN));
-    if (!o.deadline) { const m = mondayOfWeekKey_(o.week); if (m) set('deadline', addDays_(m, 4)); }
-    set('to_report', true);
-    set('created_at', now);
+  if (code === 'BASE' && editedKeys.indexOf('response') >= 0 && o.response && !o.response_date) set('response_date', today);
+  if (code === 'CONT' && editedKeys.indexOf('status') >= 0 && dictClassOf_('content_status', o.status) === CLS.DONE && !o.pub_date) set('pub_date', today);
+  if (code === 'LIB') {
+    const content = editedKeys.some(k => ['kind', 'title', 'applies', 'text'].indexOf(k) >= 0);
+    if (content) { set('updated_at', now); set('author', user); }
   }
 }
 
@@ -163,54 +161,45 @@ function sameValue_(a, b) {
   return String(a) === String(b);
 }
 
-/** Исправили ID объекта в 01 → заменить старый ID в связанных листах и в именах папок Drive. */
+/** Исправили ID объекта в 01 → заменить старый ID в журналах, во вкладке объекта и в имени папки Drive. */
 function renameObjectId_(oldId, newId) {
-  ['STR', 'ACT', 'PF', 'ARCH', 'HYP'].forEach(code => {
+  ['TASK', 'BASE', 'CONT', 'ARCH', 'HIST'].forEach(code => {
     const sh = sheet_(code);
     const col = fieldIndex_(code, 'obj_id');
     sh.getRange(2, col, sh.getMaxRows() - 1, 1).createTextFinder(oldId).matchEntireCell(true).replaceAllWith(newId);
   });
-  ['FOLDER_OBJECTS_ID'].forEach(k => {
-    try {
-      const parent = folderById_(cfgGet_(k));
-      if (!parent) return;
-      const it = parent.getFolders();
-      const suffix = '(' + oldId + ')';
-      while (it.hasNext()) {
-        const f = it.next();
-        if (f.getName().slice(-suffix.length) === suffix) f.setName(f.getName().slice(0, -suffix.length) + '(' + newId + ')');
-      }
-    } catch (err) { /* папки переименуются вручную */ }
+  objectTabs_().forEach(t => {
+    if (String(t.getRange(TAB.ID).getValue()) === oldId) t.getRange(TAB.ID).setNumberFormat('@').setValue(newId);
   });
-}
-
-/** Строка в 02_СТРАТЕГИЯ для каждого нового объекта (если её ещё нет). */
-function ensureStrategyRows_(ids) {
-  const t = readTable_('STR');
-  const have = {};
-  t.rows.forEach(r => { have[r.obj_id] = true; });
-  const toAdd = ids.filter(id => !have[id]).map(id => ({ obj_id: id, strategy_status: dictValues_('strategy_status')[0] || '' }));
-  if (toAdd.length) appendRows_('STR', toAdd);
+  try {
+    const parent = folderById_(cfgGet_('FOLDER_OBJECTS_ID'));
+    if (!parent) return;
+    const it = parent.getFolders();
+    const suffix = '(' + oldId + ')';
+    while (it.hasNext()) {
+      const f = it.next();
+      if (f.getName().slice(-suffix.length) === suffix) f.setName(f.getName().slice(0, -suffix.length) + '(' + newId + ')');
+    }
+  } catch (err) { /* папку можно переименовать вручную */ }
 }
 
 /** Копия задачи на следующую неделю. Исходная строка остаётся со статусом «Перенесено». */
 function moveTask_(o, hist, targetWeek) {
-  const pf = readTable_('PF');
-  if (pf.rows.some(r => r.moved_from === o.task_id)) return null;
+  const t = readTable_('TASK');
+  if (t.rows.some(r => r.moved_from === o.id)) return null;
   const baseMon = mondayOfWeekKey_(o.week) || mondayOf_(today_());
   const nextKey = targetWeek || isoWeekKey_(addDays_(baseMon, 7));
   const nextMon = mondayOfWeekKey_(nextKey);
   const deadline = o.deadline instanceof Date ? addDays_(o.deadline, 7) : addDays_(nextMon, 4);
-  const newId = nextId_('PF');
-  appendRow_('PF', {
-    week: nextKey, obj_id: o.obj_id, week_goal: o.week_goal, task: o.task, type: o.type, owner: o.owner,
-    plan: o.plan, kpi_metric: o.kpi_metric, kpi_plan: o.kpi_plan,
-    status: dictFirstByClass_('task_status', CLS.OPEN), deadline: deadline,
-    to_report: o.to_report === '' ? true : o.to_report, task_id: newId, moved_from: o.task_id, created_at: new Date(),
+  const newId = nextId_('TASK');
+  appendRow_('TASK', {
+    id: newId, week: nextKey, obj_id: o.obj_id, block: o.block, task: o.task, owner: o.owner, unit: o.unit, plan: o.plan,
+    status: dictFirstByClass_('task_status', CLS.OPEN), deadline: deadline, to_report: o.to_report === '' ? true : o.to_report,
+    source: o.source, moved_from: o.id, created_at: new Date(), author: 'перенос',
   });
   hist.push({
-    sheet: SHEET_NAMES.PF, record_id: o.task_id, obj_id: o.obj_id, field: fieldTitle_('PF', 'week'),
-    old: o.week, new: nextKey, kind: HIST_KIND.MOVE, note: 'Создана копия ' + newId + ' (дедлайн ' + fmtDate_(deadline) + ')',
+    sheet: SHEET_NAMES.TASK, record_id: o.id, obj_id: o.obj_id, field: fieldTitle_('TASK', 'week'),
+    old: o.week, new: nextKey, kind: HIST_KIND.MOVE, note: 'Создана копия ' + newId + ' (срок ' + fmtDate_(deadline) + ')',
   });
   return newId;
 }
