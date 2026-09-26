@@ -3561,7 +3561,7 @@ function selectedObjectId_() {
 
 function objectById_(id) {
   const t = readTable_('OBJ');
-  return t.rows.find(r => r.id === id) || null;
+  return t.rows.find(r => String(r.id) === String(id)) || null;
 }
 
 function toast_(msg, title, sec) { ss_().toast(msg, title || SYS.MENU, sec || 5); }
@@ -4486,6 +4486,7 @@ function removeCrmSettings() {
  * 18_ImportObjects — «Загрузить объекты списком»: вставить таблицу (из CRM, Excel, Google Таблицы)
  * и разом добавить объекты в 01_ОБЪЕКТЫ. Формульные столбцы не затрагиваются, вкладки создаются сами.
  * Объекты с уже существующим ID не дублируются — у них дополняются пустые поля.
+ * С ID из CRM, а объект уже заведён с временным ID (НОВ-001, ВРЕМЯ-1) и то же название / адрес — ID заменяется везде.
  * Без ID: объект ищется по названию (дополняются пустые поля), не найден — получает временный ID «НОВ-001».
  */
 
@@ -4517,7 +4518,7 @@ function importObjects() {
 
 function previewObjectsImport(text) {
   const r = parseObjectsImport_(text);
-  return { add: r.add.length, upd: r.upd.length, names: r.add.concat(r.upd).map(o => o.id + ' — ' + o.name), errors: r.errors };
+  return { add: r.add.length, upd: r.upd.length, names: r.add.concat(r.upd).map(o => (o._from ? o._from + ' → ' : '') + o.id + ' — ' + o.name), errors: r.errors };
 }
 
 function runObjectsImport(text) {
@@ -4530,15 +4531,21 @@ function runObjectsImport(text) {
     const firstStatus = dictValues_('obj_status')[0] || '';
     appendRows_('OBJ', r.add.map(o => Object.assign({}, o, { status: o.status || firstStatus, created_at: now })));
     const t = readTable_('OBJ');
+    const hist = [];
     r.upd.forEach(o => {
-      const row = t.rows.find(x => String(x.id) === o.id);
+      const row = t.rows.find(x => String(x.id) === (o._from || o.id));
       if (!row) return;
       const upd = {};
-      Object.keys(o).forEach(k => { if (k !== 'id' && o[k] !== '' && (row[k] === '' || row[k] === null)) upd[k] = o[k]; });
+      Object.keys(o).forEach(k => { if (k !== 'id' && k !== '_from' && k !== 'name' && o[k] !== '' && (row[k] === '' || row[k] === null)) upd[k] = o[k]; });
+      if (o._from) {
+        upd.id = o.id;
+        renameObjectId_(o._from, o.id);
+        hist.push({ sheet: SHEET_NAMES.OBJ, record_id: o.id, obj_id: o.id, field: fieldTitle_('OBJ', 'id'), old: o._from, new: o.id, kind: HIST_KIND.CHANGE, note: 'Загрузка списком: ID из CRM' });
+      }
       if (Object.keys(upd).length) writeFields_(t.sh, 'OBJ', row._row, upd);
     });
     SpreadsheetApp.flush();
-    const hist = r.add.map(o => ({ sheet: SHEET_NAMES.OBJ, record_id: o.id, obj_id: o.id, field: 'Объект', old: '', new: o.name, kind: HIST_KIND.CREATE, note: 'Загрузка списком' }));
+    hist.push.apply(hist, r.add.map(o => ({ sheet: SHEET_NAMES.OBJ, record_id: o.id, obj_id: o.id, field: 'Объект', old: '', new: o.name, kind: HIST_KIND.CREATE, note: 'Загрузка списком' })));
     logHistory_(hist, userEmail_());
     readTable_('OBJ').rows.forEach(o => {
       if (!o.id || !o.name || findObjectTab_(o)) return;
@@ -4552,6 +4559,9 @@ function runObjectsImport(text) {
   return 'Добавлено объектов: ' + r.add.length + ', дополнено: ' + r.upd.length + ', создано вкладок: ' + tabs +
     (r.errors.length ? '. Замечаний: ' + r.errors.length + ' (см. «Проверить»)' : '') + '. Проверьте 01_ОБЪЕКТЫ.';
 }
+
+/** ID из CRM — число; «НОВ-001», «ВРЕМЯ-1» и т.п. — временные, их можно заменить при загрузке списка. */
+function isCrmId_(id) { return /^\d{4,}$/.test(String(id || '').trim()); }
 
 function parseObjectsImport_(text) {
   const existing = {};
@@ -4582,12 +4592,16 @@ function parseObjectsImport_(text) {
     }
     if (seen[o.id]) { errors.push('Строка ' + (n + 1) + ': ID ' + o.id + ' повторяется в списке'); return; }
     seen[o.id] = true;
+    if (!existing[o.id]) { // объект уже заведён с временным ID (НОВ-001, ВРЕМЯ-1) — присваиваем ID из CRM
+      const same = findObjectByName_(o.name) || (o.address ? findObjectByAddress_(o.address) : null);
+      if (same && !isCrmId_(same.id) && !seen[String(same.id)]) { o._from = String(same.id); seen[o._from] = true; }
+    }
     ['kind', 'deal', 'status', 'manager'].forEach((k, j) => {
       const raw = String(cells[IMPORT_COLS.findIndex(c => c[0] === k)] || '').trim();
       if (raw && !o[k]) errors.push('Строка ' + (n + 1) + ': «' + raw + '» нет в списке «' + IMPORT_COLS.find(c => c[0] === k)[1] + '» (07_СПРАВОЧНИКИ) — поле оставлено пустым');
     });
     Object.keys(o).forEach(k => { if (o[k] === '') delete o[k]; });
-    (existing[o.id] ? upd : add).push(o);
+    (existing[o.id] || o._from ? upd : add).push(o);
   });
   return { add: add, upd: upd, errors: errors };
 }
@@ -4646,9 +4660,23 @@ function processInbox_() {
     try {
       const parsed = parseInboxName_(fname);
       let obj = parsed.id ? objectById_(parsed.id) : findObjectByName_(parsed.name);
+      if (!obj && parsed.id && isCrmId_(parsed.id)) { // «144890621 12 месяцев.pdf», а объект заведён как НОВ-001 — присваиваем ID из CRM
+        const same = findObjectByName_(parsed.name);
+        if (same && !isCrmId_(same.id)) {
+          writeFields_(sheet_('OBJ'), 'OBJ', same._row, { id: parsed.id });
+          renameObjectId_(String(same.id), parsed.id);
+          hist.push({ sheet: SHEET_NAMES.OBJ, record_id: parsed.id, obj_id: parsed.id, field: fieldTitle_('OBJ', 'id'), old: same.id, new: parsed.id, kind: HIST_KIND.CHANGE, note: 'ID из имени файла ' + fname });
+          SpreadsheetApp.flush();
+          obj = objectById_(parsed.id);
+        }
+      }
       let note = '';
       const info = obj ? null : guessObjectInfo_(extractFileText_(file));
       if (!obj && info.address) obj = findObjectByAddress_(info.address);
+      if (!obj && !parsed.id && !matchWords_(parsed.name, false).length && !info.address) {
+        res.errors.push('• ' + fname + ': не понятно, какой это объект — переименуйте файл («ID Название.pdf») и разберите папку ещё раз');
+        continue;
+      }
       if (!obj) {
         const id = parsed.id || nextTempObjectId_();
         const name = parsed.name || info.name || 'Новый объект ' + id;

@@ -255,7 +255,7 @@ function selectedObjectId_() {
 
 function objectById_(id) {
   const t = readTable_('OBJ');
-  return t.rows.find(r => r.id === id) || null;
+  return t.rows.find(r => String(r.id) === String(id)) || null;
 }
 
 function toast_(msg, title, sec) { ss_().toast(msg, title || SYS.MENU, sec || 5); }

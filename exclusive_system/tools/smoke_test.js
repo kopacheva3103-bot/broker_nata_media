@@ -249,3 +249,10 @@ const nm = q => { const o = X.findObjectByName_(X.parseInboxName_(q).name); retu
 console.log('match:', ['лермонтовский.pdf', 'жк остров квартира.pdf', 'Остров коммерция.pdf', 'сосновый бор.pdf', 'остров.pdf', 'Арендодатели, Мои объекты.pdf', 'беговая.pdf'].map(q => q + ' → ' + nm(q)).join(' | '));
 console.log('by address:', (X.findObjectByAddress_('г. Москва, ВАО, Преображенское р-н, ул. Лермонтовская, д. 1') || {}).id, (X.findObjectByAddress_('г. Москва, ул. Беговая, д. 5') || {}).id || '—');
 console.log('import again (no dup):', X.previewObjectsImport('\tсосновый бор\t\t\t\t169,1\t65000000').names.join(','));
+// список из CRM с ID: временные ID заменяются
+const pv3 = X.previewObjectsImport(['144890621\tСосновый бор, коттедж', '137073408\tЖК Время · Лермонтовская 1', '129866881\tЖК Остров, квартира\tЖильё\tПродажа\tг. Москва, ул. Нижние Мневники, д. 7\t136,6\t89900000'].join('\n'));
+console.log('crm ids preview:', pv3.add, pv3.upd, pv3.names.join(' | '));
+X.runObjectsImport(['137073408\tЖК Время · Лермонтовская 1', '129866881\tЖК Остров, квартира\tЖильё\tПродажа\tг. Москва, ул. Нижние Мневники, д. 7\t136,6\t89900000'].join('\n'));
+const o137 = X.objectById_('137073408'), o129 = X.objectById_('129866881');
+console.log('renamed:', !!o137, !X.objectById_('ВРЕМЯ-1'), o129 && [o129.name, o129.area, o129.price, o129.address].join('/'),
+  'tasks moved:', X.readTable_('TASK').rows.filter(t => t.obj_id === '137073408').length, 'left old:', X.readTable_('TASK').rows.filter(t => t.obj_id === 'ВРЕМЯ-1').length);

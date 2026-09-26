@@ -51,9 +51,23 @@ function processInbox_() {
     try {
       const parsed = parseInboxName_(fname);
       let obj = parsed.id ? objectById_(parsed.id) : findObjectByName_(parsed.name);
+      if (!obj && parsed.id && isCrmId_(parsed.id)) { // «144890621 12 месяцев.pdf», а объект заведён как НОВ-001 — присваиваем ID из CRM
+        const same = findObjectByName_(parsed.name);
+        if (same && !isCrmId_(same.id)) {
+          writeFields_(sheet_('OBJ'), 'OBJ', same._row, { id: parsed.id });
+          renameObjectId_(String(same.id), parsed.id);
+          hist.push({ sheet: SHEET_NAMES.OBJ, record_id: parsed.id, obj_id: parsed.id, field: fieldTitle_('OBJ', 'id'), old: same.id, new: parsed.id, kind: HIST_KIND.CHANGE, note: 'ID из имени файла ' + fname });
+          SpreadsheetApp.flush();
+          obj = objectById_(parsed.id);
+        }
+      }
       let note = '';
       const info = obj ? null : guessObjectInfo_(extractFileText_(file));
       if (!obj && info.address) obj = findObjectByAddress_(info.address);
+      if (!obj && !parsed.id && !matchWords_(parsed.name, false).length && !info.address) {
+        res.errors.push('• ' + fname + ': не понятно, какой это объект — переименуйте файл («ID Название.pdf») и разберите папку ещё раз');
+        continue;
+      }
       if (!obj) {
         const id = parsed.id || nextTempObjectId_();
         const name = parsed.name || info.name || 'Новый объект ' + id;

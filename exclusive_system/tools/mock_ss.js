@@ -24,6 +24,8 @@ function makeSS() {
         setRichTextValues: vals => { vals.forEach((row, i) => row.forEach((v, j) => { S.cells[k(r + i, c + j)] = { v }; })); return p; },
         getRow: () => r, getColumn: () => c, getNumRows: () => nr, getNumColumns: () => nc, getLastRow: () => r + nr - 1, getLastColumn: () => c + nc - 1,
         getSheet: () => sh,
+        createTextFinder: find => { const tf = { matchEntireCell: () => tf, replaceAllWith: rep => { let n = 0;
+          for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) { const v = S.cells[k(r + i, c + j)]; if (v && 'v' in v && String(v.v) === String(find)) { v.v = rep; n++; } } return n; } }; return tf; },
       };
       const p = new Proxy(base, { get: (t, prop) => prop in t ? t[prop] : (() => p) });
       return p;
