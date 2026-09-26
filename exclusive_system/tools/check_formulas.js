@@ -2,7 +2,7 @@
 const { loadGs } = require('./load_gs.js');
 const { makeSS } = require('./mock_ss.js');
 const M = makeSS();
-const x = loadGs({ SpreadsheetApp: M.SpreadsheetApp });
+const x = loadGs({ SpreadsheetApp: M.SpreadsheetApp, PropertiesService: M.PropertiesService });
 
 const KNOWN = new Set(('ARRAYFORMULA IF IFERROR LEN VLOOKUP SORT FILTER TEXT LEFT TODAY WEEKDAY ROUND YEAR ISOWEEKNUM MONTH ' +
   'SUMIF COUNTIF SUMIFS COUNTIFS LET SEQUENCE MAX ROUNDUP UNIQUE REGEXEXTRACT OR HYPERLINK INDEX TEXTJOIN QUERY ISNUMBER MATCH ' +

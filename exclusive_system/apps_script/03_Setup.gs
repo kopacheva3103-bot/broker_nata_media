@@ -40,8 +40,11 @@ function setupSystem() {
     warn += '\n\n⚠ Триггер: ' + err.message;
   }
   const tabs = objectTabs_().length;
+  if (tabs) {
+    try { rebuildObjectTabs_(); log.push('Вкладки объектов обновлены: ' + tabs); } catch (err) { warn += '\n\n⚠ Вкладки объектов: ' + err.message + '\nЗапустите «Сервис → Обновить все вкладки объектов».'; }
+  }
   ui.alert('Готово', log.join('\n') + warn +
-    (tabs ? '\n\nВкладок объектов: ' + tabs + '. Чтобы применить к ним новую версию — «Сервис → Обновить все вкладки объектов».' :
+    (tabs ? '' :
       '\n\nДальше: внесите объекты в 01_ОБЪЕКТЫ (ID из CRM + название) — вкладка объекта создастся сама. Для примера: «Сервис → Загрузить пример (Лермонтовский)».'),
     ui.ButtonSet.OK);
 }
@@ -197,7 +200,7 @@ function buildDict_() {
     hdr.setValues([d.cols]);
     if (d.generated) {
       sh.getRange(2, c, sh.getMaxRows() - 1, d.cols.length).clearContent();
-      sh.getRange(2, c).setFormula(resolveF_(gen[d.key]));
+      sh.getRange(2, c).setFormula(toLocaleF_(resolveF_(gen[d.key])));
       styleHeaderRow_(hdr, 'formula');
       sh.getRange(2, c, sh.getMaxRows() - 1, d.cols.length).setBackground(COLORS.FORMULA_CELL_BG);
       protectWarn_(sh.getRange(1, c, sh.getMaxRows(), d.cols.length), 'Вычисляемый список ' + d.cols[0]);
@@ -234,7 +237,7 @@ function buildDataSheet_(code) {
 
   // заголовки: значения + формулы одним вызовом
   sh.getRange(1, 1, 1, n).setValues([spec.fields.map(f => f.kind === 'f' ? '' : f.title)]);
-  spec.fields.forEach((f, i) => { if (f.kind === 'f') sh.getRange(1, i + 1).setFormula(headerFormula_(spec, f)); });
+  spec.fields.forEach((f, i) => { if (f.kind === 'f') sh.getRange(1, i + 1).setFormula(toLocaleF_(headerFormula_(spec, f))); });
   const bg = [], fg = [], notes = [];
   spec.fields.forEach(f => {
     const kind = f.kind === 'f' ? (f.helper ? 'helper' : 'formula') : (f.kind === 'sys' || f.kind === 'id') ? (f.helper ? 'helper' : 'auto') : 'input';
@@ -340,7 +343,7 @@ function nf_(fmt) {
 // Формулы без запятых (только * и сравнения) — не зависят от локали таблицы.
 
 function cfRule_(formula, range, bg, fg) {
-  const b = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(formula).setRanges([range]);
+  const b = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(toLocaleF_(formula)).setRanges([range]);
   if (bg) b.setBackground(bg);
   if (fg) b.setFontColor(fg);
   return b.build();
@@ -392,7 +395,7 @@ function applyDataCF_(code, sh) {
 function applyCells_(sh, cells) {
   cells.forEach(c => {
     const r = sh.getRange(c.a1);
-    if (c.f) r.setFormula(resolveF_(c.f));
+    if (c.f) r.setFormula(toLocaleF_(resolveF_(c.f)));
     else if (c.v !== undefined) r.setValue(c.v);
     if (c.fmt) r.setNumberFormat(nf_(c.fmt));
     if (c.note) r.setNote(c.note);

@@ -3,6 +3,9 @@ function col(n) { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String
 function coln(l) { let n = 0; for (const ch of l) n = n * 26 + ch.charCodeAt(0) - 64; return n; }
 const chain = () => new Proxy(function () {}, { get: (t, p) => p === 'build' ? () => ({}) : (() => chain()), apply: () => chain() });
 
+function props(store) {
+  return { getProperty: k => (k in store ? store[k] : null), setProperty: (k, v) => { store[k] = v; }, deleteProperty: k => { delete store[k]; } };
+}
 function makeSS() {
   const book = {}; const names = {}; const order = []; let gid = 100;
   function sheetObj(name) {
@@ -14,7 +17,7 @@ function makeSS() {
         getValues: () => Array.from({ length: nr }, (_, i) => Array.from({ length: nc }, (_, j) => { const v = S.cells[k(r + i, c + j)]; return v && 'v' in v ? v.v : ''; })),
         getDisplayValues: () => base.getValues().map(r => r.map(v => String(v))),
         getValue: () => { const v = S.cells[k(r, c)]; return v && 'v' in v ? v.v : ''; },
-        getDisplayValue: () => String(base.getValue()),
+        getDisplayValue: () => { const v = S.cells[k(r, c)]; if (v && v.f === '=SUM(1,2)') return globalThis.__EN_FORMULAS === false ? '#ERROR!' : '3'; return String(base.getValue()); },
         setValues: vals => { vals.forEach((row, i) => row.forEach((v, j) => { S.cells[k(r + i, c + j)] = (typeof v === 'string' && v[0] === '=') ? { f: v } : { v }; })); return p; },
         setValue: v => { S.cells[k(r, c)] = (typeof v === 'string' && v[0] === '=') ? { f: v } : { v }; return p; },
         setFormula: f => { S.cells[k(r, c)] = { f }; return p; },
@@ -50,14 +53,16 @@ function makeSS() {
     getSheets: () => order.map(n => book[n].sh),
     getRangeByName: n => { if (!names[n]) return null; const m = /^([A-Z]+)(\d+)$/.exec(names[n].a1); return sheetObj(names[n].sheet).getRange(+m[2], coln(m[1]), names[n].nr || 1, names[n].nc || 1); },
     setNamedRange: (n, r) => { names[n] = { sheet: r.getSheet().getName(), a1: col(r.getColumn()) + r.getRow(), nr: r.getNumRows(), nc: r.getNumColumns() }; },
-    getName: () => 'Test', rename: () => {}, setSpreadsheetTimeZone: () => {}, setSpreadsheetLocale: () => {}, setActiveSheet: () => {}, moveActiveSheet: () => {}, deleteSheet: () => {},
+    getName: () => 'Test', rename: () => {}, setSpreadsheetTimeZone: () => {}, setSpreadsheetLocale: () => {}, setActiveSheet: () => {}, moveActiveSheet: () => {}, deleteSheet: (sh) => { const n = sh.getName(); delete book[n]; order.splice(order.indexOf(n), 1); },
     getRange: a1 => { const m = /^'?(.+?)'?!(.+)$/.exec(a1); return sheetObj(m[1]).getRange(m[2]); },
-    getSpreadsheetTimeZone: () => 'Europe/Moscow', getUrl: () => 'https://docs.google.com/x', toast: (m) => { if (/Ошибка/.test(m)) console.log('TOAST', m); }, getId: () => 'x',
+    getSpreadsheetTimeZone: () => 'Europe/Moscow', getUrl: () => 'https://docs.google.com/x', toast: (m) => { if (/Ошибка/.test(m)) console.log('TOAST', m); }, getId: () => 'x', getSpreadsheetLocale: () => 'ru_RU',
   };
   const SpreadsheetApp = {
     getActiveSpreadsheet: () => ss, flush: () => {}, newDataValidation: chain, newConditionalFormatRule: chain,
     BorderStyle: {}, ProtectionType: {}, getActiveSheet: () => null,
   };
-  return { book, names, ss, sheetObj, SpreadsheetApp, col, coln };
+  const store = {};
+  const PropertiesService = { getDocumentProperties: () => props(store), getScriptProperties: () => props(store) };
+  return { book, names, ss, sheetObj, SpreadsheetApp, PropertiesService, col, coln };
 }
 module.exports = { makeSS };

@@ -16,8 +16,10 @@ const EXAMPLE_FILES = {
 
 function loadExampleData() {
   const ui = SpreadsheetApp.getUi();
-  if (objectById_(EXAMPLE_ID)) { ui.alert('Пример уже загружен (объект ' + EXAMPLE_ID + ').'); return; }
-  const b = ui.alert('Пример «ЖК Время»', 'Добавить пример объекта с вкладкой стратегии, задачами, обзвоном медцентров и контентом? Реальные данные не затрагиваются.', ui.ButtonSet.OK_CANCEL);
+  const exists = !!objectById_(EXAMPLE_ID);
+  const b = ui.alert('Пример «ЖК Время»', exists
+    ? 'Пример уже есть. Дозагрузить то, чего не хватает (вкладка, задачи, обзвон, контент)? Уже внесённое не дублируется.'
+    : 'Добавить пример объекта с вкладкой стратегии, задачами, обзвоном медцентров и контентом? Реальные данные не затрагиваются.', ui.ButtonSet.OK_CANCEL);
   if (b !== ui.Button.OK) return;
   const sh = loadExample_();
   sh.activate();
@@ -28,7 +30,9 @@ function d_(s) { return s ? new Date(s + 'T00:00:00') : ''; }
 
 function loadExample_() {
   const F = EXAMPLE_FILES;
-  appendRow_('OBJ', {
+  // пример можно дозагрузить: каждая часть добавляется, только если её ещё нет
+  const has = code => readTable_(code).rows.some(r => r.obj_id === EXAMPLE_ID);
+  if (!objectById_(EXAMPLE_ID)) appendRow_('OBJ', {
     id: EXAMPLE_ID, name: 'ЖК Время · Лермонтовская 1', kind: 'Коммерция', deal: 'Продажа',
     address: 'г. Москва, ул. Лермонтовская, д.1 (помещение 1Н, 756,2 кв.м)', area: 756.2, price: 225500000,
     status: 'В работе', manager: 'Наталья', assistant: 'Ассистент', smm: 'SMM', customer: 'ООО «Заказчик»',
@@ -88,14 +92,16 @@ function loadExample_() {
       analysis_link: F.analysis,
     },
   };
-  buildObjectTab_(res.sheet, EXAMPLE_ID, data);
+  const current = readObjectTab_(res.sheet);
+  if (!Object.keys(current.tables).length) buildObjectTab_(res.sheet, EXAMPLE_ID, data);
+  else buildObjectTab_(res.sheet, EXAMPLE_ID, current);
 
   const cache = {};
   const T = (week, block, task, owner, unit, plan, status, result, deadline) => ({
     id: nextId_('TASK', cache), week: week, obj_id: EXAMPLE_ID, block: block, task: task, owner: owner, unit: unit, plan: plan,
     status: status, result: result || '', deadline: d_(deadline), to_report: true, source: 'План недели', created_at: new Date(), author: 'пример',
   });
-  appendRows_('TASK', [
+  if (!has('TASK')) appendRows_('TASK', [
     T('2026-W38', 'База и рассылки', 'Произведён обзвон медицинских центров с предложением объекта', 'Ассистент', 'звонков', 8, 'Выполнено', '', '2026-09-18'),
     T('2026-W38', 'База и рассылки', 'Направлены коммерческие предложения по медцентрам', 'Ассистент', 'КП', 2, 'Выполнено', 'Срок получения обратной связи — в течение недели, до 25.09', '2026-09-18'),
     T('2026-W38', 'КП и материалы', 'Разработаны презентации под каждый вид бизнеса и целевую аудиторию', 'Наталья', '', '', 'Выполнено', 'Прикрепляем к отчёту', '2026-09-18'),
@@ -460,13 +466,13 @@ function loadExample_() {
       "owner": "Ассистент"
     }
   ];
-  appendRows_('BASE', base.map(b => ({
+  if (!has('BASE')) appendRows_('BASE', base.map(b => ({
     id: nextId_('BASE', cache), obj_id: EXAMPLE_ID, audience: b.audience, company: b.company, site: b.site, contact: b.contact,
     fit: b.fit, fit_note: b.fit_note, call_date: d_(b.call_date), call_result: b.call_result, kp_date: d_(b.kp_date), kp_type: b.kp_type,
     response: b.response, response_date: d_(b.response_date), next_step: b.next_step, owner: b.owner, created_at: d_(b.call_date || b.kp_date || '2026-09-14'), author: 'пример',
   })));
 
-  appendRows_('CONT', [
+  if (!has('CONT')) appendRows_('CONT', [
     { id: nextId_('CONT', cache), obj_id: EXAMPLE_ID, topic: 'Помещение 756 м² под медцентр: 4,5 м, 152 кВт, 4 входа', platform: 'Instagram', format: 'Рилс', goal: 'Все три', script: 'Хук: «Где открыть клинику без переделки?» → проход по этажам → цифры на экране → призыв написать', status: 'Сценарий', owner: 'SMM', created_at: new Date(), author: 'пример' },
     { id: nextId_('CONT', cache), obj_id: EXAMPLE_ID, topic: 'Как мы ищем арендатора-медцентр: 23 сети за 2 недели', platform: 'Telegram', format: 'Пост', goal: 'Бренд агентства', status: 'Идея', owner: 'SMM', created_at: new Date(), author: 'пример' },
   ]);

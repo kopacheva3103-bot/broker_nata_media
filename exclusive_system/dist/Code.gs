@@ -813,8 +813,11 @@ function setupSystem() {
     warn += '\n\n⚠ Триггер: ' + err.message;
   }
   const tabs = objectTabs_().length;
+  if (tabs) {
+    try { rebuildObjectTabs_(); log.push('Вкладки объектов обновлены: ' + tabs); } catch (err) { warn += '\n\n⚠ Вкладки объектов: ' + err.message + '\nЗапустите «Сервис → Обновить все вкладки объектов».'; }
+  }
   ui.alert('Готово', log.join('\n') + warn +
-    (tabs ? '\n\nВкладок объектов: ' + tabs + '. Чтобы применить к ним новую версию — «Сервис → Обновить все вкладки объектов».' :
+    (tabs ? '' :
       '\n\nДальше: внесите объекты в 01_ОБЪЕКТЫ (ID из CRM + название) — вкладка объекта создастся сама. Для примера: «Сервис → Загрузить пример (Лермонтовский)».'),
     ui.ButtonSet.OK);
 }
@@ -970,7 +973,7 @@ function buildDict_() {
     hdr.setValues([d.cols]);
     if (d.generated) {
       sh.getRange(2, c, sh.getMaxRows() - 1, d.cols.length).clearContent();
-      sh.getRange(2, c).setFormula(resolveF_(gen[d.key]));
+      sh.getRange(2, c).setFormula(toLocaleF_(resolveF_(gen[d.key])));
       styleHeaderRow_(hdr, 'formula');
       sh.getRange(2, c, sh.getMaxRows() - 1, d.cols.length).setBackground(COLORS.FORMULA_CELL_BG);
       protectWarn_(sh.getRange(1, c, sh.getMaxRows(), d.cols.length), 'Вычисляемый список ' + d.cols[0]);
@@ -1007,7 +1010,7 @@ function buildDataSheet_(code) {
 
   // заголовки: значения + формулы одним вызовом
   sh.getRange(1, 1, 1, n).setValues([spec.fields.map(f => f.kind === 'f' ? '' : f.title)]);
-  spec.fields.forEach((f, i) => { if (f.kind === 'f') sh.getRange(1, i + 1).setFormula(headerFormula_(spec, f)); });
+  spec.fields.forEach((f, i) => { if (f.kind === 'f') sh.getRange(1, i + 1).setFormula(toLocaleF_(headerFormula_(spec, f))); });
   const bg = [], fg = [], notes = [];
   spec.fields.forEach(f => {
     const kind = f.kind === 'f' ? (f.helper ? 'helper' : 'formula') : (f.kind === 'sys' || f.kind === 'id') ? (f.helper ? 'helper' : 'auto') : 'input';
@@ -1113,7 +1116,7 @@ function nf_(fmt) {
 // Формулы без запятых (только * и сравнения) — не зависят от локали таблицы.
 
 function cfRule_(formula, range, bg, fg) {
-  const b = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(formula).setRanges([range]);
+  const b = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(toLocaleF_(formula)).setRanges([range]);
   if (bg) b.setBackground(bg);
   if (fg) b.setFontColor(fg);
   return b.build();
@@ -1165,7 +1168,7 @@ function applyDataCF_(code, sh) {
 function applyCells_(sh, cells) {
   cells.forEach(c => {
     const r = sh.getRange(c.a1);
-    if (c.f) r.setFormula(resolveF_(c.f));
+    if (c.f) r.setFormula(toLocaleF_(resolveF_(c.f)));
     else if (c.v !== undefined) r.setValue(c.v);
     if (c.fmt) r.setNumberFormat(nf_(c.fmt));
     if (c.note) r.setNote(c.note);
@@ -1554,7 +1557,7 @@ function buildObjectTab_(sh, objId, data) {
   sh.getRange('H1').setValue('ID объекта:');
   const look = f => 'IFERROR(VLOOKUP([[ID]],{[[OBJ.id]],[[OBJ.' + f + ']]},2,FALSE),"")';
   const tf = f => resolveTabF_(f, L, null);
-  sh.getRange('B1').setFormula(tf('=IFERROR(VLOOKUP([[ID]],{[[OBJ.id]],[[OBJ.name]]},2,FALSE),"⚠ объекта с этим ID нет в 01_ОБЪЕКТЫ")'));
+  sh.getRange('B1').setFormula(toLocaleF_(tf('=IFERROR(VLOOKUP([[ID]],{[[OBJ.id]],[[OBJ.name]]},2,FALSE),"⚠ объекта с этим ID нет в 01_ОБЪЕКТЫ")')));
   sh.getRange('B1:G1').merge();
   const head = [
     ['Адрес', '=' + look('address')], ['Тип · сделка', '=' + look('kind') + '&IF(' + look('deal') + '="",""," · "&' + look('deal') + ')'],
@@ -1564,9 +1567,9 @@ function buildObjectTab_(sh, objId, data) {
   ];
   head.forEach((h, i) => {
     sh.getRange(2, 2 + i).setValue(h[0]);
-    if (h[1]) sh.getRange(3, 2 + i).setFormula(tf(h[1]));
+    if (h[1]) sh.getRange(3, 2 + i).setFormula(toLocaleF_(tf(h[1])));
   });
-  sh.getRange(TAB.PCT.replace(/\$/g, '')).setFormula(strategyPctFormula_(L)).setNote(STRATEGY_PCT_NOTE);
+  sh.getRange(TAB.PCT.replace(/\$/g, '')).setFormula(toLocaleF_(strategyPctFormula_(L))).setNote(STRATEGY_PCT_NOTE);
   const gid = code => { try { return sheet_(code).getSheetId(); } catch (e) { return 0; } };
   const links = [
     ['=IF(' + look('crm_link') + '="","",HYPERLINK(' + look('crm_link') + ',"Объект в CRM"))'],
@@ -1577,7 +1580,7 @@ function buildObjectTab_(sh, objId, data) {
     ['=HYPERLINK("#gid=' + gid('CONT') + '","→ 04 Контент")'],
     ['=HYPERLINK("#gid=' + gid('DASH') + '","→ Дэшборд")'],
   ];
-  links.forEach((l, i) => sh.getRange(4, 2 + i).setFormula(tf(l[0])));
+  links.forEach((l, i) => sh.getRange(4, 2 + i).setFormula(toLocaleF_(tf(l[0]))));
   sh.getRange('B5').setValue('Белые ячейки заполняет команда, серые считаются сами. Строки внутри раздела можно добавлять (вставить строку). Все изменения пишутся в 09_ИСТОРИЯ.');
   sh.getRange('B1').setFontSize(16).setFontWeight('bold');
   sh.getRange('H1').setFontColor(COLORS.GREY_FG).setFontSize(9).setHorizontalAlignment('right');
@@ -1617,7 +1620,7 @@ function buildObjectTab_(sh, objId, data) {
         const val = sh.getRange(r, 3, 1, TAB.LAST_COL - 2).merge();
         const cell = sh.getRange(r, 3);
         if (it.k === 'f') {
-          cell.setFormula(resolveTabF_('=' + it.f, L, s.key));
+          cell.setFormula(toLocaleF_(resolveTabF_('=' + it.f, L, s.key)));
           val.setBackground(COLORS.FORMULA_CELL_BG);
           protectWarn_(val, 'Считается автоматически');
         } else {
@@ -1646,7 +1649,7 @@ function buildObjectTab_(sh, objId, data) {
         const body = sh.getRange(p.first, col, n, 1);
         const hcell = sh.getRange(p.header, col);
         if (c.k === 'f') {
-          hcell.setFormula('={"' + c.t + '";ARRAYFORMULA(IF(LEN(' + L.colRange(s.key, 1) + ')=0,"",' + resolveTabF_(c.f, L, s.key) + '))}');
+          hcell.setFormula(toLocaleF_('={"' + c.t + '";ARRAYFORMULA(IF(LEN(' + L.colRange(s.key, 1) + ')=0,"",' + resolveTabF_(c.f, L, s.key) + '))}'));
           hcell.setBackground(COLORS.HDR_FORMULA_BG).setFontColor(COLORS.HDR_FORMULA_FG);
           body.setBackground(COLORS.FORMULA_CELL_BG);
           protectWarn_(sh.getRange(p.header, col, n + 1, 1), 'Формула «' + c.t + '» — считается автоматически');
@@ -1674,7 +1677,7 @@ function buildObjectTab_(sh, objId, data) {
       const body = sh.getRange(p.first, 2, n, titles.length);
       body.setBackground(COLORS.FORMULA_CELL_BG).setVerticalAlignment('top');
       if (s.type === 'auto') {
-        sh.getRange(p.first, 2).setFormula(resolveTabF_(s.f, L, s.key));
+        sh.getRange(p.first, 2).setFormula(toLocaleF_(resolveTabF_(s.f, L, s.key)));
         (s.fmts || []).forEach((f, i) => { if (f) sh.getRange(p.first, 2 + i, n, 1).setNumberFormat(nf_(f)); });
         sh.getRange(p.first, 3, n, 1).setWrap(true);
         if (s.key === 'PF') {
@@ -1684,7 +1687,7 @@ function buildObjectTab_(sh, objId, data) {
         }
       } else {
         s.grid.forEach((gr, ri) => gr.forEach((f, ci) => {
-          if (f) sh.getRange(p.first + ri, 2 + ci).setFormula('=ARRAYFORMULA(' + resolveTabF_(f, L, s.key).slice(1) + ')');
+          if (f) sh.getRange(p.first + ri, 2 + ci).setFormula(toLocaleF_('=ARRAYFORMULA(' + resolveTabF_(f, L, s.key).slice(1) + ')'));
         }));
         sh.getRange(p.first, 2, n, 1).setFontWeight('bold');
       }
@@ -1792,11 +1795,16 @@ function createObjectTabs() {
 
 /** Сервис: пересобрать все вкладки (после обновления системы). Данные команды сохраняются. */
 function rebuildObjectTabs() {
+  const n = rebuildObjectTabs_();
+  toast_('Обновлено вкладок: ' + n, 'Вкладки объектов', 6);
+}
+
+function rebuildObjectTabs_() {
   const t = readTable_('OBJ');
   let n = 0;
-  t.rows.forEach(o => { if (o.id && o.name) { syncObjectTab_(o, 'rebuild'); n++; } });
+  t.rows.forEach(o => { if (o.id && o.name && findObjectTab_(o)) { syncObjectTab_(o, 'rebuild'); n++; } });
   SpreadsheetApp.flush();
-  toast_('Обновлено вкладок: ' + n, 'Вкладки объектов', 6);
+  return n;
 }
 
 /** Меню: перейти во вкладку выбранного объекта. */
@@ -2510,8 +2518,10 @@ const EXAMPLE_FILES = {
 
 function loadExampleData() {
   const ui = SpreadsheetApp.getUi();
-  if (objectById_(EXAMPLE_ID)) { ui.alert('Пример уже загружен (объект ' + EXAMPLE_ID + ').'); return; }
-  const b = ui.alert('Пример «ЖК Время»', 'Добавить пример объекта с вкладкой стратегии, задачами, обзвоном медцентров и контентом? Реальные данные не затрагиваются.', ui.ButtonSet.OK_CANCEL);
+  const exists = !!objectById_(EXAMPLE_ID);
+  const b = ui.alert('Пример «ЖК Время»', exists
+    ? 'Пример уже есть. Дозагрузить то, чего не хватает (вкладка, задачи, обзвон, контент)? Уже внесённое не дублируется.'
+    : 'Добавить пример объекта с вкладкой стратегии, задачами, обзвоном медцентров и контентом? Реальные данные не затрагиваются.', ui.ButtonSet.OK_CANCEL);
   if (b !== ui.Button.OK) return;
   const sh = loadExample_();
   sh.activate();
@@ -2522,7 +2532,9 @@ function d_(s) { return s ? new Date(s + 'T00:00:00') : ''; }
 
 function loadExample_() {
   const F = EXAMPLE_FILES;
-  appendRow_('OBJ', {
+  // пример можно дозагрузить: каждая часть добавляется, только если её ещё нет
+  const has = code => readTable_(code).rows.some(r => r.obj_id === EXAMPLE_ID);
+  if (!objectById_(EXAMPLE_ID)) appendRow_('OBJ', {
     id: EXAMPLE_ID, name: 'ЖК Время · Лермонтовская 1', kind: 'Коммерция', deal: 'Продажа',
     address: 'г. Москва, ул. Лермонтовская, д.1 (помещение 1Н, 756,2 кв.м)', area: 756.2, price: 225500000,
     status: 'В работе', manager: 'Наталья', assistant: 'Ассистент', smm: 'SMM', customer: 'ООО «Заказчик»',
@@ -2582,14 +2594,16 @@ function loadExample_() {
       analysis_link: F.analysis,
     },
   };
-  buildObjectTab_(res.sheet, EXAMPLE_ID, data);
+  const current = readObjectTab_(res.sheet);
+  if (!Object.keys(current.tables).length) buildObjectTab_(res.sheet, EXAMPLE_ID, data);
+  else buildObjectTab_(res.sheet, EXAMPLE_ID, current);
 
   const cache = {};
   const T = (week, block, task, owner, unit, plan, status, result, deadline) => ({
     id: nextId_('TASK', cache), week: week, obj_id: EXAMPLE_ID, block: block, task: task, owner: owner, unit: unit, plan: plan,
     status: status, result: result || '', deadline: d_(deadline), to_report: true, source: 'План недели', created_at: new Date(), author: 'пример',
   });
-  appendRows_('TASK', [
+  if (!has('TASK')) appendRows_('TASK', [
     T('2026-W38', 'База и рассылки', 'Произведён обзвон медицинских центров с предложением объекта', 'Ассистент', 'звонков', 8, 'Выполнено', '', '2026-09-18'),
     T('2026-W38', 'База и рассылки', 'Направлены коммерческие предложения по медцентрам', 'Ассистент', 'КП', 2, 'Выполнено', 'Срок получения обратной связи — в течение недели, до 25.09', '2026-09-18'),
     T('2026-W38', 'КП и материалы', 'Разработаны презентации под каждый вид бизнеса и целевую аудиторию', 'Наталья', '', '', 'Выполнено', 'Прикрепляем к отчёту', '2026-09-18'),
@@ -2954,13 +2968,13 @@ function loadExample_() {
       "owner": "Ассистент"
     }
   ];
-  appendRows_('BASE', base.map(b => ({
+  if (!has('BASE')) appendRows_('BASE', base.map(b => ({
     id: nextId_('BASE', cache), obj_id: EXAMPLE_ID, audience: b.audience, company: b.company, site: b.site, contact: b.contact,
     fit: b.fit, fit_note: b.fit_note, call_date: d_(b.call_date), call_result: b.call_result, kp_date: d_(b.kp_date), kp_type: b.kp_type,
     response: b.response, response_date: d_(b.response_date), next_step: b.next_step, owner: b.owner, created_at: d_(b.call_date || b.kp_date || '2026-09-14'), author: 'пример',
   })));
 
-  appendRows_('CONT', [
+  if (!has('CONT')) appendRows_('CONT', [
     { id: nextId_('CONT', cache), obj_id: EXAMPLE_ID, topic: 'Помещение 756 м² под медцентр: 4,5 м, 152 кВт, 4 входа', platform: 'Instagram', format: 'Рилс', goal: 'Все три', script: 'Хук: «Где открыть клинику без переделки?» → проход по этажам → цифры на экране → призыв написать', status: 'Сценарий', owner: 'SMM', created_at: new Date(), author: 'пример' },
     { id: nextId_('CONT', cache), obj_id: EXAMPLE_ID, topic: 'Как мы ищем арендатора-медцентр: 23 сети за 2 недели', platform: 'Telegram', format: 'Пост', goal: 'Бренд агентства', status: 'Идея', owner: 'SMM', created_at: new Date(), author: 'пример' },
   ]);
@@ -3282,7 +3296,8 @@ function writeFields_(sh, code, row, obj) {
   const cols = Object.keys(obj).map(k => {
     const f = fieldOf_(code, k);
     if (f.kind === 'f') throw new Error('Нельзя писать в формульный столбец ' + f.title);
-    return { col: fieldIndex_(code, k), v: obj[k] };
+    const v = obj[k];
+    return { col: fieldIndex_(code, k), v: typeof v === 'string' && v[0] === '=' ? toLocaleF_(v) : v };
   }).sort((a, b) => a.col - b.col);
   // группируем соседние столбцы в один вызов
   let i = 0;
@@ -3411,6 +3426,72 @@ function showLinks_(title, links, text) {
     (text ? '<p>' + htmlEscape_(text).replace(/\n/g, '<br>') + '</p>' : '') +
     '<ul>' + items + '</ul></div>' + auto).setWidth(520).setHeight(120 + 30 * links.length + (text ? 60 : 0));
   SpreadsheetApp.getUi().showModalDialog(html, title);
+}
+
+// ───────────────────────── формулы и локаль таблицы ─────────────────────────
+// Формулы в коде записаны по-английски: «,» между аргументами, «{a,b}» в массивах, «0.5».
+// Таблица с русской (и любой «десятичная запятая») локалью разбирает формулы из скрипта по своим
+// правилам: «;» между аргументами, «\» между столбцами массива, «0,5». Скрипт один раз проверяет,
+// как таблица понимает формулы, и при необходимости переводит их перед записью.
+
+function formulaSemicolon_() {
+  if (formulaSemicolon_.v !== undefined) return formulaSemicolon_.v;
+  const ss = ss_();
+  const props = PropertiesService.getDocumentProperties();
+  const loc = String(ss.getSpreadsheetLocale ? ss.getSpreadsheetLocale() : '');
+  const saved = props.getProperty('FORMULA_SEP');
+  if (saved && saved.indexOf(loc + '|') === 0) { formulaSemicolon_.v = saved.slice(loc.length + 1) === ';'; return formulaSemicolon_.v; }
+  const tmp = ss.insertSheet('__formula_probe_' + Date.now());
+  let semi = false;
+  try {
+    const c = tmp.getRange(1, 1);
+    c.setFormula('=SUM(1,2)');
+    SpreadsheetApp.flush();
+    semi = String(c.getDisplayValue()) !== '3';
+  } finally {
+    ss.deleteSheet(tmp);
+  }
+  props.setProperty('FORMULA_SEP', loc + '|' + (semi ? ';' : ','));
+  formulaSemicolon_.v = semi;
+  return semi;
+}
+
+/** Английская запись формулы → запись локали таблицы (строки в кавычках и имена листов не трогаются). */
+function toLocaleF_(f) {
+  f = String(f);
+  if (f[0] !== '=' || !formulaSemicolon_()) return f;
+  return enToSemicolonF_(f);
+}
+
+function enToSemicolonF_(f) {
+  let out = '';
+  const stack = [];
+  for (let i = 0; i < f.length; i++) {
+    const ch = f[i];
+    if (ch === '"') {                       // строка: до закрывающей кавычки ("" — экранированная)
+      let j = i + 1;
+      while (j < f.length) { if (f[j] === '"') { if (f[j + 1] === '"') { j += 2; continue; } break; } j++; }
+      out += f.slice(i, j + 1); i = j; continue;
+    }
+    if (ch === "'") {                       // имя листа в апострофах
+      let j = i + 1;
+      while (j < f.length) { if (f[j] === "'") { if (f[j + 1] === "'") { j += 2; continue; } break; } j++; }
+      out += f.slice(i, j + 1); i = j; continue;
+    }
+    if (ch === '(' || ch === '{') { stack.push(ch); out += ch; continue; }
+    if (ch === ')' || ch === '}') { stack.pop(); out += ch; continue; }
+    if (ch === ',') { out += stack[stack.length - 1] === '{' ? '\\' : ';'; continue; }
+    if (ch === '.' && /\d/.test(f[i - 1] || '') && /\d/.test(f[i + 1] || '') && !/[A-Za-z_$]/.test(prevToken_(f, i))) { out += ','; continue; }
+    out += ch;
+  }
+  return out;
+}
+
+/** Первый символ числа перед точкой: если число — часть ссылки/имени (A1.5 не бывает, но R1C1, имена) — не трогаем. */
+function prevToken_(f, i) {
+  let j = i - 1;
+  while (j >= 0 && /\d/.test(f[j])) j--;
+  return j >= 0 ? f[j] : '';
 }
 
 // ═════════════ 13_Menu.gs ═════════════

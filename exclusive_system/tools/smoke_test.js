@@ -42,7 +42,7 @@ const X = loadGs({
   Session: { getActiveUser: () => ({ getEmail: () => 'test@example.com' }), getEffectiveUser: () => ({ getEmail: () => 'boss@example.com' }) },
   LockService: { getDocumentLock: () => ({ tryLock: () => true, waitLock: () => {}, releaseLock: () => {} }) },
   UrlFetchApp: { fetch: (u) => FETCH(u) },
-  PropertiesService: { getScriptProperties: () => PROPS },
+  PropertiesService: { getScriptProperties: () => PROPS, getDocumentProperties: () => PROPS },
   CalendarApp: { getDefaultCalendar: () => CAL },
   Utilities2: null,
 });
@@ -166,3 +166,6 @@ console.log('note text ok:', NOTES.length === 1 && /Лермонтовская|�
 X.crmSendPending();
 console.log('after pending:', X.readTable_('BASE').rows.slice(2, 3).map(r => r.crm_note).join(''));
 console.log('imported rows:', X.readTable_('CONT').rows.filter(r => r.author === 'Threads (автоимпорт)').map(r => [r.obj_id, r.platform, r.status, r.link.slice(-4), r.owner, r.topic].join(' / ')).join(' || '));
+// пример дозагружается без дублей
+const cnt = () => ['TASK', 'BASE', 'CONT'].map(c => X.readTable_(c).rows.filter(r => r.obj_id === X.EXAMPLE_ID).length).join('/');
+const c0 = cnt(); X.loadExample_(); console.log('example resume no dups:', c0 === cnt(), c0);

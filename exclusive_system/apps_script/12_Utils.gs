@@ -143,7 +143,8 @@ function writeFields_(sh, code, row, obj) {
   const cols = Object.keys(obj).map(k => {
     const f = fieldOf_(code, k);
     if (f.kind === 'f') throw new Error('Нельзя писать в формульный столбец ' + f.title);
-    return { col: fieldIndex_(code, k), v: obj[k] };
+    const v = obj[k];
+    return { col: fieldIndex_(code, k), v: typeof v === 'string' && v[0] === '=' ? toLocaleF_(v) : v };
   }).sort((a, b) => a.col - b.col);
   // группируем соседние столбцы в один вызов
   let i = 0;
@@ -272,4 +273,70 @@ function showLinks_(title, links, text) {
     (text ? '<p>' + htmlEscape_(text).replace(/\n/g, '<br>') + '</p>' : '') +
     '<ul>' + items + '</ul></div>' + auto).setWidth(520).setHeight(120 + 30 * links.length + (text ? 60 : 0));
   SpreadsheetApp.getUi().showModalDialog(html, title);
+}
+
+// ───────────────────────── формулы и локаль таблицы ─────────────────────────
+// Формулы в коде записаны по-английски: «,» между аргументами, «{a,b}» в массивах, «0.5».
+// Таблица с русской (и любой «десятичная запятая») локалью разбирает формулы из скрипта по своим
+// правилам: «;» между аргументами, «\» между столбцами массива, «0,5». Скрипт один раз проверяет,
+// как таблица понимает формулы, и при необходимости переводит их перед записью.
+
+function formulaSemicolon_() {
+  if (formulaSemicolon_.v !== undefined) return formulaSemicolon_.v;
+  const ss = ss_();
+  const props = PropertiesService.getDocumentProperties();
+  const loc = String(ss.getSpreadsheetLocale ? ss.getSpreadsheetLocale() : '');
+  const saved = props.getProperty('FORMULA_SEP');
+  if (saved && saved.indexOf(loc + '|') === 0) { formulaSemicolon_.v = saved.slice(loc.length + 1) === ';'; return formulaSemicolon_.v; }
+  const tmp = ss.insertSheet('__formula_probe_' + Date.now());
+  let semi = false;
+  try {
+    const c = tmp.getRange(1, 1);
+    c.setFormula('=SUM(1,2)');
+    SpreadsheetApp.flush();
+    semi = String(c.getDisplayValue()) !== '3';
+  } finally {
+    ss.deleteSheet(tmp);
+  }
+  props.setProperty('FORMULA_SEP', loc + '|' + (semi ? ';' : ','));
+  formulaSemicolon_.v = semi;
+  return semi;
+}
+
+/** Английская запись формулы → запись локали таблицы (строки в кавычках и имена листов не трогаются). */
+function toLocaleF_(f) {
+  f = String(f);
+  if (f[0] !== '=' || !formulaSemicolon_()) return f;
+  return enToSemicolonF_(f);
+}
+
+function enToSemicolonF_(f) {
+  let out = '';
+  const stack = [];
+  for (let i = 0; i < f.length; i++) {
+    const ch = f[i];
+    if (ch === '"') {                       // строка: до закрывающей кавычки ("" — экранированная)
+      let j = i + 1;
+      while (j < f.length) { if (f[j] === '"') { if (f[j + 1] === '"') { j += 2; continue; } break; } j++; }
+      out += f.slice(i, j + 1); i = j; continue;
+    }
+    if (ch === "'") {                       // имя листа в апострофах
+      let j = i + 1;
+      while (j < f.length) { if (f[j] === "'") { if (f[j + 1] === "'") { j += 2; continue; } break; } j++; }
+      out += f.slice(i, j + 1); i = j; continue;
+    }
+    if (ch === '(' || ch === '{') { stack.push(ch); out += ch; continue; }
+    if (ch === ')' || ch === '}') { stack.pop(); out += ch; continue; }
+    if (ch === ',') { out += stack[stack.length - 1] === '{' ? '\\' : ';'; continue; }
+    if (ch === '.' && /\d/.test(f[i - 1] || '') && /\d/.test(f[i + 1] || '') && !/[A-Za-z_$]/.test(prevToken_(f, i))) { out += ','; continue; }
+    out += ch;
+  }
+  return out;
+}
+
+/** Первый символ числа перед точкой: если число — часть ссылки/имени (A1.5 не бывает, но R1C1, имена) — не трогаем. */
+function prevToken_(f, i) {
+  let j = i - 1;
+  while (j >= 0 && /\d/.test(f[j])) j--;
+  return j >= 0 ? f[j] : '';
 }

@@ -217,7 +217,7 @@ function buildObjectTab_(sh, objId, data) {
   sh.getRange('H1').setValue('ID объекта:');
   const look = f => 'IFERROR(VLOOKUP([[ID]],{[[OBJ.id]],[[OBJ.' + f + ']]},2,FALSE),"")';
   const tf = f => resolveTabF_(f, L, null);
-  sh.getRange('B1').setFormula(tf('=IFERROR(VLOOKUP([[ID]],{[[OBJ.id]],[[OBJ.name]]},2,FALSE),"⚠ объекта с этим ID нет в 01_ОБЪЕКТЫ")'));
+  sh.getRange('B1').setFormula(toLocaleF_(tf('=IFERROR(VLOOKUP([[ID]],{[[OBJ.id]],[[OBJ.name]]},2,FALSE),"⚠ объекта с этим ID нет в 01_ОБЪЕКТЫ")')));
   sh.getRange('B1:G1').merge();
   const head = [
     ['Адрес', '=' + look('address')], ['Тип · сделка', '=' + look('kind') + '&IF(' + look('deal') + '="",""," · "&' + look('deal') + ')'],
@@ -227,9 +227,9 @@ function buildObjectTab_(sh, objId, data) {
   ];
   head.forEach((h, i) => {
     sh.getRange(2, 2 + i).setValue(h[0]);
-    if (h[1]) sh.getRange(3, 2 + i).setFormula(tf(h[1]));
+    if (h[1]) sh.getRange(3, 2 + i).setFormula(toLocaleF_(tf(h[1])));
   });
-  sh.getRange(TAB.PCT.replace(/\$/g, '')).setFormula(strategyPctFormula_(L)).setNote(STRATEGY_PCT_NOTE);
+  sh.getRange(TAB.PCT.replace(/\$/g, '')).setFormula(toLocaleF_(strategyPctFormula_(L))).setNote(STRATEGY_PCT_NOTE);
   const gid = code => { try { return sheet_(code).getSheetId(); } catch (e) { return 0; } };
   const links = [
     ['=IF(' + look('crm_link') + '="","",HYPERLINK(' + look('crm_link') + ',"Объект в CRM"))'],
@@ -240,7 +240,7 @@ function buildObjectTab_(sh, objId, data) {
     ['=HYPERLINK("#gid=' + gid('CONT') + '","→ 04 Контент")'],
     ['=HYPERLINK("#gid=' + gid('DASH') + '","→ Дэшборд")'],
   ];
-  links.forEach((l, i) => sh.getRange(4, 2 + i).setFormula(tf(l[0])));
+  links.forEach((l, i) => sh.getRange(4, 2 + i).setFormula(toLocaleF_(tf(l[0]))));
   sh.getRange('B5').setValue('Белые ячейки заполняет команда, серые считаются сами. Строки внутри раздела можно добавлять (вставить строку). Все изменения пишутся в 09_ИСТОРИЯ.');
   sh.getRange('B1').setFontSize(16).setFontWeight('bold');
   sh.getRange('H1').setFontColor(COLORS.GREY_FG).setFontSize(9).setHorizontalAlignment('right');
@@ -280,7 +280,7 @@ function buildObjectTab_(sh, objId, data) {
         const val = sh.getRange(r, 3, 1, TAB.LAST_COL - 2).merge();
         const cell = sh.getRange(r, 3);
         if (it.k === 'f') {
-          cell.setFormula(resolveTabF_('=' + it.f, L, s.key));
+          cell.setFormula(toLocaleF_(resolveTabF_('=' + it.f, L, s.key)));
           val.setBackground(COLORS.FORMULA_CELL_BG);
           protectWarn_(val, 'Считается автоматически');
         } else {
@@ -309,7 +309,7 @@ function buildObjectTab_(sh, objId, data) {
         const body = sh.getRange(p.first, col, n, 1);
         const hcell = sh.getRange(p.header, col);
         if (c.k === 'f') {
-          hcell.setFormula('={"' + c.t + '";ARRAYFORMULA(IF(LEN(' + L.colRange(s.key, 1) + ')=0,"",' + resolveTabF_(c.f, L, s.key) + '))}');
+          hcell.setFormula(toLocaleF_('={"' + c.t + '";ARRAYFORMULA(IF(LEN(' + L.colRange(s.key, 1) + ')=0,"",' + resolveTabF_(c.f, L, s.key) + '))}'));
           hcell.setBackground(COLORS.HDR_FORMULA_BG).setFontColor(COLORS.HDR_FORMULA_FG);
           body.setBackground(COLORS.FORMULA_CELL_BG);
           protectWarn_(sh.getRange(p.header, col, n + 1, 1), 'Формула «' + c.t + '» — считается автоматически');
@@ -337,7 +337,7 @@ function buildObjectTab_(sh, objId, data) {
       const body = sh.getRange(p.first, 2, n, titles.length);
       body.setBackground(COLORS.FORMULA_CELL_BG).setVerticalAlignment('top');
       if (s.type === 'auto') {
-        sh.getRange(p.first, 2).setFormula(resolveTabF_(s.f, L, s.key));
+        sh.getRange(p.first, 2).setFormula(toLocaleF_(resolveTabF_(s.f, L, s.key)));
         (s.fmts || []).forEach((f, i) => { if (f) sh.getRange(p.first, 2 + i, n, 1).setNumberFormat(nf_(f)); });
         sh.getRange(p.first, 3, n, 1).setWrap(true);
         if (s.key === 'PF') {
@@ -347,7 +347,7 @@ function buildObjectTab_(sh, objId, data) {
         }
       } else {
         s.grid.forEach((gr, ri) => gr.forEach((f, ci) => {
-          if (f) sh.getRange(p.first + ri, 2 + ci).setFormula('=ARRAYFORMULA(' + resolveTabF_(f, L, s.key).slice(1) + ')');
+          if (f) sh.getRange(p.first + ri, 2 + ci).setFormula(toLocaleF_('=ARRAYFORMULA(' + resolveTabF_(f, L, s.key).slice(1) + ')'));
         }));
         sh.getRange(p.first, 2, n, 1).setFontWeight('bold');
       }
@@ -455,11 +455,16 @@ function createObjectTabs() {
 
 /** Сервис: пересобрать все вкладки (после обновления системы). Данные команды сохраняются. */
 function rebuildObjectTabs() {
+  const n = rebuildObjectTabs_();
+  toast_('Обновлено вкладок: ' + n, 'Вкладки объектов', 6);
+}
+
+function rebuildObjectTabs_() {
   const t = readTable_('OBJ');
   let n = 0;
-  t.rows.forEach(o => { if (o.id && o.name) { syncObjectTab_(o, 'rebuild'); n++; } });
+  t.rows.forEach(o => { if (o.id && o.name && findObjectTab_(o)) { syncObjectTab_(o, 'rebuild'); n++; } });
   SpreadsheetApp.flush();
-  toast_('Обновлено вкладок: ' + n, 'Вкладки объектов', 6);
+  return n;
 }
 
 /** Меню: перейти во вкладку выбранного объекта. */
