@@ -262,8 +262,6 @@ function reportRows_() {
   const cw = P.id + '&"|"&' + P.wk;
   return [
     { ph: 'EXEC_HEADER', label: 'Шапка исполнителя', f: '=SUBSTITUTE(CFG_EXEC_HEADER," | ",CHAR(10))', lines: true },
-    { ph: 'CONTRACT_NO', label: '№ договора', f: look('contract_no') },
-    { ph: 'CONTRACT_DATE', label: 'Дата договора', f: '=IFERROR(TEXT(VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.contract_date]]},2,FALSE),"dd.mm.yyyy")&"г.","")' },
     { ph: 'REPORT_NO', label: 'Отчёт №', f: '=' + P.no },
     { ph: 'PERIOD', label: 'Период', f: '=IF(' + P.start + '="","",TEXT(' + P.start + ',"dd.mm.yyyy")&" – "&TEXT(' + P.start + '+4,"dd.mm.yyyy"))' },
     { ph: 'OBJECT', label: 'Объект', f: look('address') },

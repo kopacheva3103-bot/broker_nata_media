@@ -1,7 +1,7 @@
 /**
  * 06_Reports — еженедельный отчёт клиенту: Google Doc + PDF + архив.
  *
- * Формат — как в отчётах руководителя (шапка ИП, «Приложение №1 к Договору», таблица реквизитов,
+ * Формат — как в отчётах руководителя (шапка ИП, таблица реквизитов,
  * Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА, Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ, Раздел 3. ПЛАН РАБОТЫ).
  * Источник — лист 05_ОТЧЁТ_КЛИЕНТУ (предпросмотр): скрипт берёт оттуда только поля с метками {{…}},
  * поэтому внутренние данные (контакты, звонки, комментарии) в документ попасть не могут.
@@ -228,10 +228,18 @@ function ensureObjectFolder_(id, kind) {
  * Шаблон отчёта в формате руководителя. Создаётся один раз в 02_ШАБЛОНЫ; дальше вёрстку (шрифты, логотип,
  * отступы) можно менять прямо в Google Docs — метки {{…}} не удаляйте.
  */
+const REPORT_TEMPLATE_VERSION = '2'; // 2: без строки «Приложение №1 к Договору № … от …»
+
 function ensureReportTemplate_() {
   const id = String(cfgGet_('TEMPLATE_REPORT_ID') || '');
+  const props = PropertiesService.getDocumentProperties();
+  const fresh = props.getProperty('TEMPLATE_VERSION') === REPORT_TEMPLATE_VERSION;
   if (id) {
-    try { if (!DriveApp.getFileById(id).isTrashed()) return id; } catch (e) { /* создадим заново */ }
+    try {
+      const f = DriveApp.getFileById(id);
+      if (!f.isTrashed() && fresh) return id;
+      if (!f.isTrashed()) f.setName(f.getName() + ' (старая версия)'); // шаблон изменился — старый остаётся в папке
+    } catch (e) { /* создадим заново */ }
   }
   const doc = DocumentApp.create(SYS.REPORT_TEMPLATE_NAME);
   try {
@@ -244,6 +252,7 @@ function ensureReportTemplate_() {
   const tplFolder = folderById_(cfgGet_('FOLDER_TEMPLATES_ID'));
   if (tplFolder) file.moveTo(tplFolder);
   cfgSet_('TEMPLATE_REPORT_ID', doc.getId());
+  props.setProperty('TEMPLATE_VERSION', REPORT_TEMPLATE_VERSION);
   return doc.getId();
 }
 
@@ -261,7 +270,6 @@ function buildReportTemplate_(doc) {
   p0.setAlignment(A.RIGHT);
   p0.editAsText().setFontSize(10);
   b.appendParagraph('');
-  b.appendParagraph('Приложение №1 к Договору № {{CONTRACT_NO}} от {{CONTRACT_DATE}}').setAlignment(A.RIGHT).editAsText().setFontSize(11);
   b.appendParagraph('Еженедельный отчёт').setHeading(H.HEADING2).setAlignment(A.CENTER);
   const info = b.appendTable([
     ['Наименование', 'Значение'], ['Отчет №', '{{REPORT_NO}}'], ['Период', '{{PERIOD}}'],

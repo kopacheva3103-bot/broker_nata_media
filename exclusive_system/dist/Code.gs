@@ -673,8 +673,6 @@ function reportRows_() {
   const cw = P.id + '&"|"&' + P.wk;
   return [
     { ph: 'EXEC_HEADER', label: 'Шапка исполнителя', f: '=SUBSTITUTE(CFG_EXEC_HEADER," | ",CHAR(10))', lines: true },
-    { ph: 'CONTRACT_NO', label: '№ договора', f: look('contract_no') },
-    { ph: 'CONTRACT_DATE', label: 'Дата договора', f: '=IFERROR(TEXT(VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.contract_date]]},2,FALSE),"dd.mm.yyyy")&"г.","")' },
     { ph: 'REPORT_NO', label: 'Отчёт №', f: '=' + P.no },
     { ph: 'PERIOD', label: 'Период', f: '=IF(' + P.start + '="","",TEXT(' + P.start + ',"dd.mm.yyyy")&" – "&TEXT(' + P.start + '+4,"dd.mm.yyyy"))' },
     { ph: 'OBJECT', label: 'Объект', f: look('address') },
@@ -2354,7 +2352,7 @@ function appendRows_(code, objs) {
 /**
  * 06_Reports — еженедельный отчёт клиенту: Google Doc + PDF + архив.
  *
- * Формат — как в отчётах руководителя (шапка ИП, «Приложение №1 к Договору», таблица реквизитов,
+ * Формат — как в отчётах руководителя (шапка ИП, таблица реквизитов,
  * Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА, Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ, Раздел 3. ПЛАН РАБОТЫ).
  * Источник — лист 05_ОТЧЁТ_КЛИЕНТУ (предпросмотр): скрипт берёт оттуда только поля с метками {{…}},
  * поэтому внутренние данные (контакты, звонки, комментарии) в документ попасть не могут.
@@ -2581,10 +2579,18 @@ function ensureObjectFolder_(id, kind) {
  * Шаблон отчёта в формате руководителя. Создаётся один раз в 02_ШАБЛОНЫ; дальше вёрстку (шрифты, логотип,
  * отступы) можно менять прямо в Google Docs — метки {{…}} не удаляйте.
  */
+const REPORT_TEMPLATE_VERSION = '2'; // 2: без строки «Приложение №1 к Договору № … от …»
+
 function ensureReportTemplate_() {
   const id = String(cfgGet_('TEMPLATE_REPORT_ID') || '');
+  const props = PropertiesService.getDocumentProperties();
+  const fresh = props.getProperty('TEMPLATE_VERSION') === REPORT_TEMPLATE_VERSION;
   if (id) {
-    try { if (!DriveApp.getFileById(id).isTrashed()) return id; } catch (e) { /* создадим заново */ }
+    try {
+      const f = DriveApp.getFileById(id);
+      if (!f.isTrashed() && fresh) return id;
+      if (!f.isTrashed()) f.setName(f.getName() + ' (старая версия)'); // шаблон изменился — старый остаётся в папке
+    } catch (e) { /* создадим заново */ }
   }
   const doc = DocumentApp.create(SYS.REPORT_TEMPLATE_NAME);
   try {
@@ -2597,6 +2603,7 @@ function ensureReportTemplate_() {
   const tplFolder = folderById_(cfgGet_('FOLDER_TEMPLATES_ID'));
   if (tplFolder) file.moveTo(tplFolder);
   cfgSet_('TEMPLATE_REPORT_ID', doc.getId());
+  props.setProperty('TEMPLATE_VERSION', REPORT_TEMPLATE_VERSION);
   return doc.getId();
 }
 
@@ -2614,7 +2621,6 @@ function buildReportTemplate_(doc) {
   p0.setAlignment(A.RIGHT);
   p0.editAsText().setFontSize(10);
   b.appendParagraph('');
-  b.appendParagraph('Приложение №1 к Договору № {{CONTRACT_NO}} от {{CONTRACT_DATE}}').setAlignment(A.RIGHT).editAsText().setFontSize(11);
   b.appendParagraph('Еженедельный отчёт').setHeading(H.HEADING2).setAlignment(A.CENTER);
   const info = b.appendTable([
     ['Наименование', 'Значение'], ['Отчет №', '{{REPORT_NO}}'], ['Период', '{{PERIOD}}'],
@@ -3355,7 +3361,7 @@ function selfTest_(opts) {
     SpreadsheetApp.flush();
     const v = readReportValues_();
     check('Отчёт: период 14.09.2026 – 18.09.2026', v.kv.PERIOD === '14.09.2026 – 18.09.2026', v.kv.PERIOD);
-    check('Отчёт: № договора из 01_ОБЪЕКТЫ', v.kv.CONTRACT_NO === '000-000', v.kv.CONTRACT_NO);
+    check('Отчёт: заказчик из 01_ОБЪЕКТЫ', !!v.kv.CUSTOMER, v.kv.CUSTOMER);
     check('Отчёт: 5 пунктов в «Выполнение плана»', v.tables.PLAN_ROWS.length === 5, v.tables.PLAN_ROWS.length);
     check('Отчёт: 3 пункта в «План работы»', v.tables.NEXT_ROWS.length === 3, v.tables.NEXT_ROWS.length);
     check('Отчёт: в тексте нет контактов из обзвона', JSON.stringify(v).indexOf('+7') < 0);

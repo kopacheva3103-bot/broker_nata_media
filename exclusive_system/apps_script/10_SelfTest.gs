@@ -70,7 +70,7 @@ function selfTest_(opts) {
     SpreadsheetApp.flush();
     const v = readReportValues_();
     check('Отчёт: период 14.09.2026 – 18.09.2026', v.kv.PERIOD === '14.09.2026 – 18.09.2026', v.kv.PERIOD);
-    check('Отчёт: № договора из 01_ОБЪЕКТЫ', v.kv.CONTRACT_NO === '000-000', v.kv.CONTRACT_NO);
+    check('Отчёт: заказчик из 01_ОБЪЕКТЫ', !!v.kv.CUSTOMER, v.kv.CUSTOMER);
     check('Отчёт: 5 пунктов в «Выполнение плана»', v.tables.PLAN_ROWS.length === 5, v.tables.PLAN_ROWS.length);
     check('Отчёт: 3 пункта в «План работы»', v.tables.NEXT_ROWS.length === 3, v.tables.NEXT_ROWS.length);
     check('Отчёт: в тексте нет контактов из обзвона', JSON.stringify(v).indexOf('+7') < 0);
