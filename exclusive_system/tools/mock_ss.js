@@ -52,7 +52,7 @@ function makeSS() {
     setNamedRange: (n, r) => { names[n] = { sheet: r.getSheet().getName(), a1: col(r.getColumn()) + r.getRow(), nr: r.getNumRows(), nc: r.getNumColumns() }; },
     getName: () => 'Test', rename: () => {}, setSpreadsheetTimeZone: () => {}, setSpreadsheetLocale: () => {}, setActiveSheet: () => {}, moveActiveSheet: () => {}, deleteSheet: () => {},
     getRange: a1 => { const m = /^'?(.+?)'?!(.+)$/.exec(a1); return sheetObj(m[1]).getRange(m[2]); },
-    getSpreadsheetTimeZone: () => 'Europe/Moscow', toast: (m) => { if (/Ошибка/.test(m)) console.log('TOAST', m); }, getId: () => 'x',
+    getSpreadsheetTimeZone: () => 'Europe/Moscow', getUrl: () => 'https://docs.google.com/x', toast: (m) => { if (/Ошибка/.test(m)) console.log('TOAST', m); }, getId: () => 'x',
   };
   const SpreadsheetApp = {
     getActiveSpreadsheet: () => ss, flush: () => {}, newDataValidation: chain, newConditionalFormatRule: chain,

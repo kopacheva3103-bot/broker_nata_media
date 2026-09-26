@@ -81,6 +81,7 @@ function sheetSpecs_() {
       F('moved_from', 'Перенесено из', 'sys', { helper: true }),
       F('created_at', 'Создано', 'sys', { helper: true, fmt: 'datetime' }),
       F('author', 'Автор', 'sys', { helper: true }),
+      F('cal_event', 'Событие календаря', 'sys', { helper: true, d: 'ID события Google Календаря — ставит «Синхронизировать с календарём».' }),
     ],
   };
 
@@ -134,7 +135,7 @@ function sheetSpecs_() {
       F('status', 'Статус', 'dd', { dict: 'content_status', track: true }),
       F('pub_date', 'Дата публикации', 'date'),
       F('link', 'Ссылка', 'link', { w: 120, client: true }),
-      F('views', 'Просмотры', 'num', { fmt: '#,##0', client: true }),
+      F('views', 'Просмотры', 'num', { fmt: '#,##0', client: true, d: 'Telegram и YouTube обновляются автоматически по ссылке (меню «Обновить статистику Telegram / YouTube»), остальные — вручную.' }),
       F('reach', 'Охват', 'num', { fmt: '#,##0', client: true }),
       F('saves', 'Сохранения', 'num', { fmt: '#,##0' }),
       F('leads', 'Заявки', 'num', { fmt: '0' }),

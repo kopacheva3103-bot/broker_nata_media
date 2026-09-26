@@ -258,6 +258,7 @@ function sheetSpecs_() {
       F('moved_from', 'Перенесено из', 'sys', { helper: true }),
       F('created_at', 'Создано', 'sys', { helper: true, fmt: 'datetime' }),
       F('author', 'Автор', 'sys', { helper: true }),
+      F('cal_event', 'Событие календаря', 'sys', { helper: true, d: 'ID события Google Календаря — ставит «Синхронизировать с календарём».' }),
     ],
   };
 
@@ -311,7 +312,7 @@ function sheetSpecs_() {
       F('status', 'Статус', 'dd', { dict: 'content_status', track: true }),
       F('pub_date', 'Дата публикации', 'date'),
       F('link', 'Ссылка', 'link', { w: 120, client: true }),
-      F('views', 'Просмотры', 'num', { fmt: '#,##0', client: true }),
+      F('views', 'Просмотры', 'num', { fmt: '#,##0', client: true, d: 'Telegram и YouTube обновляются автоматически по ссылке (меню «Обновить статистику Telegram / YouTube»), остальные — вручную.' }),
       F('reach', 'Охват', 'num', { fmt: '#,##0', client: true }),
       F('saves', 'Сохранения', 'num', { fmt: '#,##0' }),
       F('leads', 'Заявки', 'num', { fmt: '0' }),
@@ -3105,8 +3106,8 @@ function libraryDefaults_() {
       'Составь для ассистента: 1) скрипт звонка в колл-центр / приёмную сети {аудитория} с целью выйти на отдел развития (3 варианта обхода «секретаря»); 2) короткое письмо с КП (до 700 знаков) с просьбой переслать ЛПР; 3) текст для формы обратной связи на сайте; 4) ответы на 5 типовых возражений. Объект: {кратко}.'],
     [PR, 'Сценарий рилс', 'Контент (04_КОНТЕНТ)',
       'Сценарий вертикального видео 30–45 сек по объекту {описание}. Три цели: найти покупателя / арендатора ({аудитория}), показать собственнику работу, бренд агентства. Дай: хук на 2 секунды, раскадровку по 5–7 планам (что снимать, текст на экране, закадровый текст), призыв к действию, подпись к посту и 10 хэштегов. Варианты для Instagram, Telegram, YouTube Shorts, Threads.'],
-    [PR, 'Оперативка → задачи', 'Расшифровка Zoom / заметки встречи',
-      'Вот расшифровка оперативки: {текст}. Выдели по каждому объекту: решения, задачи (что сделать, кто, срок, единица и план — звонков / КП / публикаций), открытые вопросы. Ответ — таблица с колонками: ID объекта | Блок стратегии | Задача | Исполнитель | Единица | План | Срок. Формулировки задач — так, чтобы их можно было показать клиенту.'],
+    [PR, 'Оперативка → задачи', 'Расшифровка Zoom / заметки встречи → меню «Внести задачи с оперативки»',
+      'Вот расшифровка оперативки агентства недвижимости: {текст}.\nСписок объектов (ID — название): {объекты}. Сотрудники: {сотрудники}.\nВыдели все поручения и решения. Ответ — ТОЛЬКО таблица без пояснений, 8 столбцов через символ «|»:\nID объекта | Блок стратегии | Задача | Исполнитель | Единица | План | Срок | Решение\nПравила: ID объекта — строго из списка; Блок — одно из: Аналитика и цена, Сценарии использования, Целевые аудитории, КП и материалы, База и рассылки, Каналы и партнёры, Контент, Фото и видео, Объявления, Отчётность, Другое; Исполнитель — строго из списка сотрудников; Единица — звонков / КП / ответов / публикаций / писем / встреч / документов / шт или пусто; План — число или пусто; Срок — дд.мм.гггг; Решение — вывод или решение по стратегии объекта, если прозвучал (иначе пусто). Задачу формулируй так, чтобы её можно было показать собственнику объекта.'],
     [RG, 'Регламент недели', 'Вся команда',
       'Пн — оперативка (Zoom), «Создать план недели», задачи по объектам в 02_ЗАДАЧИ.\nЕжедневно — ассистент ведёт 03_ОБЗВОН_И_КП (каждый звонок и КП — строкой, в тот же день); SMM — 04_КОНТЕНТ.\nПт — закрыть статусы задач, внести ручной факт; проверить просрочки.\nПн утром — «Отчёт клиенту» по каждому объекту → проверить → PDF клиенту.\nВ CRM переносим только реально заинтересованных (галочка «Передан в CRM»).'],
     [RG, 'Правила заполнения', 'Вся команда',
@@ -3415,8 +3416,14 @@ function onOpen() {
   ui.createMenu(SYS.MENU)
     .addItem('➜ Открыть вкладку объекта', 'openObjectTab')
     .addItem('➜ Создать вкладки для новых объектов', 'createObjectTabs')
+    .addSeparator()
     .addItem('➜ Создать план недели', 'createWeekPlan')
+    .addItem('➜ Внести задачи с оперативки', 'importMeetingTasks')
     .addItem('➜ Проверить просрочки', 'checkOverdue')
+    .addItem('➜ Синхронизировать задачи с календарём', 'syncCalendar')
+    .addSeparator()
+    .addItem('➜ Промпт для Claude по объекту', 'promptForObject')
+    .addItem('➜ Обновить просмотры Telegram / YouTube', 'refreshSocialStats')
     .addSeparator()
     .addItem('➜ Создать отчёт клиенту', 'createReport')
     .addItem('➜ Обновить PDF отчёта', 'createPdf')
@@ -3427,6 +3434,9 @@ function onOpen() {
     .addSubMenu(ui.createMenu('Сервис')
       .addItem('⚙ Установить / обновить систему', 'setupSystem')
       .addItem('Обновить все вкладки объектов', 'rebuildObjectTabs')
+      .addItem('Включить ежедневное обновление (календарь, просмотры)', 'enableDailyJobs')
+      .addItem('Выключить ежедневное обновление', 'disableDailyJobs')
+      .addSeparator()
       .addItem('Загрузить пример (ЖК Время · Лермонтовская 1)', 'loadExampleData')
       .addItem('Запустить самопроверку', 'runSelfTest')
       .addItem('О системе', 'aboutSystem'))
@@ -3442,4 +3452,361 @@ function aboutSystem() {
     '• 06_БИБЛИОТЕКА — чек-листы, промпты, регламенты. 09_ИСТОРИЯ — кто что изменил.\n\n' +
     'Цвет заголовка: тёмный — вводится вручную; серо-голубой — формула; светло-серый — заполняет скрипт.',
     SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+// ═════════════ 14_Prompts.gs ═════════════
+/**
+ * 14_Prompts — работа с Claude через подписку (без API и без доплат):
+ *  - «Промпт для Claude по объекту»: промпт из 06_БИБЛИОТЕКА + данные вкладки объекта одним текстом → скопировать в claude.ai;
+ *  - «Внести задачи с оперативки»: таблица задач (из Claude или из протокола) → строки 02_ЗАДАЧИ + решения во вкладки объектов.
+ * Кнопка «Спросить Claude» с API-ключом — отдельный этап (отложен).
+ */
+
+const MEETING_COLS = ['ID объекта', 'Блок стратегии', 'Задача', 'Исполнитель', 'Единица', 'План', 'Срок', 'Решение'];
+
+// ───────────────────────── промпт по объекту ─────────────────────────
+
+function promptForObject() {
+  const id = selectedObjectId_();
+  const obj = id ? objectById_(id) : null;
+  const prompts = readTable_('LIB').rows.filter(r => r.kind === 'Промпт' && r.title);
+  if (!prompts.length) { SpreadsheetApp.getUi().alert('В 06_БИБЛИОТЕКА нет промптов (раздел «Промпт»).'); return; }
+  const options = prompts.map(p => '<option value="' + htmlEscape_(p.id) + '">' + htmlEscape_(p.title) + '</option>').join('');
+  const html = HtmlService.createHtmlOutput(
+    '<div style="font:14px Arial,sans-serif">' +
+    '<div>Объект: <b>' + htmlEscape_(obj ? obj.name + ' (' + obj.id + ')' : 'не выбран — промпт без данных объекта') + '</b></div>' +
+    '<div style="margin:8px 0">Промпт: <select id="p" style="max-width:420px">' + options + '</select></div>' +
+    '<textarea id="t" style="width:100%;height:330px;font:12px monospace"></textarea>' +
+    '<div style="margin-top:8px"><button onclick="copyIt()">Скопировать</button> ' +
+    '<a href="https://claude.ai/new" target="_blank">Открыть Claude</a> <span id="s" style="color:#2E7D32"></span></div>' +
+    '<div style="color:#80868B;font-size:12px;margin-top:6px">Вставьте текст в Claude (ваша подписка). Ответ перенесите в нужный раздел вкладки объекта. Использование промпта записывается в 09_ИСТОРИЯ.</div></div>' +
+    '<script>' +
+    'const objId=' + JSON.stringify(obj ? obj.id : '') + ';' +
+    'function load(){document.getElementById("t").value="Собираю…";google.script.run.withSuccessHandler(function(x){document.getElementById("t").value=x;}).withFailureHandler(function(e){document.getElementById("t").value="Ошибка: "+e.message;}).getPromptText(objId,document.getElementById("p").value);}' +
+    'function copyIt(){const t=document.getElementById("t");t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand("copy");}document.getElementById("s").textContent="Скопировано";}' +
+    'document.getElementById("p").onchange=load;load();' +
+    '</script>').setWidth(620).setHeight(520);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Промпт для Claude');
+}
+
+/** Вызывается из диалога: текст промпта с данными объекта. */
+function getPromptText(objId, libId) {
+  const p = readTable_('LIB').rows.find(r => r.id === libId);
+  if (!p) throw new Error('Промпт не найден');
+  const obj = objId ? objectById_(objId) : null;
+  let text = String(p.text || '');
+  text = text.replace(/\{объекты\}/g, readTable_('OBJ').rows.filter(o => o.id && o.name && o.in_work !== 'НЕТ').map(o => o.id + ' — ' + o.name).join('; '));
+  text = text.replace(/\{сотрудники\}/g, dictValues_('people').join(', '));
+  if (obj) text = text.replace(/\{(?!текст\})[^{}]{2,80}\}/g, '(см. «Данные объекта» ниже)');
+  const out = text + (obj ? '\n\n' + objectContext_(obj) : '');
+  logHistory_([{ sheet: 'Claude (подписка)', record_id: p.id, obj_id: obj ? obj.id : '', field: 'Промпт: ' + p.title, old: '', new: 'сформирован для копирования', kind: 'Промпт' }], userEmail_());
+  return out;
+}
+
+/** Данные объекта текстом: реестр + то, что внесено во вкладку. */
+function objectContext_(obj) {
+  const L = [];
+  const v = x => (x instanceof Date ? fmtDate_(x) : String(x === null || x === undefined ? '' : x)).trim();
+  L.push('=== ДАННЫЕ ОБЪЕКТА ===');
+  [['Объект', obj.name], ['Адрес', obj.address], ['Тип', obj.kind], ['Сделка', obj.deal], ['Площадь, м²', obj.area],
+    ['Цена, ₽', obj.price], ['Цена за м², ₽', obj.price_m2], ['Статус', obj.status]].forEach(p => { if (v(p[1])) L.push(p[0] + ': ' + v(p[1])); });
+  const tab = findObjectTab_(obj);
+  if (tab) {
+    const d = readObjectTab_(tab);
+    const secs = objTabSections_();
+    secs.forEach(s => {
+      if (s.type === 'kv') {
+        const lines = s.items.filter(i => i.k !== 'f' && i.k !== 'link' && v(d.kv[i.key])).map(i => i.label + ': ' + v(d.kv[i.key]));
+        if (lines.length) { L.push('', s.title); L.push.apply(L, lines); }
+      }
+      if (s.type === 'table' && d.tables[s.key] && d.tables[s.key].length) {
+        const idx = s.cols.map((c, i) => (c.k === 'f' || c.k === 'link') ? -1 : i).filter(i => i >= 0);
+        L.push('', s.title, idx.map(i => s.cols[i].t).join(' | '));
+        d.tables[s.key].forEach(r => L.push(idx.map(i => v(r[i])).join(' | ')));
+      }
+    });
+  }
+  return L.join('\n');
+}
+
+// ───────────────────────── оперативка → задачи ─────────────────────────
+
+function importMeetingTasks() {
+  const html = HtmlService.createHtmlOutput(
+    '<div style="font:14px Arial,sans-serif">' +
+    '<div>Вставьте таблицу задач — ответ Claude по промпту «Оперативка → задачи» или строки из протокола (столбцы через «|» или табуляцию):</div>' +
+    '<div style="color:#80868B;font-size:12px;margin:4px 0">' + MEETING_COLS.join(' | ') + '</div>' +
+    '<textarea id="t" style="width:100%;height:250px;font:12px monospace"></textarea>' +
+    '<div style="margin-top:8px"><button onclick="prev()">Проверить</button> <button id="go" onclick="go()" disabled>Внести задачи</button></div>' +
+    '<div id="r" style="margin-top:8px;font-size:12px;max-height:150px;overflow:auto"></div></div>' +
+    '<script>' +
+    'function esc(s){return String(s).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];});}' +
+    'function prev(){google.script.run.withSuccessHandler(function(x){var h="Задач: <b>"+x.ok.length+"</b>"+(x.ok.length?"<ul>"+x.ok.map(function(o){return "<li>"+esc(o.obj_id+": "+o.task+" — "+(o.owner||"без исполнителя")+", срок "+o.deadlineText+(o.decision?" · решение":""))+"</li>";}).join("")+"</ul>":"");' +
+    'if(x.errors.length)h+="<div style=\\"color:#B71C1C\\">Пропущено:<br>"+x.errors.map(esc).join("<br>")+"</div>";document.getElementById("r").innerHTML=h;document.getElementById("go").disabled=!x.ok.length;}).withFailureHandler(function(e){document.getElementById("r").textContent="Ошибка: "+e.message;}).previewMeetingTasks(document.getElementById("t").value);}' +
+    'function go(){document.getElementById("go").disabled=true;google.script.run.withSuccessHandler(function(m){document.getElementById("r").innerHTML="<b>"+esc(m)+"</b>";}).withFailureHandler(function(e){document.getElementById("r").textContent="Ошибка: "+e.message;}).addMeetingTasks(document.getElementById("t").value);}' +
+    '</script>').setWidth(680).setHeight(520);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Задачи с оперативки');
+}
+
+function previewMeetingTasks(text) {
+  const r = parseMeetingTasks_(text);
+  return { ok: r.ok.map(o => ({ obj_id: o.obj_id, task: o.task, owner: o.owner, deadlineText: o.deadline ? fmtDate_(o.deadline) : 'пятница текущей недели', decision: !!o.decision })), errors: r.errors };
+}
+
+function addMeetingTasks(text) {
+  const r = parseMeetingTasks_(text);
+  if (!r.ok.length) return 'Нет задач для внесения.';
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    const cache = {};
+    const openName = dictFirstByClass_('task_status', CLS.OPEN);
+    const user = userEmail_();
+    const today = today_();
+    const rows = r.ok.filter(o => o.task).map(o => {
+      const deadline = o.deadline || addDays_(mondayOf_(today), 4);
+      return {
+        id: nextId_('TASK', cache), week: isoWeekKey_(deadline), obj_id: o.obj_id, block: o.block, task: o.task, owner: o.owner,
+        unit: o.unit, plan: o.plan, deadline: deadline, status: openName, to_report: true, source: 'Оперативка', created_at: new Date(), author: user,
+      };
+    });
+    appendRows_('TASK', rows);
+    let dec = 0;
+    const hist = [];
+    r.ok.filter(o => o.decision).forEach(o => {
+      const obj = objectById_(o.obj_id);
+      const tab = obj ? findObjectTab_(obj) : null;
+      if (!tab) return;
+      appendTabRow_(tab, 'DEC', [today, o.decision, o.owner || '', o.task || '']);
+      hist.push({ sheet: tab.getName(), record_id: 'раздел 7', obj_id: o.obj_id, field: '7. ВЫВОДЫ И РЕШЕНИЯ · с оперативки', old: '', new: o.decision, kind: HIST_KIND.CREATE });
+      dec++;
+    });
+    logHistory_(hist, user);
+    return 'Внесено задач: ' + rows.length + (dec ? ', решений во вкладки объектов: ' + dec : '') + (r.errors.length ? '. Пропущено строк: ' + r.errors.length : '') + '.';
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Разбор таблицы: «|»-таблица (markdown) или строки через табуляцию. */
+function parseMeetingTasks_(text) {
+  const objs = readTable_('OBJ').rows.filter(o => o.id);
+  const people = dictValues_('people');
+  const blocks = dictValues_('task_blocks');
+  const units = dictValues_('units');
+  const ok = [], errors = [];
+  const norm = s => String(s || '').trim().toLowerCase();
+  String(text || '').split(/\r?\n/).forEach((line, n) => {
+    if (!line.trim() || /^\s*\|?\s*:?-{2,}/.test(line)) return;
+    let cells = line.indexOf('\t') >= 0 ? line.split('\t') : line.split('|');
+    if (line.indexOf('\t') < 0 && line.trim()[0] === '|') cells = cells.slice(1, line.trim().slice(-1) === '|' ? -1 : undefined);
+    cells = cells.map(c => c.trim());
+    if (cells.length < 3) return;
+    if (/id объекта|^задача$/i.test(cells[0]) || norm(cells[2]) === 'задача') return; // заголовок
+    const [rawObj, rawBlock, task, rawOwner, rawUnit, rawPlan, rawDate, decision] = cells.concat(['', '', '', '', '', '', '', '']);
+    const obj = objs.find(o => norm(o.id) === norm(rawObj)) || objs.find(o => norm(o.name) === norm(rawObj)) ||
+      objs.find(o => norm(rawObj) && norm(o.name).indexOf(norm(rawObj)) >= 0);
+    if (!obj) { errors.push('Строка ' + (n + 1) + ': объект «' + rawObj + '» не найден в 01_ОБЪЕКТЫ'); return; }
+    if (!task && !decision) { errors.push('Строка ' + (n + 1) + ': нет задачи'); return; }
+    const owner = people.find(p => norm(p) === norm(rawOwner)) || '';
+    if (rawOwner && !owner) errors.push('Строка ' + (n + 1) + ': исполнитель «' + rawOwner + '» не из 07_СПРАВОЧНИКИ — задача внесена без исполнителя');
+    const plan = rawPlan && !isNaN(Number(String(rawPlan).replace(',', '.'))) ? Number(String(rawPlan).replace(',', '.')) : '';
+    ok.push({
+      obj_id: obj.id, task: task, owner: owner, plan: plan, decision: decision || '',
+      block: blocks.find(b => norm(b) === norm(rawBlock)) || (blocks.indexOf('Другое') >= 0 ? 'Другое' : ''),
+      unit: units.find(u => norm(u) === norm(rawUnit)) || '',
+      deadline: parseRuDate_(rawDate),
+    });
+  });
+  return { ok: ok, errors: errors };
+}
+
+/** «25.09.2026», «25.09.26», «25.09» → дата. */
+function parseRuDate_(s) {
+  const m = /(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?/.exec(String(s || ''));
+  if (!m) return null;
+  const t = today_();
+  let y = m[3] ? Number(m[3]) : t.getFullYear();
+  if (y < 100) y += 2000;
+  const d = new Date(y, Number(m[2]) - 1, Number(m[1]));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Добавляет строку в табличный раздел вкладки: в первую пустую строку, иначе вставляет новую в конец раздела. */
+function appendTabRow_(sh, secKey, values) {
+  const max = sh.getLastRow();
+  const marks = sh.getRange(1, 1, max, 2).getValues();
+  let inSec = false, inData = false, firstEmpty = 0, lastData = 0;
+  for (let r = 0; r < marks.length; r++) {
+    const m = String(marks[r][0] || '');
+    if (m.indexOf('§') === 0) { if (inSec) break; inSec = m === '§' + secKey; inData = false; continue; }
+    if (!inSec) continue;
+    if (m === 'H') { inData = true; continue; }
+    if (m === '·') break;
+    if (inData) {
+      lastData = r + 1;
+      if (!firstEmpty && String(marks[r][1]) === '') firstEmpty = r + 1;
+    }
+  }
+  if (!lastData) throw new Error('Раздел ' + secKey + ' не найден во вкладке ' + sh.getName());
+  let row = firstEmpty;
+  if (!row) { sh.insertRowAfter(lastData); row = lastData + 1; }
+  sh.getRange(row, 2, 1, values.length).setValues([values]);
+  return row;
+}
+
+// ═════════════ 15_Calendar.gs ═════════════
+/**
+ * 15_Calendar — задачи 02_ЗАДАЧИ в Google Календаре.
+ *
+ * Событие на весь день в дату «Срок» создаётся в календаре того, кто запускает синхронизацию
+ * (руководителя), исполнитель получает приглашение на свой email из 07_СПРАВОЧНИКИ.
+ * Выполнено → в названии «✓»; Отменено / Перенесено → событие удаляется (у копии-переноса — своё событие).
+ * Изменили срок или исполнителя → событие обновляется. Обрабатываются задачи со сроком не старше 14 дней.
+ */
+
+function syncCalendar() {
+  const r = syncCalendar_();
+  toast_('Календарь: создано ' + r.created + ', обновлено ' + r.updated + ', удалено ' + r.deleted +
+    (r.noEmail.length ? '. Нет email у: ' + r.noEmail.join(', ') + ' (07_СПРАВОЧНИКИ)' : ''), 'Google Календарь', 10);
+}
+
+function syncCalendar_() {
+  const t = readTable_('TASK');
+  const cal = CalendarApp.getDefaultCalendar();
+  const me = String(Session.getEffectiveUser().getEmail() || '').toLowerCase();
+  const emails = {};
+  dictRows_('people').forEach(p => { emails[p[0]] = String(p[2] || '').trim(); });
+  const url = ss_().getUrl();
+  const from = addDays_(today_(), -14);
+  const res = { created: 0, updated: 0, deleted: 0, noEmail: [] };
+  t.rows.forEach(o => {
+    if (!o.obj_id || !o.task) return;
+    const cls = o.status ? dictClassOf_('task_status', o.status) : CLS.OPEN;
+    let ev = null;
+    if (o.cal_event) { try { ev = cal.getEventById(o.cal_event); } catch (e) { ev = null; } }
+    if (cls === CLS.CANCEL || cls === CLS.MOVED) {
+      if (ev) { ev.deleteEvent(); res.deleted++; }
+      if (o.cal_event) writeFields_(t.sh, 'TASK', o._row, { cal_event: '' });
+      return;
+    }
+    if (!(o.deadline instanceof Date) || o.deadline < from) return;
+    const email = emails[o.owner] || '';
+    if (o.owner && !email && res.noEmail.indexOf(o.owner) < 0) res.noEmail.push(o.owner);
+    const title = (cls === CLS.DONE ? '✓ ' : '') + o.obj_name + ': ' + o.task + (o.plan !== '' ? ' (' + o.plan + (o.unit ? ' ' + o.unit : '') + ')' : '');
+    const desc = 'Задача ' + o.id + ' · исполнитель: ' + (o.owner || '—') + '\nСтатус: ' + (o.status || '—') + '\nТаблица: ' + url;
+    const guest = email && email.toLowerCase() !== me ? email : '';
+    if (!ev) {
+      if (cls === CLS.DONE) return; // уже выполненные в календарь не добавляем
+      ev = cal.createAllDayEvent(title, o.deadline, { description: desc, guests: guest, sendInvites: !!guest });
+      writeFields_(t.sh, 'TASK', o._row, { cal_event: ev.getId() });
+      res.created++;
+      return;
+    }
+    let changed = false;
+    if (ev.getTitle() !== title) { ev.setTitle(title); changed = true; }
+    if (ev.getDescription() !== desc) { ev.setDescription(desc); changed = true; }
+    const start = ev.getAllDayStartDate();
+    if (!start || start.getTime() !== o.deadline.getTime()) { ev.setAllDayDate(o.deadline); changed = true; }
+    const guests = ev.getGuestList().map(g => g.getEmail().toLowerCase());
+    guests.forEach(g => { if (g !== (guest || '').toLowerCase()) { ev.removeGuest(g); changed = true; } });
+    if (guest && guests.indexOf(guest.toLowerCase()) < 0) { ev.addGuest(guest); changed = true; }
+    if (changed) res.updated++;
+  });
+  return res;
+}
+
+// ───────────────────────── ежедневное обновление ─────────────────────────
+
+/** Каждое утро: календарь + просмотры Telegram / YouTube. */
+function dailyJobs() {
+  try { syncCalendar_(); } catch (e) { Logger.log('Календарь: ' + e.message); }
+  try { refreshSocialStats_(); } catch (e) { Logger.log('Статистика: ' + e.message); }
+}
+
+function enableDailyJobs() {
+  disableDailyJobs_();
+  ScriptApp.newTrigger('dailyJobs').timeBased().everyDays(1).atHour(7).create();
+  toast_('Каждое утро (около 7:00) задачи синхронизируются с календарём, просмотры Telegram / YouTube обновляются.', 'Ежедневное обновление', 8);
+}
+
+function disableDailyJobs() {
+  disableDailyJobs_();
+  toast_('Ежедневное обновление выключено.', 'Ежедневное обновление', 5);
+}
+
+function disableDailyJobs_() {
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyJobs') ScriptApp.deleteTrigger(t); });
+}
+
+// ═════════════ 16_Social.gs ═════════════
+/**
+ * 16_Social — просмотры публикаций по ссылкам из 04_КОНТЕНТ.
+ *
+ *  - Telegram (публичный канал, ссылка вида t.me/канал/123): просмотры берутся со страницы поста — без ключей и настроек.
+ *  - YouTube / Shorts: нужен встроенный сервис «YouTube Data API» (редактор Apps Script → «Сервисы» ＋ → YouTube Data API v3 → Добавить).
+ *  - Instagram, Threads: нужен доступ Meta Graph API (профессиональный аккаунт + приложение Meta) — следующий этап, пока вручную.
+ * Охват, сохранения и заявки площадки публично не отдают — их вносит SMM.
+ */
+
+function refreshSocialStats() {
+  const r = refreshSocialStats_();
+  toast_('Обновлено просмотров: Telegram ' + r.tg + ', YouTube ' + r.yt +
+    (r.ytOff ? '. YouTube не подключён: редактор Apps Script → Сервисы ＋ → YouTube Data API v3' : '') +
+    (r.failed ? '. Не удалось: ' + r.failed : ''), 'Статистика контента', 10);
+}
+
+function refreshSocialStats_() {
+  const t = readTable_('CONT');
+  const res = { tg: 0, yt: 0, failed: 0, ytOff: false };
+  const yt = [];
+  t.rows.forEach(o => {
+    const link = String(o.link || '').trim();
+    if (!link) return;
+    const tg = /t\.me\/(?:s\/)?([A-Za-z0-9_]{4,})\/(\d+)/.exec(link);
+    if (tg) {
+      const n = telegramViews_(tg[1], tg[2]);
+      if (n === null) { res.failed++; return; }
+      if (n !== o.views) { writeFields_(t.sh, 'CONT', o._row, { views: n }); res.tg++; }
+      return;
+    }
+    const id = youtubeId_(link);
+    if (id) yt.push({ row: o._row, id: id, views: o.views });
+  });
+  if (yt.length) {
+    if (typeof YouTube === 'undefined') { res.ytOff = true; return res; }
+    for (let i = 0; i < yt.length; i += 50) {
+      const part = yt.slice(i, i + 50);
+      try {
+        const resp = YouTube.Videos.list('statistics', { id: part.map(x => x.id).join(',') });
+        const map = {};
+        (resp.items || []).forEach(it => { map[it.id] = Number(it.statistics.viewCount || 0); });
+        part.forEach(x => {
+          if (!(x.id in map)) { res.failed++; return; }
+          if (map[x.id] !== x.views) { writeFields_(t.sh, 'CONT', x.row, { views: map[x.id] }); res.yt++; }
+        });
+      } catch (e) { res.failed += part.length; }
+    }
+  }
+  return res;
+}
+
+/** Просмотры поста публичного канала: страница t.me/<канал>/<id>?embed=1 содержит «1.2K» в tgme_widget_message_views. */
+function telegramViews_(channel, post) {
+  try {
+    const html = UrlFetchApp.fetch('https://t.me/' + channel + '/' + post + '?embed=1&mode=tme', { muteHttpExceptions: true, followRedirects: true }).getContentText();
+    const m = /tgme_widget_message_views[^>]*>([\d.,]+)\s*([KMkm]?)</.exec(html);
+    return m ? parseCount_(m[1], m[2]) : null;
+  } catch (e) { return null; }
+}
+
+function parseCount_(num, suffix) {
+  const n = Number(String(num).replace(',', '.'));
+  const k = { k: 1e3, m: 1e6 }[String(suffix || '').toLowerCase()] || 1;
+  return Math.round(n * k);
+}
+
+function youtubeId_(link) {
+  const m = /(?:youtube\.com\/(?:shorts\/|watch\?(?:.*&)?v=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/.exec(link);
+  return m ? m[1] : '';
 }
