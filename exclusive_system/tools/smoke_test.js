@@ -289,5 +289,5 @@ X.autoReportsJob();
 const inWork = X.readTable_('OBJ').rows.filter(o => o.id && o.name).length;
 console.log('mail:', MAILS.length, MAILS[0] && MAILS[0].subject); console.log('auto reports:', GEN.length, 'of in-work', inWork, '| first:', GEN[0], '| B5 restored:', X.sheet_('REP').getRange('B5').getValue(), '| state cleared:', !PSTORE.AUTO_REP_STATE);
 X.sheet_('REP').getRange('B5').setValue('');
-GEN.length = 0; X.readTable_('ARCH'); X.appendRow_('ARCH', { ts: new Date(), obj_id: '137073408', week: X.isoWeekKey_(X.today_()), status: X.REPORT_STATUS.ACTUAL });
-X.autoReportsJob(); console.log('skip manual:', GEN.every(g => g.indexOf('137073408|') !== 0), GEN.length);
+GEN.length = 0; X.readTable_('ARCH'); NOTES.length = 0; X.appendRow_('ARCH', { ts: new Date(), obj_id: '129866881', week: X.isoWeekKey_(X.today_()), status: X.REPORT_STATUS.ACTUAL, pdf_link: 'https://manual' });
+X.autoReportsJob(); console.log('skip manual:', GEN.every(g => g.indexOf('129866881|') !== 0), GEN.length, '| manual sent to CRM:', NOTES.length, (JSON.parse(NOTES[1] || '{}').note || '').split('\n').slice(0, 3).join(' / '));

@@ -60,7 +60,7 @@ function generateReport_(id, wk, opts) {
   });
   writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { last_report_link: pdf.getUrl(), last_report_date: today_() });
   let crm = '';
-  try { crm = sendReportToCrm_(obj, values, pdf.getUrl(), sheet_('REP').getRange('B6').getValue()); } catch (e) { crm = '⚠ CRM: ' + e.message; }
+  try { crm = sendReportToCrm_(obj, values, pdf.getUrl(), sheet_('REP').getRange('B6').getValue(), wk); } catch (e) { crm = '⚠ CRM: ' + e.message; }
   if (crm) { const a = readTable_('ARCH'); const last = a.rows[a.rows.length - 1]; if (last) writeFields_(a.sh, 'ARCH', last._row, { crm: crm }); }
   return { crm: crm, name: name, docId: copy.getId(), docUrl: copy.getUrl(), pdfId: pdf.getId(), pdfUrl: pdf.getUrl(), folderUrl: folder.getUrl() };
 }

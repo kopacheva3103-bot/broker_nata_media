@@ -2343,7 +2343,7 @@ function generateReport_(id, wk, opts) {
   });
   writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { last_report_link: pdf.getUrl(), last_report_date: today_() });
   let crm = '';
-  try { crm = sendReportToCrm_(obj, values, pdf.getUrl(), sheet_('REP').getRange('B6').getValue()); } catch (e) { crm = '⚠ CRM: ' + e.message; }
+  try { crm = sendReportToCrm_(obj, values, pdf.getUrl(), sheet_('REP').getRange('B6').getValue(), wk); } catch (e) { crm = '⚠ CRM: ' + e.message; }
   if (crm) { const a = readTable_('ARCH'); const last = a.rows[a.rows.length - 1]; if (last) writeFields_(a.sh, 'ARCH', last._row, { crm: crm }); }
   return { crm: crm, name: name, docId: copy.getId(), docUrl: copy.getUrl(), pdfId: pdf.getId(), pdfUrl: pdf.getUrl(), folderUrl: folder.getUrl() };
 }
@@ -4448,8 +4448,8 @@ function objectMatcher_() {
  * Ограничение API: поиск не чаще 1 раза в 6 секунд — при массовой отметке используйте «Отправить отмеченные в CRM».
  *
  * Отчёт клиенту: при «Создать отчёт клиенту» в карточку объекта (ID объекта = ID карточки в CRM) добавляются
- * комментарий с текстом отчёта и ссылкой на PDF и — если есть — комментарий «для себя» (05_ОТЧЁТ_КЛИЕНТУ, B6)
- * и список просроченных задач. Клиенту в PDF «для себя» не попадает.
+ * всегда два комментария: отчёт для клиента (текст отчёта и ссылка на PDF) и для руководителя (выполнение задач недели,
+ * невыполненные и просроченные задачи, «Комментарий для себя» из 05_ОТЧЁТ_КЛИЕНТУ, B6). В PDF клиенту второе не попадает.
  */
 
 const CRM_BASE_DEFAULT = 'https://agencies-p.topnlab.ru/public';
@@ -4526,7 +4526,7 @@ function crmPostNote_(cfg, type, id, note) {
 // ───────────────────────── отчёт клиенту → карточка объекта ─────────────────────────
 
 /** Текст комментария «отчёт клиенту» и внутреннего комментария для руководителя. */
-function reportCrmNotes_(obj, values, pdfUrl, internal) {
+function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
   const kv = values.kv, t = values.tables;
   const rows = (ph, empty) => {
     const r = (t[ph] || []).filter(x => x[1] && x[0] !== '—');
@@ -4541,31 +4541,35 @@ function reportCrmNotes_(obj, values, pdfUrl, internal) {
     kv.COMMENT ? '\nКомментарий для клиента:\n' + kv.COMMENT : '',
     pdfUrl ? '\nPDF отчёта: ' + pdfUrl : '',
   ].filter(Boolean).join('\n');
-  const overdue = readTable_('TASK').rows.filter(x => String(x.obj_id) === String(obj.id) && x.overdue === 'ПРОСРОЧЕНО');
+  const tasks = readTable_('TASK').rows.filter(x => String(x.obj_id) === String(obj.id) && x.task);
+  const cls = x => x.status ? dictClassOf_('task_status', x.status) : CLS.OPEN;
+  const week = wk ? tasks.filter(x => x.week === wk && cls(x) !== CLS.CANCEL) : [];
+  const done = week.filter(x => cls(x) === CLS.DONE);
+  const notDone = week.filter(x => cls(x) !== CLS.DONE);
+  const overdue = tasks.filter(x => cls(x) === CLS.OPEN && x.deadline instanceof Date && x.deadline < today_());
   const own = String(internal || '').trim();
-  const inner = own || overdue.length ? [
-    'ДЛЯ РУКОВОДИТЕЛЯ (клиенту не отправляется) — отчёт №' + (kv.REPORT_NO || '') + ' за ' + (kv.PERIOD || ''),
-    own ? '\n' + own : '',
-    overdue.length ? '\nПросрочено задач: ' + overdue.length + '\n' + overdue.slice(0, 10).map(x => '• ' + x.task + ' (' + (x.owner || '—') + ', срок ' + fmtDate_(x.deadline) + ')').join('\n') : '',
-  ].filter(Boolean).join('\n') : '';
+  const line = x => '• ' + x.task + ' (' + (x.owner || '—') + (x.status ? ', ' + x.status : '') + (x.deadline instanceof Date ? ', срок ' + fmtDate_(x.deadline) : '') + ')';
+  const inner = [
+    'ДЛЯ РУКОВОДИТЕЛЯ (клиенту не отправляется) — отчёт №' + (kv.REPORT_NO || '') + ' за ' + (kv.PERIOD || '') + ' — ' + obj.name,
+    '\nВыполнение задач недели: ' + (week.length ? done.length + ' из ' + week.length + ' (' + Math.round(done.length / week.length * 100) + '%)' : 'задачи на неделю не внесены'),
+    notDone.length ? '\nНе выполнено:\n' + notDone.slice(0, 15).map(line).join('\n') : '',
+    '\nПросрочено задач: ' + overdue.length + (overdue.length ? '\n' + overdue.slice(0, 10).map(line).join('\n') : ''),
+    own ? '\nКомментарий руководителя:\n' + own : '',
+  ].filter(Boolean).join('\n');
   return { client: client, inner: inner };
 }
 
 /** Отправляет отчёт в карточку объекта (ID объекта = ID карточки в CRM). Возвращает текст статуса. */
-function sendReportToCrm_(obj, values, pdfUrl, internal) {
+function sendReportToCrm_(obj, values, pdfUrl, internal, wk) {
   const cfg = crmConfig_();
   if (!cfg.key) return '';
   if (!cfg.user) return '⚠ не задан ID автора заметок (Сервис → Подключить CRM TopenLab)';
   if (!isCrmId_(obj.id)) return '⚠ у объекта нет ID из CRM (сейчас «' + obj.id + '»)';
-  const n = reportCrmNotes_(obj, values, pdfUrl, internal);
+  const n = reportCrmNotes_(obj, values, pdfUrl, internal, wk);
   const a = crmPostNote_(cfg, 'realty', obj.id, n.client);
   if (!a.ok) return '⚠ CRM: отчёт не добавлен (' + a.code + (a.msg ? ', ' + a.msg : '') + ')';
-  let st = '✓ в CRM ' + fmtDate_(new Date()) + ': отчёт';
-  if (n.inner) {
-    const b = crmPostNote_(cfg, 'realty', obj.id, n.inner);
-    st += b.ok ? ' + комментарий для себя' : ', ⚠ комментарий для себя не добавлен (' + b.code + ')';
-  }
-  return st;
+  const b = crmPostNote_(cfg, 'realty', obj.id, n.inner);
+  return '✓ в CRM ' + fmtDate_(new Date()) + ': отчёт для клиента' + (b.ok ? ' + для руководителя' : ', ⚠ для руководителя не добавлен (' + b.code + ')');
 }
 
 /** Меню: отправить в CRM отчёт, выбранный в 05_ОТЧЁТ_КЛИЕНТУ (например, после правок или если CRM подключили позже). */
@@ -4580,7 +4584,7 @@ function crmSendReport() {
   const arch = readTable_('ARCH');
   const rows = arch.rows.filter(r => String(r.obj_id) === id && r.week === wk && r.status === REPORT_STATUS.ACTUAL);
   const last = rows[rows.length - 1];
-  const st = sendReportToCrm_(obj, readReportValues_(), last ? last.pdf_link : '', rep.getRange('B6').getValue());
+  const st = sendReportToCrm_(obj, readReportValues_(), last ? last.pdf_link : '', rep.getRange('B6').getValue(), wk);
   if (last) writeFields_(arch.sh, 'ARCH', last._row, { crm: st });
   ui.alert('Отчёт → CRM', st || 'CRM не подключена', ui.ButtonSet.OK);
 }
@@ -5087,8 +5091,8 @@ function guessObjectInfo_(text) {
  * 20_AutoReports — еженедельные отчёты автоматически: каждую пятницу в 20:00 (МСК).
  *
  * По каждому объекту «в работе» за текущую неделю: Google Doc + PDF в папке объекта и комментарий
- * в карточку TopenLab (как «Создать отчёт клиенту»). Объекты, по которым отчёт за эту неделю уже создан вручную,
- * пропускаются. Клиенту система ничего не отправляет — ссылки на PDF приходят письмом руководителю.
+ * в карточку TopenLab (как «Создать отчёт клиенту»). Если отчёт за эту неделю уже создан вручную, новый не создаётся,
+ * но если он ещё не попал в CRM — отправляется. Клиенту система ничего не отправляет — ссылки на PDF приходят письмом руководителю.
  * Поля «Комментарий для клиента / для себя» (05_ОТЧЁТ_КЛИЕНТУ) в автоотчёт не попадают — они общие для всех объектов.
  * Если за один запуск (лимит Google — 6 минут) не успели все объекты, продолжает сам через минуту.
  */
@@ -5154,12 +5158,27 @@ function autoReportsRun_() {
     objs.forEach(o => {
       const id = String(o.id);
       if (state.done.indexOf(id) >= 0) return;
-      if (arch.some(r => String(r.obj_id) === id && r.week === state.wk && r.status === REPORT_STATUS.ACTUAL)) {
+      if (Date.now() - start > AUTO_REP.BUDGET_MS) { left++; return; }
+      const manual = arch.filter(r => String(r.obj_id) === id && r.week === state.wk && r.status === REPORT_STATUS.ACTUAL).pop();
+      if (manual) { // отчёт за неделю уже сделан вручную: новый не создаём, но в CRM он должен быть
+        let note = 'отчёт создан вручную' + (String(manual.crm).indexOf('✓') === 0 ? ', в CRM уже отправлен' : '');
+        if (String(manual.crm).indexOf('✓') !== 0) {
+          try {
+            rep.getRange('B3').setValue(id + ' · ' + o.name);
+            rep.getRange('B4').setValue(label);
+            SpreadsheetApp.flush();
+            const st = sendReportToCrm_(o, readReportValues_(), manual.pdf_link, '', state.wk);
+            const a = readTable_('ARCH');
+            const row = a.rows.find(r => r._row === manual._row);
+            if (row && st) writeFields_(a.sh, 'ARCH', row._row, { crm: st });
+            note += st ? ' · ' + st : '';
+          } catch (e) { note += ' · ⚠ CRM: ' + e.message; }
+        }
         state.done.push(id);
-        state.results.push({ name: o.name, note: 'отчёт за неделю уже был создан вручную — пропущен' });
+        state.results.push({ name: o.name, pdf: manual.pdf_link, note: note });
+        props.setProperty('AUTO_REP_STATE', JSON.stringify(state));
         return;
       }
-      if (Date.now() - start > AUTO_REP.BUDGET_MS) { left++; return; }
       try {
         rep.getRange('B3').setValue(id + ' · ' + o.name);
         rep.getRange('B4').setValue(label);

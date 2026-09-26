@@ -10,8 +10,8 @@
  * Ограничение API: поиск не чаще 1 раза в 6 секунд — при массовой отметке используйте «Отправить отмеченные в CRM».
  *
  * Отчёт клиенту: при «Создать отчёт клиенту» в карточку объекта (ID объекта = ID карточки в CRM) добавляются
- * комментарий с текстом отчёта и ссылкой на PDF и — если есть — комментарий «для себя» (05_ОТЧЁТ_КЛИЕНТУ, B6)
- * и список просроченных задач. Клиенту в PDF «для себя» не попадает.
+ * всегда два комментария: отчёт для клиента (текст отчёта и ссылка на PDF) и для руководителя (выполнение задач недели,
+ * невыполненные и просроченные задачи, «Комментарий для себя» из 05_ОТЧЁТ_КЛИЕНТУ, B6). В PDF клиенту второе не попадает.
  */
 
 const CRM_BASE_DEFAULT = 'https://agencies-p.topnlab.ru/public';
@@ -88,7 +88,7 @@ function crmPostNote_(cfg, type, id, note) {
 // ───────────────────────── отчёт клиенту → карточка объекта ─────────────────────────
 
 /** Текст комментария «отчёт клиенту» и внутреннего комментария для руководителя. */
-function reportCrmNotes_(obj, values, pdfUrl, internal) {
+function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
   const kv = values.kv, t = values.tables;
   const rows = (ph, empty) => {
     const r = (t[ph] || []).filter(x => x[1] && x[0] !== '—');
@@ -103,31 +103,35 @@ function reportCrmNotes_(obj, values, pdfUrl, internal) {
     kv.COMMENT ? '\nКомментарий для клиента:\n' + kv.COMMENT : '',
     pdfUrl ? '\nPDF отчёта: ' + pdfUrl : '',
   ].filter(Boolean).join('\n');
-  const overdue = readTable_('TASK').rows.filter(x => String(x.obj_id) === String(obj.id) && x.overdue === 'ПРОСРОЧЕНО');
+  const tasks = readTable_('TASK').rows.filter(x => String(x.obj_id) === String(obj.id) && x.task);
+  const cls = x => x.status ? dictClassOf_('task_status', x.status) : CLS.OPEN;
+  const week = wk ? tasks.filter(x => x.week === wk && cls(x) !== CLS.CANCEL) : [];
+  const done = week.filter(x => cls(x) === CLS.DONE);
+  const notDone = week.filter(x => cls(x) !== CLS.DONE);
+  const overdue = tasks.filter(x => cls(x) === CLS.OPEN && x.deadline instanceof Date && x.deadline < today_());
   const own = String(internal || '').trim();
-  const inner = own || overdue.length ? [
-    'ДЛЯ РУКОВОДИТЕЛЯ (клиенту не отправляется) — отчёт №' + (kv.REPORT_NO || '') + ' за ' + (kv.PERIOD || ''),
-    own ? '\n' + own : '',
-    overdue.length ? '\nПросрочено задач: ' + overdue.length + '\n' + overdue.slice(0, 10).map(x => '• ' + x.task + ' (' + (x.owner || '—') + ', срок ' + fmtDate_(x.deadline) + ')').join('\n') : '',
-  ].filter(Boolean).join('\n') : '';
+  const line = x => '• ' + x.task + ' (' + (x.owner || '—') + (x.status ? ', ' + x.status : '') + (x.deadline instanceof Date ? ', срок ' + fmtDate_(x.deadline) : '') + ')';
+  const inner = [
+    'ДЛЯ РУКОВОДИТЕЛЯ (клиенту не отправляется) — отчёт №' + (kv.REPORT_NO || '') + ' за ' + (kv.PERIOD || '') + ' — ' + obj.name,
+    '\nВыполнение задач недели: ' + (week.length ? done.length + ' из ' + week.length + ' (' + Math.round(done.length / week.length * 100) + '%)' : 'задачи на неделю не внесены'),
+    notDone.length ? '\nНе выполнено:\n' + notDone.slice(0, 15).map(line).join('\n') : '',
+    '\nПросрочено задач: ' + overdue.length + (overdue.length ? '\n' + overdue.slice(0, 10).map(line).join('\n') : ''),
+    own ? '\nКомментарий руководителя:\n' + own : '',
+  ].filter(Boolean).join('\n');
   return { client: client, inner: inner };
 }
 
 /** Отправляет отчёт в карточку объекта (ID объекта = ID карточки в CRM). Возвращает текст статуса. */
-function sendReportToCrm_(obj, values, pdfUrl, internal) {
+function sendReportToCrm_(obj, values, pdfUrl, internal, wk) {
   const cfg = crmConfig_();
   if (!cfg.key) return '';
   if (!cfg.user) return '⚠ не задан ID автора заметок (Сервис → Подключить CRM TopenLab)';
   if (!isCrmId_(obj.id)) return '⚠ у объекта нет ID из CRM (сейчас «' + obj.id + '»)';
-  const n = reportCrmNotes_(obj, values, pdfUrl, internal);
+  const n = reportCrmNotes_(obj, values, pdfUrl, internal, wk);
   const a = crmPostNote_(cfg, 'realty', obj.id, n.client);
   if (!a.ok) return '⚠ CRM: отчёт не добавлен (' + a.code + (a.msg ? ', ' + a.msg : '') + ')';
-  let st = '✓ в CRM ' + fmtDate_(new Date()) + ': отчёт';
-  if (n.inner) {
-    const b = crmPostNote_(cfg, 'realty', obj.id, n.inner);
-    st += b.ok ? ' + комментарий для себя' : ', ⚠ комментарий для себя не добавлен (' + b.code + ')';
-  }
-  return st;
+  const b = crmPostNote_(cfg, 'realty', obj.id, n.inner);
+  return '✓ в CRM ' + fmtDate_(new Date()) + ': отчёт для клиента' + (b.ok ? ' + для руководителя' : ', ⚠ для руководителя не добавлен (' + b.code + ')');
 }
 
 /** Меню: отправить в CRM отчёт, выбранный в 05_ОТЧЁТ_КЛИЕНТУ (например, после правок или если CRM подключили позже). */
@@ -142,7 +146,7 @@ function crmSendReport() {
   const arch = readTable_('ARCH');
   const rows = arch.rows.filter(r => String(r.obj_id) === id && r.week === wk && r.status === REPORT_STATUS.ACTUAL);
   const last = rows[rows.length - 1];
-  const st = sendReportToCrm_(obj, readReportValues_(), last ? last.pdf_link : '', rep.getRange('B6').getValue());
+  const st = sendReportToCrm_(obj, readReportValues_(), last ? last.pdf_link : '', rep.getRange('B6').getValue(), wk);
   if (last) writeFields_(arch.sh, 'ARCH', last._row, { crm: st });
   ui.alert('Отчёт → CRM', st || 'CRM не подключена', ui.ButtonSet.OK);
 }

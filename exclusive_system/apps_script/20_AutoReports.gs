@@ -2,8 +2,8 @@
  * 20_AutoReports — еженедельные отчёты автоматически: каждую пятницу в 20:00 (МСК).
  *
  * По каждому объекту «в работе» за текущую неделю: Google Doc + PDF в папке объекта и комментарий
- * в карточку TopenLab (как «Создать отчёт клиенту»). Объекты, по которым отчёт за эту неделю уже создан вручную,
- * пропускаются. Клиенту система ничего не отправляет — ссылки на PDF приходят письмом руководителю.
+ * в карточку TopenLab (как «Создать отчёт клиенту»). Если отчёт за эту неделю уже создан вручную, новый не создаётся,
+ * но если он ещё не попал в CRM — отправляется. Клиенту система ничего не отправляет — ссылки на PDF приходят письмом руководителю.
  * Поля «Комментарий для клиента / для себя» (05_ОТЧЁТ_КЛИЕНТУ) в автоотчёт не попадают — они общие для всех объектов.
  * Если за один запуск (лимит Google — 6 минут) не успели все объекты, продолжает сам через минуту.
  */
@@ -69,12 +69,27 @@ function autoReportsRun_() {
     objs.forEach(o => {
       const id = String(o.id);
       if (state.done.indexOf(id) >= 0) return;
-      if (arch.some(r => String(r.obj_id) === id && r.week === state.wk && r.status === REPORT_STATUS.ACTUAL)) {
+      if (Date.now() - start > AUTO_REP.BUDGET_MS) { left++; return; }
+      const manual = arch.filter(r => String(r.obj_id) === id && r.week === state.wk && r.status === REPORT_STATUS.ACTUAL).pop();
+      if (manual) { // отчёт за неделю уже сделан вручную: новый не создаём, но в CRM он должен быть
+        let note = 'отчёт создан вручную' + (String(manual.crm).indexOf('✓') === 0 ? ', в CRM уже отправлен' : '');
+        if (String(manual.crm).indexOf('✓') !== 0) {
+          try {
+            rep.getRange('B3').setValue(id + ' · ' + o.name);
+            rep.getRange('B4').setValue(label);
+            SpreadsheetApp.flush();
+            const st = sendReportToCrm_(o, readReportValues_(), manual.pdf_link, '', state.wk);
+            const a = readTable_('ARCH');
+            const row = a.rows.find(r => r._row === manual._row);
+            if (row && st) writeFields_(a.sh, 'ARCH', row._row, { crm: st });
+            note += st ? ' · ' + st : '';
+          } catch (e) { note += ' · ⚠ CRM: ' + e.message; }
+        }
         state.done.push(id);
-        state.results.push({ name: o.name, note: 'отчёт за неделю уже был создан вручную — пропущен' });
+        state.results.push({ name: o.name, pdf: manual.pdf_link, note: note });
+        props.setProperty('AUTO_REP_STATE', JSON.stringify(state));
         return;
       }
-      if (Date.now() - start > AUTO_REP.BUDGET_MS) { left++; return; }
       try {
         rep.getRange('B3').setValue(id + ' · ' + o.name);
         rep.getRange('B4').setValue(label);
