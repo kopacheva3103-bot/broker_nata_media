@@ -265,7 +265,7 @@ function reportRows_() {
     { ph: 'REPORT_NO', label: 'Отчёт №', f: '=' + P.no },
     { ph: 'PERIOD', label: 'Период', f: '=IF(' + P.start + '="","",TEXT(' + P.start + ',"dd.mm.yyyy")&" – "&TEXT(' + P.start + '+4,"dd.mm.yyyy"))' },
     { ph: 'OBJECT', label: 'Объект', f: look('address') },
-    { ph: 'CUSTOMER', label: 'Заказчик', f: look('customer') },
+    { ph: 'CUSTOMER', label: 'Заказчик', f: '=IFERROR(IF(VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.customer]]},2,FALSE)="","Заказчик",VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.customer]]},2,FALSE)),"Заказчик")' }, // пусто → «Заказчик»
     { ph: 'EXECUTOR', label: 'Исполнитель', f: '=CFG_EXEC_NAME' },
     {
       ph: 'SUMMARY', label: 'Итоги недели в цифрах', lines: true,
