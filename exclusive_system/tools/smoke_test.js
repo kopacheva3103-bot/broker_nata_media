@@ -235,4 +235,17 @@ console.log('inbox:', ib.done.join(' | '), '| errors:', ib.errors.join(';'), '| 
 ['НОВ-001', 'НОВ-002'].forEach(id => { const o = X.objectById_(id); console.log(id, o && [o.name, o.kind, o.deal, o.address, o.area, o.price, o.status, !!o.tab_url].join(' / ')); });
 console.log('files moved:', F1.where, F2.where, F3.where, 'inbox left:', INBOX.files.length, 'tmp trashed:', TRASHED.length);
 console.log('guess:', JSON.stringify(X.guessObjectInfo_('КП «Остров»\nМосковская обл., Истринский р-н, КП Остров, уч. 12\nДом 450,5 м² на участке 25 соток\nСтоимость: 185 000 000 ₽\nЦена за м²: 410 000 ₽\nПродажа')));
+const CIAN1 = 'Продавцы, Мои объекты \n\nПродается помещ.своб.назнач-я | 756.2 м²\n\nПосёлок "" ООО "БЭСТКОН"\n\nг. Москва,ВАО,Преображенское р-н,ул. Лермонтовская,д. 1\n\nПреображенская площадь 13 мин.\n\n₽ 225 500 000 298 202 ₽/м²\n\nВход\nПродажа коммерческого помещения 756,2 м² — можно сдать в аренду.';
+const CIAN2 = 'Арендодатели, Мои объекты \n\n|  |\n| :-: |\n\nСдается коттедж | 1200 м² | 30 соток\n\nМосковская обл.,Одинцовский р-н,д. Примерово,тер. Лесной\n\n**₽ 1 490 000**\n\n1 242 ₽/м²\n\nПредлагается в долгосрочную аренду роскошный особняк 1200 м²';
+const CIAN3 = 'Продавцы, Мои объекты\nПродается 4-комн. квартира | 179 м²\nг. Москва,ЗАО,ул. Примерная,д. 7,к. 2\n₽ 550 000 000 3 072 626 ₽/м²';
+console.log('cian1:', JSON.stringify(X.guessObjectInfo_(CIAN1)));
+console.log('cian2:', JSON.stringify(X.guessObjectInfo_(CIAN2)));
+console.log('cian3:', JSON.stringify(X.guessObjectInfo_(CIAN3)));
+console.log('cian names:', JSON.stringify(X.parseInboxName_('Арендодатели, Мои объекты.pdf')), JSON.stringify(X.parseInboxName_('сосновый бор.pdf')));
 console.log('guess2:', JSON.stringify(X.guessObjectInfo_('ЖК Время\nг. Москва, ул. Лермонтовская, д.1\nПомещение 756,2 кв.м\n225,5 млн ₽\n298 000 ₽/м²')));
+// сопоставление имени файла с объектом (основы слов, адрес)
+X.runObjectsImport(['\tЖК Остров, коммерция\tКоммерция', '\tЖК Остров, квартира\tЖильё', '\tСосновый Бор, коттедж 169 м²\tЗагородный дом\tПродажа\tКП Сосновый бор, д. 18'].join('\n'));
+const nm = q => { const o = X.findObjectByName_(X.parseInboxName_(q).name); return o ? o.id + ' ' + o.name : '—'; };
+console.log('match:', ['лермонтовский.pdf', 'жк остров квартира.pdf', 'Остров коммерция.pdf', 'сосновый бор.pdf', 'остров.pdf', 'Арендодатели, Мои объекты.pdf', 'беговая.pdf'].map(q => q + ' → ' + nm(q)).join(' | '));
+console.log('by address:', (X.findObjectByAddress_('г. Москва, ВАО, Преображенское р-н, ул. Лермонтовская, д. 1') || {}).id, (X.findObjectByAddress_('г. Москва, ул. Беговая, д. 5') || {}).id || '—');
+console.log('import again (no dup):', X.previewObjectsImport('\tсосновый бор\t\t\t\t169,1\t65000000').names.join(','));

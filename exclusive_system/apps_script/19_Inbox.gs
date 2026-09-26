@@ -52,8 +52,9 @@ function processInbox_() {
       const parsed = parseInboxName_(fname);
       let obj = parsed.id ? objectById_(parsed.id) : findObjectByName_(parsed.name);
       let note = '';
+      const info = obj ? null : guessObjectInfo_(extractFileText_(file));
+      if (!obj && info.address) obj = findObjectByAddress_(info.address);
       if (!obj) {
-        const info = guessObjectInfo_(extractFileText_(file));
         const id = parsed.id || nextTempObjectId_();
         const name = parsed.name || info.name || 'Новый объект ' + id;
         const row = { id: id, name: name, status: dictValues_('obj_status').indexOf('Подготовка') >= 0 ? 'Подготовка' : (dictValues_('obj_status')[0] || ''), created_at: today_() };
@@ -87,18 +88,61 @@ function parseInboxName_(fname) {
   let id = '';
   const m = /^\s*(\d{3,}|[A-Za-zА-Яа-яЁё]{2,6}-\d{1,6})\s*[-—–.·:)]*\s+(.+)$/.exec(base);
   if (m) { id = m[1].toUpperCase(); base = m[2]; }
-  const name = (' ' + base + ' ').replace(/(^|[\s,.;()«»"-])(презентация|презентации|коммерческое предложение|кп|pdf|финал|final|new|новая|версия|v\d+)(?=[\s,.;()«»"-]|$)/gi, '$1 ')
-    .replace(/\(\d+\)/g, ' ').replace(/[\s\-—–_.]+$/g, '').replace(/^[\s\-—–_.]+/g, '').replace(/\s{2,}/g, ' ').trim();
+  base = base.replace(/^(продавцы|арендодатели)\s*,?\s*мои объекты\s*/i, ''); // имя выгрузки из ЦИАН
+  let name = (' ' + base + ' ').replace(/(^|[\s,.;()«»"-])(презентация|презентации|коммерческое предложение|кп|pdf|финал|final|new|новая|версия|v\d+)(?=[\s,.;()«»"-]|$)/gi, '$1 ')
+    .replace(/\(\d+\)/g, ' ').replace(/[\s\-—–_.,]+$/g, '').replace(/^[\s\-—–_.,]+/g, '').replace(/\s{2,}/g, ' ').trim();
+  if (name && name === name.toLowerCase()) name = name.replace(/(^|\s)([а-яёa-z])/g, (x, sp, c) => sp + c.toUpperCase()); // «сосновый бор» → «Сосновый Бор»
   return { id: id, name: name };
 }
 
+const MATCH_STOP_ = ['жк', 'кп', 'дом', 'пос', 'ул', 'г', 'д', 'стр', 'корп', 'мои', 'объекты', 'продавцы', 'арендодатели', 'новый', 'объект',
+  'москва', 'московская', 'обл', 'область', 'район', 'улица', 'город', 'деревня', 'поселок', 'территория', 'тер', 'вао', 'цао', 'зао', 'сао', 'юао', 'свао', 'сзао', 'юзао', 'ювао'];
+
+/** Значимые слова: «ЖК Время · Лермонтовская 1» → ['время', 'лермонтовская'] (+ номера, если withNums). */
+function matchWords_(s, withNums) {
+  return String(s || '').toLowerCase().replace(/ё/g, 'е').split(/[^a-zа-я0-9]+/)
+    .filter(w => w && MATCH_STOP_.indexOf(w) < 0 && (/^\d+$/.test(w) ? withNums : w.length >= 3));
+}
+
+/** Слово запроса совпадает со словом объекта по основе: «лермонтовский» ↔ «лермонтовская», «озера» ↔ «озёра». */
+function wordMatch_(q, w) {
+  if (/^\d+$/.test(q) || /^\d+$/.test(w)) return q === w;
+  const stem = x => x.slice(0, x.length <= 5 ? x.length : Math.max(5, x.length - 3));
+  return w.indexOf(stem(q)) === 0 || q.indexOf(stem(w)) === 0;
+}
+
+/** Объект по названию из имени файла: все значимые слова должны найтись в названии или адресе объекта. */
 function findObjectByName_(name) {
   const norm = x => String(x || '').toLowerCase().replace(/ё/g, 'е').replace(/[«»"']/g, '').replace(/\s+/g, ' ').trim();
   const n = norm(name);
-  if (n.length < 4) return null;
+  if (n.length < 3) return null;
   const rows = readTable_('OBJ').rows.filter(o => o.id && o.name);
-  return rows.find(o => norm(o.name) === n) ||
-    rows.find(o => { const on = norm(o.name); return on.length >= 4 && (on.indexOf(n) >= 0 || n.indexOf(on) >= 0); }) || null;
+  const exact = rows.find(o => norm(o.name) === n);
+  if (exact) return exact;
+  const q = matchWords_(n, false);
+  if (!q.length) return null;
+  let best = null, bestScore = -1e9, tie = false;
+  rows.forEach(o => {
+    const words = matchWords_(o.name + ' ' + (o.address || ''), false);
+    if (!q.every(x => words.some(w => wordMatch_(x, w)))) return;
+    const nameWords = matchWords_(o.name, false);
+    const score = nameWords.filter(w => q.some(x => wordMatch_(x, w))).length * 10 - nameWords.length; // точнее совпало название — выше
+    if (!best || score > bestScore) { best = o; bestScore = score; tie = false; } else if (score === bestScore) tie = true;
+  });
+  return tie ? null : best;
+}
+
+/** Объект по адресу из презентации: улица / населённый пункт и номер дома объекта есть в адресе. */
+function findObjectByAddress_(address) {
+  const a = matchWords_(address, true);
+  if (a.length < 2) return null;
+  const found = readTable_('OBJ').rows.filter(o => {
+    if (!o.id || !o.address) return false;
+    const w = matchWords_(String(o.address).split('(')[0], true); // «д.1 (помещение 1Н, …)» — уточнение в скобках не сравниваем
+    const words = w.filter(x => !/^\d+$/.test(x)), house = w.find(x => /^\d+$/.test(x));
+    return words.length >= 1 && (house || words.length >= 2) && words.every(x => a.some(y => wordMatch_(x, y))) && (!house || a.indexOf(house) >= 0);
+  });
+  return found.length === 1 ? found[0] : null;
 }
 
 function nextTempObjectId_() {
@@ -136,40 +180,70 @@ function extractFileText_(file) {
   }
 }
 
-/** Адрес, площадь, цена, тип, сделка — из текста презентации (эвристика, проверяйте). */
+/** Адрес, площадь, цена, тип, сделка — из текста презентации (эвристика, проверяйте). Понимает выгрузку объекта из ЦИАН. */
 function guessObjectInfo_(text) {
-  const t = String(text || '').replace(/ /g, ' ');
+  const t = String(text || '').replace(/\u00a0/g, ' ').replace(/\*\*/g, '').replace(/\\~/g, '~');
   const info = {};
   if (!t.trim()) return info;
   const lines = t.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const num = s => Number(String(s).replace(/\s/g, '').replace(',', '.'));
+  // ЦИАН: «Продается помещ.своб.назнач-я | 756.2 м²», «Сдается коттедж | 1200 м² | 30 соток»
+  const hdr = /(?:^|\n)\s*(Прода[её]тся|Сда[её]тся)\s+([^|\n]+?)\s*\|\s*(\d[\d ]*(?:[.,]\d+)?)\s*(?:м²|м2)/i.exec(t);
+  if (hdr) { info.deal = /^сда/i.test(hdr[1]) ? 'Аренда' : 'Продажа'; info.area = num(hdr[3]); }
   const strong = /(г\.\s*Москва|Москва,|Московская обл|обл\.|МО,|ул\.|улица|проспект|пр-т|шоссе|переулок|пер\.|бульвар|наб\.|р-н|район)/i;
   const weak = /(пос\.|посёлок|поселок|КП\s|ЖК\s)/i;
-  const addr = lines.find(l => strong.test(l) && l.length <= 160) || lines.find(l => weak.test(l) && l.length <= 160);
-  if (addr) info.address = addr.replace(/^(адрес|расположение)\s*[:—-]\s*/i, '');
-  const num = s => Number(String(s).replace(/[\s ]/g, '').replace(',', '.'));
-  const am = /(\d{1,3}(?:[\s ]\d{3})*(?:[.,]\d+)?|\d+(?:[.,]\d+)?)\s*(?:м²|м2|кв\.?\s?м)/i.exec(t);
-  if (am && num(am[1]) > 5) info.area = num(am[1]);
-  let best = 0;
-  const priceRe = /(\d{1,3}(?:[\s ]\d{3})+|\d+(?:[.,]\d+)?)\s*(млрд|млн)?\.?\s*(?:₽|руб|р\.)/gi;
-  let pm;
-  while ((pm = priceRe.exec(t)) !== null) {
-    let v = num(pm[1]);
-    if (/млрд/i.test(pm[2] || '')) v *= 1e9; else if (/млн/i.test(pm[2] || '')) v *= 1e6;
-    const around = t.slice(Math.max(0, pm.index - 25), pm.index);
-    const after = t.slice(pm.index + pm[0].length, pm.index + pm[0].length + 12).split(/\r?\n/)[0];
-    const before = around.split(/\r?\n/).pop();
-    if (/^\s*(за\s*(м²|м2|кв)|\/\s*м)/i.test(after) || /за\s*(м²|м2|кв)/i.test(before)) continue; // цена за м²
-    if (v > best) best = v;
+  const addrOk = l => l.length <= 160 && !/мои объекты|^\|/i.test(l);
+  const addr = lines.find(l => strong.test(l) && addrOk(l)) || lines.find(l => weak.test(l) && addrOk(l));
+  if (addr) info.address = addr.replace(/^(адрес|расположение)\s*[:—-]\s*/i, '').replace(/,(?=\S)/g, ', ');
+  if (!info.area) {
+    const am = /(\d{1,3}(?:[ ]\d{3})*(?:[.,]\d+)?|\d+(?:[.,]\d+)?)\s*(?:м²|м2|кв\.?\s?м)/i.exec(t);
+    if (am && num(am[1]) > 5) info.area = num(am[1]);
   }
-  if (best >= 100000) info.price = Math.round(best);
+  // ЦИАН: «₽ 225 500 000 298 202 ₽/м²» (цена и цена за м² подряд) или «₽ 1 490 000»
+  const cp = /(?:^|\n)[ \t]*₽[ \t]*(\d{1,3}(?:[ ]\d{3})*)([ \t]*₽[ \t]*\/[ \t]*м)?/.exec(t);
+  if (cp) {
+    const g = cp[1].split(' ');
+    let v = num(cp[1]);
+    if (cp[2] && g.length > 2) {
+      v = 0;
+      for (let k = g.length - 1; k >= 1 && !v; k--) { // делим на «цену» и «за м²»: цена / площадь ≈ цена за м²
+        const left = num(g.slice(0, k).join('')), right = num(g.slice(k).join(''));
+        if (info.area && Math.abs(left / info.area - right) <= Math.max(2, right * 0.02)) v = left;
+      }
+      if (!v) v = num(g.slice(0, Math.max(1, g.length - 2)).join(''));
+    }
+    if (v >= 10000) info.price = v;
+  }
+  if (!info.price) {
+    let best = 0;
+    const priceRe = /(\d{1,3}(?:[ ]\d{3})+|\d+(?:[.,]\d+)?)\s*(млрд|млн)?\.?\s*(?:₽|руб|р\.)/gi;
+    let pm;
+    while ((pm = priceRe.exec(t)) !== null) {
+      let v = num(pm[1]);
+      if (/млрд/i.test(pm[2] || '')) v *= 1e9; else if (/млн/i.test(pm[2] || '')) v *= 1e6;
+      const around = t.slice(Math.max(0, pm.index - 25), pm.index);
+      const after = t.slice(pm.index + pm[0].length, pm.index + pm[0].length + 12).split(/\r?\n/)[0];
+      const before = around.split(/\r?\n/).pop();
+      if (/^\s*(за\s*(м²|м2|кв)|\/\s*м)/i.test(after) || /за\s*(м²|м2|кв)/i.test(before)) continue; // цена за м²
+      if (v > best) best = v;
+    }
+    if (best >= 100000) info.price = Math.round(best);
+  }
   const low = t.toLowerCase();
-  info.deal = /аренд|в месяц|\/мес|ставка/.test(low) && !/продаж|продаётся|продается/.test(low) ? 'Аренда' : (/продаж|продаётся|продается|стоимость/.test(low) ? 'Продажа' : '');
-  const kinds = dictValues_('obj_kinds');
-  const k = /особняк/.test(low) ? 'Особняк' : /(загородн|коттедж|участок|кп\s|посёлок|поселок|дом\s)/.test(low) ? 'Загородный дом'
-    : /(псн|помещени|коммерч|офис|ритейл|габ|стрит-ритейл|торгов)/.test(low) ? 'Коммерция' : /(квартир|апартамент|жк\s)/.test(low) ? 'Жильё' : '';
-  if (k && kinds.indexOf(k) >= 0) info.kind = k;
-  const title = lines.find(l => l.length >= 4 && l.length <= 60 && !/^\d/.test(l));
-  if (title) info.name = title;
-  Object.keys(info).forEach(x => { if (info[x] === '') delete info[x]; });
+  if (!info.deal) info.deal = /аренд|в месяц|\/мес|ставка/.test(low) && !/продаж|продаётся|продается/.test(low) ? 'Аренда' : (/продаж|продаётся|продается|стоимость/.test(low) ? 'Продажа' : '');
+  const kindOf = x => /особняк|усадьб/.test(x) ? 'Особняк' : /(загородн|коттедж|таунхаус|кп\s|посёлок|поселок|дом\b|дом\s)/.test(x) ? 'Загородный дом'
+    : /(псн|помещ|своб|коммерч|офис|ритейл|габ|торгов|склад)/.test(x) ? 'Коммерция' : /(квартир|апартамент|\d-комн|жк\s)/.test(x) ? 'Жильё'
+    : /(участок|земл)/.test(x) ? 'Земля' : '';
+  const k = (hdr && kindOf(hdr[2].toLowerCase() + ' ')) || kindOf(low);
+  if (k && dictValues_('obj_kinds').indexOf(k) >= 0) info.kind = k;
+  if (hdr) { // название: «Коттедж 1200 м² · д. Примерово»
+    const place = (info.address || '').split(/,\s*/).filter(x => x && !/москва|обл\.|область|р-н|район|^[СЮЗВЦ]{1,2}АО$/i.test(x)).slice(0, 2).join(', ');
+    const what = hdr[2].replace(/помещ\.?\s*своб\.?\s*назнач-?я/i, 'ПСН').trim();
+    info.name = what.charAt(0).toUpperCase() + what.slice(1) + ' ' + String(info.area).replace('.', ',') + ' м²' + (place ? ' · ' + place : '');
+  } else {
+    const title = lines.find(l => l.length >= 4 && l.length <= 60 && !/^\d/.test(l) && !/мои объекты|^\|/i.test(l));
+    if (title) info.name = title;
+  }
+  Object.keys(info).forEach(x => { if (info[x] === '' || info[x] === undefined) delete info[x]; });
   return info;
 }

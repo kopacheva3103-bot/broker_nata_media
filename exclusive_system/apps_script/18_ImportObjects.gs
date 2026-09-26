@@ -2,6 +2,7 @@
  * 18_ImportObjects — «Загрузить объекты списком»: вставить таблицу (из CRM, Excel, Google Таблицы)
  * и разом добавить объекты в 01_ОБЪЕКТЫ. Формульные столбцы не затрагиваются, вкладки создаются сами.
  * Объекты с уже существующим ID не дублируются — у них дополняются пустые поля.
+ * Без ID: объект ищется по названию (дополняются пустые поля), не найден — получает временный ID «НОВ-001».
  */
 
 const IMPORT_COLS = [
@@ -15,7 +16,7 @@ function importObjects() {
     '<div style="font:14px Arial,sans-serif">' +
     '<div>Скопируйте строки из CRM / Excel / Google Таблицы и вставьте сюда. Столбцы по порядку (лишние справа можно не заполнять):</div>' +
     '<div style="color:#37474F;font-size:12px;margin:6px 0"><b>' + IMPORT_COLS.map(c => c[1]).join(' | ') + '</b></div>' +
-    '<div style="color:#80868B;font-size:12px">Обязательны только ID и название. Строка заголовков, если есть, пропустится сама.</div>' +
+    '<div style="color:#80868B;font-size:12px">Обязательно только название. Без ID из CRM объект получит временный ID «' + INBOX_TEMP_PREFIX + '001» (замените потом в 01_ОБЪЕКТЫ). Строка заголовков, если есть, пропустится сама.</div>' +
     '<textarea id="t" style="width:100%;height:230px;font:12px monospace;margin-top:6px"></textarea>' +
     '<div style="margin-top:8px"><button onclick="prev()">Проверить</button> <button id="go" onclick="go()" disabled>Загрузить</button></div>' +
     '<div id="r" style="margin-top:8px;font-size:12px;max-height:150px;overflow:auto"></div></div><script>' +
@@ -81,6 +82,7 @@ function parseObjectsImport_(text) {
     return s;
   };
   const add = [], upd = [], errors = [], seen = {};
+  let tempN = Number(String(nextTempObjectId_()).slice(INBOX_TEMP_PREFIX.length)) - 1;
   String(text || '').split(/\r?\n/).forEach((line, n) => {
     if (!line.trim()) return;
     let cells = line.indexOf('\t') >= 0 ? line.split('\t') : line.split(/;|\|/);
@@ -88,7 +90,12 @@ function parseObjectsImport_(text) {
     if (/^id|^№ ?объекта|^номер/i.test(cells[0]) && /назван|объект/i.test(cells[1] || '')) return; // заголовок
     const o = {};
     IMPORT_COLS.forEach((c, i) => { o[c[0]] = c[0] === 'id' || c[0] === 'name' ? String(cells[i] || '').trim() : pick(c[0], cells[i]); });
-    if (!o.id || !o.name) { errors.push('Строка ' + (n + 1) + ': нет ID или названия'); return; }
+    if (!o.name) { errors.push('Строка ' + (n + 1) + ': нет названия'); return; }
+    if (!o.id) {
+      const same = findObjectByName_(o.name);
+      if (same) o.id = String(same.id);
+      else { const k = String(++tempN); o.id = INBOX_TEMP_PREFIX + (k.length < 3 ? '00'.slice(k.length - 1) : '') + k; }
+    }
     if (seen[o.id]) { errors.push('Строка ' + (n + 1) + ': ID ' + o.id + ' повторяется в списке'); return; }
     seen[o.id] = true;
     ['kind', 'deal', 'status', 'manager'].forEach((k, j) => {
