@@ -202,3 +202,17 @@ console.log('hidden:', X.applyTabVisibility_());
 const tSh2 = X.sheet_('TASK'); const orow = X.lastDataRow_(tSh2, X.sheetSpecs_().TASK) + 1;
 tSh2.getRange(orow, 1).setValue('TASK-9999');
 console.log('orphan removed:', X.removeOrphanRows_('TASK') === 1, !X.readTable_('TASK').rows.some(r => r.id === 'TASK-9999'));
+// загрузка объектов списком
+const imp = [
+  'ID\tНазвание\tТип\tСделка\tАдрес\tПлощадь\tЦена\tСтатус',
+  '4801\tКП Остров, дом 450\tЗагородный дом\tПродажа\tМО, КП Остров, уч. 12\t450,5\t185 000 000\tВ работе',
+  '4802\tОсобняк Остоженка\tОсобняк\tАренда\tМосква, Остоженка 7\t900\t3500000\tПодготовка',
+  '4777\tОсобняк на Остоженке\t\t\tМосква, Остоженка 5',
+  '\tБез ID',
+  '4803\tСтранный тип\tЯхта',
+].join('\n');
+const pv2 = X.previewObjectsImport(imp);
+console.log('import preview:', pv2.add, pv2.upd, pv2.errors.length, pv2.errors.join(' / '));
+console.log(X.runObjectsImport(imp));
+const o4801 = X.objectById_('4801');
+console.log('4801:', o4801.area, o4801.price, o4801.kind, o4801.status, !!o4801.tab_url, '| 4777 address:', X.objectById_('4777').address);

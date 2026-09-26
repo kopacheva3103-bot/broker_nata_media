@@ -6,6 +6,7 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu(SYS.MENU)
     .addItem('➜ Открыть вкладку объекта', 'openObjectTab')
+    .addItem('➜ Загрузить объекты списком', 'importObjects')
     .addItem('➜ Создать вкладки для новых объектов', 'createObjectTabs')
     .addItem('➜ Обновить документы объектов', 'refreshObjectFiles')
     .addSeparator()
