@@ -16,6 +16,10 @@ function onEditHandler(e) {
     try { handleObjectTabEdit_(e, sh); } catch (err) { toast_('История не записана: ' + err.message, 'Внимание', 8); }
     return;
   }
+  if (sh.getName() === SHEET_NAMES.DICT) {
+    try { handleDictEdit_(e); } catch (err) { toast_('Справочник: ' + err.message, 'Внимание', 8); }
+    return;
+  }
   const spec = specBySheetName_(sh.getName());
   if (!spec || spec.readonly) return;
   const rLast = e.range.getLastRow();
@@ -31,6 +35,29 @@ function onEditHandler(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/** Переименовали сотрудника в 07_СПРАВОЧНИКИ («Ассистент» → «Мария») — имя меняется во всех журналах и объектах. */
+function handleDictEdit_(e) {
+  const d = dictLayout_().people;
+  if (!d || e.range.getColumn() !== d.col || e.range.getNumRows() !== 1 || e.range.getNumColumns() !== 1 || e.range.getRow() < 2) return;
+  const oldName = String(e.oldValue || '').trim(), newName = String(e.value || '').trim();
+  if (!oldName || !newName || oldName === newName) return;
+  const n = renamePerson_(oldName, newName);
+  logHistory_([{ sheet: SHEET_NAMES.DICT, record_id: 'Сотрудник', field: 'Имя', old: oldName, new: newName, kind: HIST_KIND.CHANGE, note: 'заменено в журналах: ' + n }], userEmail_(e));
+  if (n) toast_('«' + oldName + '» → «' + newName + '»: заменено ' + n + ' раз в объектах и журналах.', 'Сотрудник переименован', 8);
+}
+
+function renamePerson_(oldName, newName) {
+  let n = 0;
+  [['OBJ', ['manager', 'assistant', 'smm']], ['TASK', ['owner']], ['BASE', ['owner']], ['CONT', ['owner']]].forEach(p => {
+    const sh = sheet_(p[0]);
+    p[1].forEach(k => {
+      const col = fieldIndex_(p[0], k);
+      n += sh.getRange(2, col, sh.getMaxRows() - 1, 1).createTextFinder(oldName).matchEntireCell(true).replaceAllWith(newName) || 0;
+    });
+  });
+  return n;
 }
 
 function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {

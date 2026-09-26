@@ -291,3 +291,10 @@ console.log('mail:', MAILS.length, MAILS[0] && MAILS[0].subject); console.log('a
 X.sheet_('REP').getRange('B5').setValue('');
 GEN.length = 0; X.readTable_('ARCH'); NOTES.length = 0; X.appendRow_('ARCH', { ts: new Date(), obj_id: '129866881', week: X.isoWeekKey_(X.today_()), status: X.REPORT_STATUS.ACTUAL, pdf_link: 'https://manual' });
 X.autoReportsJob(); console.log('skip manual:', GEN.every(g => g.indexOf('129866881|') !== 0), GEN.length, '| manual sent to CRM:', NOTES.length, (JSON.parse(NOTES[1] || '{}').note || '').split('\n').slice(0, 3).join(' / '));
+// переименование сотрудника в справочнике → во всех журналах
+const pc = X.dictLayout_().people.col; const dsh = X.sheet_('DICT');
+let prow = 2; while (prow < 20 && dsh.getRange(prow, pc).getValue() !== 'Ассистент') prow++;
+const beforeT = X.readTable_('TASK').rows.filter(t => t.owner === 'Ассистент').length;
+dsh.getRange(prow, pc).setValue('Мария');
+X.onEditHandler({ range: dsh.getRange(prow, pc), oldValue: 'Ассистент', value: 'Мария' });
+console.log('rename person:', beforeT, '→', X.readTable_('TASK').rows.filter(t => t.owner === 'Мария').length, 'left old:', X.readTable_('TASK').rows.filter(t => t.owner === 'Ассистент').length);
