@@ -31,6 +31,7 @@ function onOpen() {
       .addItem('⚙ Установить / обновить систему', 'setupSystem')
       .addItem('Обновить все вкладки объектов', 'rebuildObjectTabs')
       .addItem('Показать все вкладки объектов (в т.ч. закрытых)', 'showAllObjectTabs')
+      .addItem('Удалить объект (только руководитель)', 'deleteObject')
       .addItem('Подключить Instagram / Threads', 'connectSocial')
       .addItem('Подключить CRM TopenLab', 'connectCrm')
       .addItem('Тест: комментарий в карточку CRM', 'crmTestNote')

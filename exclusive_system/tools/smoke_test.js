@@ -326,3 +326,10 @@ PSTORE.TOPNLAB_PEOPLE = JSON.stringify({ 'Мария': '300271' });
 console.log('author:', X.crmAuthorId_(X.crmConfig_(), 'Мария'), X.crmAuthorId_(X.crmConfig_(), 'Наталья'), X.crmAuthorId_(X.crmConfig_(), ''));
 X.saveCrmSettings('', '', '', '', JSON.stringify([['Ассистент', ' 300271 '], ['SMM', '']]));
 console.log('saved people:', PSTORE.TOPNLAB_PEOPLE);
+// удаление объекта: строка + вкладка, журналы остаются
+{
+  const before = X.readTable_('OBJ').rows.filter(o => o.id).length;
+  const o = X.objectById_('129866881'); const hadTab = !!X.findObjectTab_(o);
+  X.deleteObject_(o);
+  console.log('delete object:', hadTab, before, '→', X.readTable_('OBJ').rows.filter(o => o.id).length, '| gone:', !X.objectById_('129866881'), '| tab gone:', !X.objectTabs_().some(t => String(t.getRange('I1').getValue()) === '129866881'));
+}

@@ -37,7 +37,7 @@ function sheetSpecs_() {
       F('manager', 'Ответственный', 'dd', { dict: 'people' }),
       F('assistant', 'Ассистент', 'dd', { dict: 'people' }),
       F('smm', 'SMM', 'dd', { dict: 'people' }),
-      F('customer', 'Заказчик (для отчёта)', 'text', { w: 170, d: 'Как в договоре: например, ООО «Ромашка».' }),
+      F('customer', 'Заказчик', 'text', { w: 170, d: 'Как в договоре: например, ООО «Ромашка».' }),
       F('contract_no', '№ договора', 'text', { w: 110 }),
       F('contract_date', 'Дата договора', 'date'),
       F('date_sign', 'Начало работы', 'date', { d: 'Дата начала эксклюзива / работы по объекту.' }),

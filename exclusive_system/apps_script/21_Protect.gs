@@ -95,3 +95,44 @@ function tabBackup_(id) {
   if (!row) return null;
   try { return JSON.parse(row[2]); } catch (e) { return null; }
 }
+
+// ───────────────────────── удаление объекта (только руководитель) ─────────────────────────
+
+/**
+ * Меню: удалить объект — строка в 01_ОБЪЕКТЫ и вкладка. Задачи, обзвон, контент и отчёты остаются в журналах
+ * (история работы), папка на Диске не удаляется — к имени добавляется «(удалён)».
+ */
+function deleteObject() {
+  const ui = SpreadsheetApp.getUi();
+  if (!isOwner_()) { ui.alert('Удалять объекты может только владелец таблицы (руководитель).'); return; }
+  const r = ui.prompt('Удалить объект', 'ID объекта (как в 01_ОБЪЕКТЫ), например НОВ-001:', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const id = String(r.getResponseText() || '').trim();
+  const obj = objectById_(id);
+  if (!obj) { ui.alert('Объекта с ID «' + id + '» нет в ' + SHEET_NAMES.OBJ + '.'); return; }
+  if (ui.alert('Удалить объект?', obj.name + ' (' + id + ')\n\nУдалятся строка в 01_ОБЪЕКТЫ и вкладка объекта. Задачи, обзвон, контент и отчёты останутся в журналах, папка на Диске останется с пометкой «(удалён)».\n\nЕсли объект просто закрыт — лучше поставить статус, а не удалять.',
+    ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  deleteObject_(obj);
+  ui.alert('Объект удалён', obj.name + ' (' + id + ')', ui.ButtonSet.OK);
+}
+
+function deleteObject_(obj) {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    const tab = findObjectTab_(obj);
+    if (tab) ss_().deleteSheet(tab);
+    const sh = sheet_('OBJ');
+    sh.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(p => { if (p.getDescription() === PROTECT.OBJ) p.remove(); });
+    sh.deleteRow(obj._row);
+    try {
+      const url = String(obj.folder_link || '');
+      const m = /folders\/([\w-]+)/.exec(url);
+      if (m) { const f = DriveApp.getFolderById(m[1]); if (f.getName().indexOf('(удалён)') < 0) f.setName(f.getName() + ' (удалён)'); }
+    } catch (e) { /* папку можно переименовать вручную */ }
+    logHistory_([{ sheet: SHEET_NAMES.OBJ, record_id: obj.id, obj_id: obj.id, field: 'Объект', old: obj.name, new: '', kind: HIST_KIND.CHANGE, note: 'Объект удалён' }], userEmail_());
+    protectObjectRows_();
+  } finally {
+    lock.releaseLock();
+  }
+}
