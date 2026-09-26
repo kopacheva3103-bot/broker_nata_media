@@ -26,6 +26,7 @@ function refreshAll() {
   let fixed = 0;
   try {
     ['TASK', 'BASE', 'CONT', 'LIB'].forEach(code => {
+      fixed += removeOrphanRows_(code);
       const t = readTable_(code);
       const cache = {};
       t.rows.forEach(o => {

@@ -61,6 +61,10 @@ const X = loadGs({
 const log = [];
 X.runSetup_(log);
 X.cfgSet_('FOLDER_OBJECTS_ID', 'FOBJ');
+// имитация посчитанного списка недель (в Google его считает формула)
+{ const wc = X.dictLayout_().weeks.col; const d0 = new Date(2026, 7, 3); const rows = [];
+  for (let i = 0; i < 20; i++) { const m = X.addDays_(d0, 7 * i); const k = X.isoWeekKey_(m); rows.push([k, m, X.addDays_(m, 6), k + ' · label']); }
+  X.sheet_('DICT').getRange(2, wc, rows.length, 4).setValues(rows); }
 console.log('setup:', log.join(', '));
 const tab = X.loadExample_();
 console.log('tab:', tab.getName());
@@ -193,3 +197,8 @@ console.log('subfolders not added to existing folder:', TIME.subs.length === 1);
 // видимость: продан → скрыта
 X.sheet_('OBJ').getRange(exObj._row, X.fieldIndex_('OBJ', 'status')).setValue('Продан');
 console.log('hidden:', X.applyTabVisibility_());
+
+// оборванная строка (ID без данных) удаляется
+const tSh2 = X.sheet_('TASK'); const orow = X.lastDataRow_(tSh2, X.sheetSpecs_().TASK) + 1;
+tSh2.getRange(orow, 1).setValue('TASK-9999');
+console.log('orphan removed:', X.removeOrphanRows_('TASK') === 1, !X.readTable_('TASK').rows.some(r => r.id === 'TASK-9999'));

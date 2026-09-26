@@ -31,7 +31,8 @@ function makeSS() {
     const sh = new Proxy({
       getName: () => S.name, setName: n => { book[n] = S; delete book[S.name]; order[order.indexOf(S.name)] = n; S.name = n; return sh; },
       getSheetId: () => S.id, getMaxRows: () => S.maxRows, getMaxColumns: () => S.maxCols,
-      insertRowsAfter: (_, n) => { S.maxRows += n; }, insertColumnsAfter: (_, n) => { S.maxCols += n; }, deleteColumns: (a, n) => { S.maxCols -= n; },
+      insertRowsAfter: (_, n) => { S.maxRows += n; },
+      deleteRow: (row) => { const nc = {}; Object.entries(S.cells).forEach(([a, v]) => { const m = /^([A-Z]+)(\d+)$/.exec(a); const r = +m[2]; if (r < row) nc[a] = v; else if (r > row) nc[m[1] + (r - 1)] = v; }); S.cells = nc; }, insertColumnsAfter: (_, n) => { S.maxCols += n; }, deleteColumns: (a, n) => { S.maxCols -= n; },
       getLastRow: () => Math.max(0, ...Object.keys(S.cells).map(a => +a.replace(/^[A-Z]+/, ''))),
       isSheetHidden: () => !!S.hidden, hideSheet: () => { S.hidden = true; }, showSheet: () => { S.hidden = false; },
       getProtections: () => [], getCharts: () => [], getConditionalFormatRules: () => [], getFilter: () => null,

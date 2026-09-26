@@ -340,3 +340,12 @@ function prevToken_(f, i) {
   while (j >= 0 && /\d/.test(f[j])) j--;
   return j >= 0 ? f[j] : '';
 }
+
+/** Удаляет «оборванные» строки журнала: есть ID от скрипта, но не заполнено ни одного поля ввода. */
+function removeOrphanRows_(code) {
+  const t = readTable_(code);
+  const idKey = t.spec.idField;
+  const rows = t.rows.filter(o => o[idKey] && !t.spec.fields.some(f => isInputKind_(f.kind) && f.kind !== 'cb' && o[f.key] !== '' && o[f.key] !== null));
+  rows.reverse().forEach(o => t.sh.deleteRow(o._row));
+  return rows.length;
+}

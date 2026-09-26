@@ -21,7 +21,8 @@ function loadExampleData() {
     ? 'Пример уже есть. Дозагрузить то, чего не хватает (вкладка, задачи, обзвон, контент)? Уже внесённое не дублируется.'
     : 'Добавить пример объекта с вкладкой стратегии, задачами, обзвоном медцентров и контентом? Реальные данные не затрагиваются.', ui.ButtonSet.OK_CANCEL);
   if (b !== ui.Button.OK) return;
-  const sh = loadExample_();
+  let sh;
+  try { sh = loadExample_(); } catch (e) { ui.alert('Пример не загружен', e.message, ui.ButtonSet.OK); return; }
   sh.activate();
   ui.alert('Готово', 'Откройте вкладку «' + sh.getName() + '», затем 05_ОТЧЁТ_КЛИЕНТУ: выберите объект и неделю 2026-W38 (14.09–18.09) — это отчёт за 14–18.09 в вашем формате (как отчёт № 5).', ui.ButtonSet.OK);
 }
@@ -30,6 +31,11 @@ function d_(s) { return s ? new Date(s + 'T00:00:00') : ''; }
 
 function loadExample_() {
   const F = EXAMPLE_FILES;
+  SpreadsheetApp.flush();
+  if (!dictRows_('weeks').some(r => /^\d{4}-W\d{2}$/.test(String(r[0])))) {
+    throw new Error('Списки недель не посчитались. Сначала: Сервис → «Установить / обновить систему», затем снова «Загрузить пример».');
+  }
+  ['TASK', 'BASE', 'CONT'].forEach(removeOrphanRows_);
   // пример можно дозагрузить: каждая часть добавляется, только если её ещё нет
   const has = code => readTable_(code).rows.some(r => r.obj_id === EXAMPLE_ID);
   if (!objectById_(EXAMPLE_ID)) appendRow_('OBJ', {
