@@ -5,7 +5,7 @@ const M = makeSS();
 const EV = {}; let evN = 0;
 const PSTORE = {};
 const PROPS = { getProperty: k => (k in PSTORE ? PSTORE[k] : null), setProperty: (k, v) => { PSTORE[k] = v; }, deleteProperty: k => { delete PSTORE[k]; } };
-const FETCHED = [];
+const FETCHED = []; const NOTES = [];
 function FETCH(u) {
   FETCHED.push(u);
   const J = o => ({ getContentText: () => JSON.stringify(o), getResponseCode: () => 200 });
@@ -16,7 +16,14 @@ function FETCH(u) {
     J({ data: [{ id: '17900001', permalink: 'https://www.instagram.com/reel/REEL1abc/' }], paging: { next: 'https://graph.instagram.com/v25.0/me/media?after=x' } });
   if (/17900001\/insights/.test(u)) return J({ data: [{ name: 'views', values: [{ value: 5400 }] }, { name: 'reach', values: [{ value: 3100 }] }, { name: 'saved', values: [{ value: 42 }] }] });
   if (/17900002\/insights/.test(u)) return u.indexOf('views') >= 0 ? J({ error: { message: 'metric not supported' } }) : J({ data: [{ name: 'reach', total_value: { value: 900 } }, { name: 'saved', values: [{ value: 3 }] }] });
-  if (/threads\.net\/v1\.0\/me\/threads/.test(u)) return J({ data: [{ id: '555', permalink: 'https://www.threads.net/@nata.broker/post/THR1' }] });
+  if (/threads\.net\/v1\.0\/me\/threads/.test(u)) return J({ data: [
+    { id: '555', permalink: 'https://www.threads.net/@nata.broker/post/THR1', text: 'Помещение 756 м² в ЖК «Время» — под клинику', timestamp: '2026-09-25T06:30:00+0000', media_type: 'IMAGE' },
+    { id: '556', permalink: 'https://www.threads.net/@nata.broker/post/THR2', text: 'Лермонтовская, 1: потолки 4,5 м', timestamp: '2026-09-24T06:30:00+0000', media_type: 'TEXT_POST' },
+    { id: '557', permalink: 'https://www.threads.net/@nata.broker/post/THR3', text: 'Как выбрать риелтора', timestamp: '2026-09-23T06:30:00+0000', media_type: 'TEXT_POST' },
+    { id: '558', permalink: 'https://www.threads.net/@nata.broker/post/THR4', text: 'ЖК Время продолжение', timestamp: '2026-09-23T06:31:00+0000', is_reply: true },
+    { id: '559', permalink: 'https://www.threads.net/@nata.broker/post/OLD', text: 'ЖК Время старый', timestamp: '2026-05-01T06:30:00+0000' } ] });
+  if (/topnlab\.ru\/public\/get-entities/.test(u)) return (u.indexOf('79251112233') >= 0 && u.indexOf('type=order') >= 0) ? J({ '123': { id: 123 } }) : { getContentText: () => '', getResponseCode: () => 404 };
+  if (/topnlab\.ru\/public\/set-note/.test(u)) { NOTES.push(u); return J({ status: 'success' }); }
   if (/555\/insights/.test(u)) return J({ data: [{ name: 'views', values: [{ value: 777 }] }] });
   if (/refresh_access_token/.test(u)) return J({ access_token: 'REFRESHED', expires_in: 5184000 });
   return J({ error: { message: 'unknown ' + u } });
@@ -31,12 +38,13 @@ const CAL = {
 const pad = n => String(n).padStart(2, '0');
 const X = loadGs({
   SpreadsheetApp: M.SpreadsheetApp,
-  Utilities: { formatDate: (d, tz, p) => p.replace('yyyy', d.getFullYear()).replace('MM', pad(d.getMonth() + 1)).replace('dd', pad(d.getDate())).replace('HH', pad(d.getHours())).replace('mm', pad(d.getMinutes())) },
+  Utilities: { sleep: () => {}, formatDate: (d, tz, p) => p.replace('yyyy', d.getFullYear()).replace('MM', pad(d.getMonth() + 1)).replace('dd', pad(d.getDate())).replace('HH', pad(d.getHours())).replace('mm', pad(d.getMinutes())) },
   Session: { getActiveUser: () => ({ getEmail: () => 'test@example.com' }), getEffectiveUser: () => ({ getEmail: () => 'boss@example.com' }) },
   LockService: { getDocumentLock: () => ({ tryLock: () => true, waitLock: () => {}, releaseLock: () => {} }) },
   UrlFetchApp: { fetch: (u) => FETCH(u) },
   PropertiesService: { getScriptProperties: () => PROPS },
   CalendarApp: { getDefaultCalendar: () => CAL },
+  Utilities2: null,
 });
 const log = [];
 X.runSetup_(log);
@@ -135,4 +143,26 @@ console.log('social2:', JSON.stringify({ ig: s2.ig, th: s2.th, notFound: s2.notF
 PSTORE.IG_TOKEN_TS = String(Date.now() - 8 * 86400000);
 X.refreshSocialStats_();
 console.log('token refreshed:', PSTORE.IG_TOKEN === 'REFRESHED', FETCHED.some(u => u.indexOf('ig_refresh_token') > 0));
+const before = X.readTable_('CONT').rows.length;
+const s3 = X.refreshSocialStats_();
+const newRows = X.readTable_('CONT').rows.slice(before);
+console.log('threads import:', s3.imported, 'unmatched', s3.unmatched, newRows.map(r => r.obj_id + ':' + r.topic.slice(0, 20) + ':' + r.status).join(' | '));
+const s4 = X.refreshSocialStats_();
+console.log('threads import again (no dups):', s4.imported === 0);
 console.log('removed:', JSON.stringify(X.removeSocialTokens()));
+// CRM
+console.log('phones:', X.phoneFromText_('ЛПР Анна +7 (925) 111-22-33, info@x.ru'), X.phoneFromText_('8 925 111 22 33'), X.phoneFromText_('нет'));
+console.log('crm save:', JSON.stringify(X.saveCrmSettings('KEY123', '42', '+7 925 111-22-33')));
+const bSh = X.sheet_('BASE');
+const bRows = X.readTable_('BASE').rows;
+const b1 = bRows[0], b2 = bRows[1], b3 = bRows[2];
+bSh.getRange(b1._row, X.fieldIndex_('BASE', 'contact')).setValue('ЛПР: +7 925 111-22-33');
+bSh.getRange(b2._row, X.fieldIndex_('BASE', 'contact')).setValue('8 (999) 000-00-01');
+[b1, b2, b3].forEach(b => bSh.getRange(b._row, X.fieldIndex_('BASE', 'to_crm')).setValue(true));
+X.onEditHandler({ range: bSh.getRange(b1._row, X.fieldIndex_('BASE', 'to_crm'), 3, 1), user: null });
+const after = X.readTable_('BASE').rows.slice(0, 3).map(r => r.crm_note);
+console.log('crm notes:', after.join(' | '));
+console.log('note text ok:', NOTES.length === 1 && /Лермонтовская|ЖК Время/.test(NOTES[0] || '') || NOTES.length);
+X.crmSendPending();
+console.log('after pending:', X.readTable_('BASE').rows.slice(2, 3).map(r => r.crm_note).join(''));
+console.log('imported rows:', X.readTable_('CONT').rows.filter(r => r.author === 'Threads (автоимпорт)').map(r => [r.obj_id, r.platform, r.status, r.link.slice(-4), r.owner, r.topic].join(' / ')).join(' || '));

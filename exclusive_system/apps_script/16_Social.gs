@@ -15,7 +15,9 @@ const TH_API = 'https://graph.threads.net/v1.0';
 
 function refreshSocialStats() {
   const r = refreshSocialStats_();
-  toast_('Обновлено: Instagram ' + r.ig + ', Threads ' + r.th + ', Telegram ' + r.tg + ', YouTube ' + r.yt +
+  toast_((r.imported ? 'Новых постов Threads в 04_КОНТЕНТ: ' + r.imported + '. ' : '') +
+    (r.unmatched ? 'Постов Threads без объекта (не добавлены): ' + r.unmatched + '. ' : '') +
+    'Обновлено: Instagram ' + r.ig + ', Threads ' + r.th + ', Telegram ' + r.tg + ', YouTube ' + r.yt +
     (r.igOff && r.igLinks ? '. Instagram не подключён (Сервис → Подключить Instagram / Threads)' : '') +
     (r.thOff && r.thLinks ? '. Threads не подключён' : '') +
     (r.notFound ? '. Не найдены в аккаунте: ' + r.notFound + ' ссылок' : '') +
@@ -24,8 +26,10 @@ function refreshSocialStats() {
 }
 
 function refreshSocialStats_() {
+  let imported = null;
+  try { imported = importThreadsPosts_(); } catch (e) { Logger.log('Импорт Threads: ' + e.message); }
   const t = readTable_('CONT');
-  const res = { tg: 0, yt: 0, ig: 0, th: 0, failed: 0, notFound: 0, ytOff: false, igOff: false, thOff: false, igLinks: 0, thLinks: 0 };
+  const res = { imported: imported ? imported.added : 0, unmatched: imported ? imported.unmatched : 0, tg: 0, yt: 0, ig: 0, th: 0, failed: 0, notFound: 0, ytOff: false, igOff: false, thOff: false, igLinks: 0, thLinks: 0 };
   const yt = [], ig = [], th = [];
   t.rows.forEach(o => {
     const link = String(o.link || '').trim();
@@ -237,4 +241,86 @@ function removeSocialTokens() {
   const st = socialStatus();
   st.msg = 'Отключено.';
   return st;
+}
+
+// ───────────────────────── посты Threads-бота → 04_КОНТЕНТ ─────────────────────────
+
+/**
+ * Новые посты аккаунта Threads (за 60 дней, без ответов и продолжений цепочек) добавляются в 04_КОНТЕНТ,
+ * если в тексте узнаётся объект: название (или часть до «·»), улица из адреса, ID. Посты без объекта не добавляются.
+ * Уже внесённые ссылки не дублируются. Объект у строки можно поправить вручную.
+ */
+function importThreadsPosts_() {
+  const tok = socialToken_('TH');
+  if (!tok) return null;
+  const since = Date.now() - 60 * 86400000;
+  const have = {};
+  const t = readTable_('CONT');
+  t.rows.forEach(o => { const c = threadsCode_(String(o.link || '')); if (c) have[c] = true; });
+  const match = objectMatcher_();
+  const add = [];
+  let unmatched = 0;
+  let url = TH_API + '/me/threads?fields=id,permalink,text,timestamp,media_type,is_reply&limit=100&access_token=' + encodeURIComponent(tok);
+  let pages = 0;
+  while (url && pages++ < 3) {
+    const r = metaGet_(url);
+    if (r.error) throw new Error(r.error.message || 'ошибка Threads API');
+    let old = false;
+    (r.data || []).forEach(m => {
+      const ts = parseMetaTime_(m.timestamp);
+      if (ts && ts.getTime() < since) { old = true; return; }
+      if (m.is_reply) return;
+      const code = threadsCode_(String(m.permalink || ''));
+      if (!code || have[code]) return;
+      const obj = match(String(m.text || ''));
+      if (!obj) { unmatched++; return; }
+      have[code] = true;
+      const text = String(m.text || '').trim();
+      add.push({
+        obj_id: obj.id, topic: text.split(/\n/)[0].slice(0, 120), platform: 'Threads',
+        format: m.media_type === 'CAROUSEL_ALBUM' ? 'Карусель' : 'Пост', goal: 'Найти покупателя / арендатора',
+        script: text.slice(0, 1500), status: dictFirstByClass_('content_status', CLS.DONE) || 'Опубликовано',
+        pub_date: ts ? new Date(ts.getFullYear(), ts.getMonth(), ts.getDate()) : '', link: m.permalink, owner: obj.smm || '',
+        created_at: new Date(), author: 'Threads (автоимпорт)',
+      });
+    });
+    url = !old && r.paging && r.paging.next ? r.paging.next : '';
+  }
+  if (add.length) {
+    const cache = {};
+    add.forEach(a => { a.id = nextId_('CONT', cache); });
+    appendRows_('CONT', add);
+  }
+  return { added: add.length, unmatched: unmatched };
+}
+
+/** «2026-09-26T05:30:00+0000» → Date. */
+function parseMetaTime_(s) {
+  if (!s) return null;
+  const d = new Date(String(s).replace(/([+-]\d\d)(\d\d)$/, '$1:$2'));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Функция «текст → объект» по названию, частям названия, улице из адреса и ID. Неоднозначно — null. */
+function objectMatcher_() {
+  const norm = s => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[«»"“”]/g, '');
+  const objs = readTable_('OBJ').rows.filter(o => o.id && o.name && o.in_work !== 'НЕТ').map(o => {
+    const keys = [];
+    const name = norm(o.name);
+    keys.push(name);
+    name.split(/[·|,()\/]/).map(x => x.trim()).filter(x => x.length >= 5).forEach(x => keys.push(x));
+    const street = /(?:ул\.?|улица|пр-т|проспект|шоссе|пер\.?|переулок|бульвар|б-р|наб\.?)\s*([а-яa-z\-]{5,})/i.exec(norm(o.address));
+    if (street) keys.push(street[1]);
+    if (String(o.id).length >= 4) keys.push(norm(o.id));
+    return { o: o, keys: keys.filter((k, i, a) => k && a.indexOf(k) === i) };
+  });
+  return text => {
+    const tx = norm(text);
+    let best = null, bestScore = 0, tie = false;
+    objs.forEach(x => {
+      const score = x.keys.filter(k => tx.indexOf(k) >= 0).length;
+      if (score > bestScore) { best = x.o; bestScore = score; tie = false; } else if (score && score === bestScore) tie = true;
+    });
+    return bestScore && !tie ? best : null;
+  };
 }

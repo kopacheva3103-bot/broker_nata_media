@@ -5,7 +5,8 @@
  *  - ID объекта вводится вручную (из CRM): скрипт проверяет его и при исправлении обновляет во всех листах;
  *  - новый объект (ID + название) сразу получает свою вкладку «▸ Название (ID)»;
  *  - пишет изменения в 09_ИСТОРИЯ: отслеживаемые поля журналов и все правки во вкладках объектов;
- *  - задача со статусом «Перенесено» копируется на следующую неделю, исходная остаётся.
+ *  - задача со статусом «Перенесено» копируется на следующую неделю, исходная остаётся;
+ *  - галочка «Передан в CRM» в 03 → заметка в карточку клиента в TopenLab (если CRM подключена).
  */
 
 function onEditHandler(e) {
@@ -43,6 +44,7 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
   const idCache = {};
   const tabSync = [];
   const renamed = [];
+  const crmRows = [];
   for (let i = 0; i < n; i++) {
     const row = r0 + i;
     const o = {};
@@ -88,6 +90,7 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
       o._row = row;
       tabSync.push(o);
     }
+    if (code === 'BASE' && editedKeys.indexOf('to_crm') >= 0 && o.to_crm === true && String(o.crm_note).indexOf('✓') !== 0) { o._row = row; crmRows.push(o); }
     if (code === 'TASK' && !isNew && editedKeys.indexOf('status') >= 0 && dictClassOf_('task_status', o.status) === CLS.MOVED) {
       const newId = moveTask_(o, hist);
       if (newId) toast_('Задача ' + o.id + ' перенесена на следующую неделю как ' + newId + '. Исходная строка сохранена.');
@@ -103,6 +106,9 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
     if (r && r.built) toast_('Создана вкладка «' + r.sheet.getName() + '» — там стратегия объекта.', 'Новый объект', 8);
   });
   logHistory_(hist, user);
+  if (crmRows.length) {
+    try { crmOnEdit_(sh, crmRows); } catch (err) { toast_('CRM: ' + err.message, 'Внимание', 8); }
+  }
 }
 
 function applyDefaults_(code, o, upd, isNew, user, editedKeys) {
