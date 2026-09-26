@@ -70,7 +70,8 @@ function dailyJobs() {
 function enableDailyJobs() {
   disableDailyJobs_();
   ScriptApp.newTrigger('dailyJobs').timeBased().everyDays(1).atHour(7).create();
-  toast_('Каждое утро (около 7:00) задачи синхронизируются с календарём, статистика соцсетей обновляется.', 'Ежедневное обновление', 8);
+  ScriptApp.newTrigger('inboxJob').timeBased().everyMinutes(10).create();
+  toast_('Каждое утро (около 7:00) — календарь, статистика соцсетей, документы. Каждые 10 минут — разбор папки 04_ВХОДЯЩИЕ.', 'Автообновление', 8);
 }
 
 function disableDailyJobs() {
@@ -79,5 +80,5 @@ function disableDailyJobs() {
 }
 
 function disableDailyJobs_() {
-  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyJobs') ScriptApp.deleteTrigger(t); });
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyJobs' || t.getHandlerFunction() === 'inboxJob') ScriptApp.deleteTrigger(t); });
 }

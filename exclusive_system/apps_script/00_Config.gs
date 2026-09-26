@@ -18,6 +18,7 @@ const SYS = {
     MASTER: '00_ТАБЛИЦА',
     OBJECTS: '01_ОБЪЕКТЫ',
     TEMPLATES: '02_ШАБЛОНЫ',
+    INBOX: '04_ВХОДЯЩИЕ — новые объекты',
   },
   /** Подпапки внутри папки объекта «Название (ID)». */
   OBJECT_SUBFOLDERS: {
@@ -108,6 +109,7 @@ function cfgDefs_() {
     { key: 'FOLDER_MASTER_ID', label: 'ID папки 00_ТАБЛИЦА', value: '', sys: true },
     { key: 'FOLDER_OBJECTS_ID', label: 'ID папки 01_ОБЪЕКТЫ', value: '', sys: true },
     { key: 'FOLDER_TEMPLATES_ID', label: 'ID папки 02_ШАБЛОНЫ', value: '', sys: true },
+    { key: 'FOLDER_INBOX_ID', label: 'ID папки 04_ВХОДЯЩИЕ', value: '', sys: true },
     { key: 'TEMPLATE_REPORT_ID', label: 'ID шаблона отчёта (Google Doc)', value: '', sys: true },
     { key: 'SYSTEM_VERSION', label: 'Версия системы', value: SYS.VERSION, sys: true },
   ];

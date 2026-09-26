@@ -11,10 +11,16 @@ const mkFolder = (id, name, files, subs) => { const f = { id, name, files: files
   getId: () => id, getName: () => name, getUrl: () => 'https://drive.google.com/drive/folders/' + id, isTrashed: () => false,
   getFiles: () => it(f.files), getFolders: () => it(f.subs), getFoldersByName: n => it(f.subs.filter(x => x.name === n)),
   createFolder: n => { const c = mkFolder(id + '_' + f.subs.length, n); f.subs.push(c); FOLDERS[c.id] = c; return c; } }; FOLDERS[id] = f; return f; };
-const FOLDERS = {};
+const FOLDERS = {}; const TRASHED = [];
+const inFile = (id, name, mime) => { const f = { getId: () => id, getName: () => name, getMimeType: () => mime, moveTo: d => { INBOX.files = INBOX.files.filter(x => x !== f); d.files.push(f); f.where = d.name; }, getLastUpdated: () => new Date(), getUrl: () => 'u', isTrashed: () => false }; return f; };
 const ANALYTICS = mkFolder('FAN', 'Аналитика', [mkFile('Маркетинговый_анализ_Лермонтовская_1.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '2026-09-10')]);
 const TIME = mkFolder('FTIME', 'ЖК Время', [mkFile('КП_ЖК_Время.pdf', 'application/pdf', '2026-09-20'), mkFile('Медцентры.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '2026-09-21')], [ANALYTICS]);
 const OBJROOT = mkFolder('FOBJ', '01_ОБЪЕКТЫ', [], [mkFolder('FOTHER', 'Остров'), TIME]);
+const INBOX = mkFolder('FINBOX', '04_ВХОДЯЩИЕ');
+const F1 = inFile('F_OSTROV', 'Презентация КП Остров.pdf', 'application/pdf');
+const F2 = inFile('F_TIME', 'ВРЕМЯ-1 Новая презентация под медцентр.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+const F3 = inFile('F_RENT', 'Тверская 15 — аренда.pdf', 'application/pdf');
+INBOX.files.push(F1, F2, F3);
 const PROPS = { getProperty: k => (k in PSTORE ? PSTORE[k] : null), setProperty: (k, v) => { PSTORE[k] = v; }, deleteProperty: k => { delete PSTORE[k]; } };
 const FETCHED = []; const NOTES = [];
 function FETCH(u) {
@@ -33,6 +39,9 @@ function FETCH(u) {
     { id: '557', permalink: 'https://www.threads.net/@nata.broker/post/THR3', text: 'Как выбрать риелтора', timestamp: '2026-09-23T06:30:00+0000', media_type: 'TEXT_POST' },
     { id: '558', permalink: 'https://www.threads.net/@nata.broker/post/THR4', text: 'ЖК Время продолжение', timestamp: '2026-09-23T06:31:00+0000', is_reply: true },
     { id: '559', permalink: 'https://www.threads.net/@nata.broker/post/OLD', text: 'ЖК Время старый', timestamp: '2026-05-01T06:30:00+0000' } ] });
+  if (/googleapis\.com\/drive\/v3\/files\/(.+)\/copy/.test(u)) return J({ id: 'TMP_' + /files\/([^/]+)\/copy/.exec(u)[1] });
+  if (/googleapis\.com\/drive\/v3\/files\/TMP_F_OSTROV\/export/.test(u)) return { getResponseCode: () => 200, getContentText: () => 'КП «Остров»\nМосковская обл., Истринский р-н, КП Остров, уч. 12\nДом 450,5 м² на участке 25 соток\nСтоимость: 185 000 000 ₽\nЦена за м²: 410 000 ₽\nПродажа' };
+  if (/googleapis\.com\/drive\/v3\/files\/TMP_F_RENT\/export/.test(u)) return { getResponseCode: () => 200, getContentText: () => 'Помещение ПСН 320 м2, аренда 1,2 млн руб. в месяц\nг. Москва, ул. Тверская, 15' };
   if (/topnlab\.ru\/public\/get-entities/.test(u)) return (u.indexOf('79251112233') >= 0 && u.indexOf('type=order') >= 0) ? J({ '123': { id: 123 } }) : { getContentText: () => '', getResponseCode: () => 404 };
   if (/topnlab\.ru\/public\/set-note/.test(u)) { NOTES.push(u); return J({ status: 'success' }); }
   if (/555\/insights/.test(u)) return J({ data: [{ name: 'views', values: [{ value: 777 }] }] });
@@ -55,12 +64,14 @@ const X = loadGs({
   UrlFetchApp: { fetch: (u) => FETCH(u) },
   PropertiesService: { getScriptProperties: () => PROPS, getDocumentProperties: () => PROPS },
   CalendarApp: { getDefaultCalendar: () => CAL },
-  DriveApp: { getFolderById: id => { if (!FOLDERS[id]) throw new Error('no folder'); return FOLDERS[id]; } },
+  DriveApp: { getFolderById: id => { if (!FOLDERS[id]) throw new Error('no folder'); return FOLDERS[id]; }, getFileById: id => ({ setTrashed: () => { TRASHED.push(id); } }) },
+  ScriptApp: { getOAuthToken: () => 'tok' },
   Utilities2: null,
 });
 const log = [];
 X.runSetup_(log);
 X.cfgSet_('FOLDER_OBJECTS_ID', 'FOBJ');
+X.cfgSet_('FOLDER_INBOX_ID', 'FINBOX');
 // имитация посчитанного списка недель (в Google его считает формула)
 { const wc = X.dictLayout_().weeks.col; const d0 = new Date(2026, 7, 3); const rows = [];
   for (let i = 0; i < 20; i++) { const m = X.addDays_(d0, 7 * i); const k = X.isoWeekKey_(m); rows.push([k, m, X.addDays_(m, 6), k + ' · label']); }
@@ -216,3 +227,12 @@ console.log('import preview:', pv2.add, pv2.upd, pv2.errors.length, pv2.errors.j
 console.log(X.runObjectsImport(imp));
 const o4801 = X.objectById_('4801');
 console.log('4801:', o4801.area, o4801.price, o4801.kind, o4801.status, !!o4801.tab_url, '| 4777 address:', X.objectById_('4777').address);
+
+// папка «Входящие»
+console.log('names:', JSON.stringify(X.parseInboxName_('4801 — Остров, дом 450.pdf')), JSON.stringify(X.parseInboxName_('Презентация ЖК Время (1).pptx')));
+const ib = X.processInbox_();
+console.log('inbox:', ib.done.join(' | '), '| errors:', ib.errors.join(';'), '| created:', ib.created);
+['НОВ-001', 'НОВ-002'].forEach(id => { const o = X.objectById_(id); console.log(id, o && [o.name, o.kind, o.deal, o.address, o.area, o.price, o.status, !!o.tab_url].join(' / ')); });
+console.log('files moved:', F1.where, F2.where, F3.where, 'inbox left:', INBOX.files.length, 'tmp trashed:', TRASHED.length);
+console.log('guess:', JSON.stringify(X.guessObjectInfo_('КП «Остров»\nМосковская обл., Истринский р-н, КП Остров, уч. 12\nДом 450,5 м² на участке 25 соток\nСтоимость: 185 000 000 ₽\nЦена за м²: 410 000 ₽\nПродажа')));
+console.log('guess2:', JSON.stringify(X.guessObjectInfo_('ЖК Время\nг. Москва, ул. Лермонтовская, д.1\nПомещение 756,2 кв.м\n225,5 млн ₽\n298 000 ₽/м²')));

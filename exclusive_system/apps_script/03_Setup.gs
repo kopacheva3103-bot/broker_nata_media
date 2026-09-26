@@ -518,7 +518,7 @@ function ensureDrive_() {
     cfgSet_('FOLDER_ROOT_ID', root.getId());
   }
   const sub = {};
-  [['MASTER', 'FOLDER_MASTER_ID'], ['OBJECTS', 'FOLDER_OBJECTS_ID'], ['TEMPLATES', 'FOLDER_TEMPLATES_ID']].forEach(p => {
+  [['MASTER', 'FOLDER_MASTER_ID'], ['OBJECTS', 'FOLDER_OBJECTS_ID'], ['TEMPLATES', 'FOLDER_TEMPLATES_ID'], ['INBOX', 'FOLDER_INBOX_ID']].forEach(p => {
     let f = folderById_(cfgGet_(p[1]));
     if (!f) {
       f = childFolder_(root, SYS.FOLDERS[p[0]]);

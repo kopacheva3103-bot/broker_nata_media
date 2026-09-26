@@ -6,6 +6,7 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu(SYS.MENU)
     .addItem('➜ Открыть вкладку объекта', 'openObjectTab')
+    .addItem('➜ Разобрать папку «Входящие»', 'processInbox')
     .addItem('➜ Загрузить объекты списком', 'importObjects')
     .addItem('➜ Создать вкладки для новых объектов', 'createObjectTabs')
     .addItem('➜ Обновить документы объектов', 'refreshObjectFiles')
@@ -31,8 +32,8 @@ function onOpen() {
       .addItem('Показать все вкладки объектов (в т.ч. закрытых)', 'showAllObjectTabs')
       .addItem('Подключить Instagram / Threads', 'connectSocial')
       .addItem('Подключить CRM TopenLab', 'connectCrm')
-      .addItem('Включить ежедневное обновление (календарь, соцсети)', 'enableDailyJobs')
-      .addItem('Выключить ежедневное обновление', 'disableDailyJobs')
+      .addItem('Включить автообновление (входящие, календарь, соцсети)', 'enableDailyJobs')
+      .addItem('Выключить автообновление', 'disableDailyJobs')
       .addSeparator()
       .addItem('Загрузить пример (ЖК Время · Лермонтовская 1)', 'loadExampleData')
       .addItem('Запустить самопроверку', 'runSelfTest')
