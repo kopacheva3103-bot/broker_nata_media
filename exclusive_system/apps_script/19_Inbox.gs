@@ -64,7 +64,7 @@ function processInbox_() {
       let note = '';
       const info = obj ? null : guessObjectInfo_(extractFileText_(file));
       if (!obj && info.address) obj = findObjectByAddress_(info.address);
-      if (!obj && !parsed.id && !matchWords_(parsed.name, false).length && !info.address) {
+      if (!obj && !parsed.id && !matchWords_(parsed.name, false).length) { // «Продавцы, Мои объекты.pdf» — выгрузка списка, а не объект
         res.errors.push('• ' + fname + ': не понятно, какой это объект — переименуйте файл («ID Название.pdf») и разберите папку ещё раз');
         continue;
       }
@@ -102,7 +102,7 @@ function parseInboxName_(fname) {
   let id = '';
   const m = /^\s*(\d{3,}|[A-Za-zА-Яа-яЁё]{2,6}-\d{1,6})\s*[-—–.·:)]*\s+(.+)$/.exec(base);
   if (m) { id = m[1].toUpperCase(); base = m[2]; }
-  base = base.replace(/^(продавцы|арендодатели)\s*,?\s*мои объекты\s*/i, ''); // имя выгрузки из ЦИАН
+  base = base.replace(/^(id\s+)?(продавцы|арендодатели)\s*,?\s*мои объекты\s*/i, ''); // имя выгрузки из ЦИАН
   let name = (' ' + base + ' ').replace(/(^|[\s,.;()«»"-])(презентация|презентации|коммерческое предложение|кп|pdf|финал|final|new|новая|версия|v\d+)(?=[\s,.;()«»"-]|$)/gi, '$1 ')
     .replace(/\(\d+\)/g, ' ').replace(/[\s\-—–_.,]+$/g, '').replace(/^[\s\-—–_.,]+/g, '').replace(/\s{2,}/g, ' ').trim();
   if (name && name === name.toLowerCase()) name = name.replace(/(^|\s)([а-яёa-z])/g, (x, sp, c) => sp + c.toUpperCase()); // «сосновый бор» → «Сосновый Бор»
