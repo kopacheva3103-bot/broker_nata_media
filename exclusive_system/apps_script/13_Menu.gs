@@ -16,6 +16,7 @@ function onOpen() {
     .addItem('➜ Проверить просрочки', 'checkOverdue')
     .addItem('➜ Синхронизировать задачи с календарём', 'syncCalendar')
     .addItem('Попросить сотрудников открыть доступ к календарю', 'requestCalendarAccess')
+    .addItem('Отправить ассистенту инструкцию на почту', 'sendAssistantManual')
     .addSeparator()
     .addItem('➜ Промпт для Claude по объекту', 'promptForObject')
     .addItem('➜ Вставить стратегию из Claude', 'importStrategy')

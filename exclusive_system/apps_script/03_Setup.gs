@@ -59,6 +59,7 @@ function setupSystem() {
     (c.noEmail.length ? '; нет email у: ' + c.noEmail.join(', ') : ''));
     const rq = requestCalendarAccess_();
     if (rq.length) log.push('Письмо с просьбой открыть доступ к календарю отправлено: ' + rq.join(', ')); } catch (err) { warn += '\n\n⚠ Календарь: ' + err.message; }
+  try { const ms = sendAssistantManual_(); if (ms.length) log.push('Инструкция ассистента отправлена на почту: ' + ms.join(', ')); } catch (err) { warn += '\n\n⚠ Инструкция ассистенту: ' + err.message; }
   try { if (!cfgGet_('REELS_PROMPT_DOC')) { const u = findReelsPromptDoc_(); log.push(u ? 'Промпт «Серия рилс на объект»: найден документ ' + u : '⚠ Промпт «Серия рилс на объект»: документ не найден — вставьте ссылку в 08_НАСТРОЙКИ'); } } catch (err) { warn += '\n\n⚠ Промпт серии рилс: ' + err.message; }
   try { const at = ensureAnalogTemplate_(); if (at) log.push(at); } catch (err) { warn += '\n\n⚠ Шаблон анализа аналогов: ' + err.message; }
   const tabs = objectTabs_().length;

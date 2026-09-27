@@ -843,6 +843,7 @@ function setupSystem() {
     (c.noEmail.length ? '; нет email у: ' + c.noEmail.join(', ') : ''));
     const rq = requestCalendarAccess_();
     if (rq.length) log.push('Письмо с просьбой открыть доступ к календарю отправлено: ' + rq.join(', ')); } catch (err) { warn += '\n\n⚠ Календарь: ' + err.message; }
+  try { const ms = sendAssistantManual_(); if (ms.length) log.push('Инструкция ассистента отправлена на почту: ' + ms.join(', ')); } catch (err) { warn += '\n\n⚠ Инструкция ассистенту: ' + err.message; }
   try { if (!cfgGet_('REELS_PROMPT_DOC')) { const u = findReelsPromptDoc_(); log.push(u ? 'Промпт «Серия рилс на объект»: найден документ ' + u : '⚠ Промпт «Серия рилс на объект»: документ не найден — вставьте ссылку в 08_НАСТРОЙКИ'); } } catch (err) { warn += '\n\n⚠ Промпт серии рилс: ' + err.message; }
   try { const at = ensureAnalogTemplate_(); if (at) log.push(at); } catch (err) { warn += '\n\n⚠ Шаблон анализа аналогов: ' + err.message; }
   const tabs = objectTabs_().length;
@@ -4060,6 +4061,7 @@ function onOpen() {
     .addItem('➜ Проверить просрочки', 'checkOverdue')
     .addItem('➜ Синхронизировать задачи с календарём', 'syncCalendar')
     .addItem('Попросить сотрудников открыть доступ к календарю', 'requestCalendarAccess')
+    .addItem('Отправить ассистенту инструкцию на почту', 'sendAssistantManual')
     .addSeparator()
     .addItem('➜ Промпт для Claude по объекту', 'promptForObject')
     .addItem('➜ Вставить стратегию из Claude', 'importStrategy')
@@ -6553,4 +6555,45 @@ function companyElsewhere_(company, objId) {
   const key = norm(company);
   if (!key) return [];
   return readTable_('BASE').rows.filter(r => norm(r.company) === key && String(r.obj_id) !== String(objId));
+}
+
+// ───────────────────────── инструкция ассистенту на почту ─────────────────────────
+
+const ASSISTANT_MANUAL_TITLE = '10 — Инструкция ассистента';
+
+/** Один раз отправляет ассистентам (роль «Ассистент» с email) письмо со ссылкой на инструкцию из 03_ИНСТРУКЦИИ. */
+function sendAssistantManual_(force) {
+  const props = PropertiesService.getScriptProperties();
+  const it = DriveApp.searchFiles('title contains "' + ASSISTANT_MANUAL_TITLE + '" and trashed = false');
+  let doc = null;
+  while (it.hasNext()) { const f = it.next(); if (!doc || f.getLastUpdated() > doc.getLastUpdated()) doc = f; }
+  if (!doc) return [];
+  const boss = String(cfgGet_('MANAGER_NAME') || 'руководитель');
+  const sent = [];
+  dictRows_('people').forEach(p => {
+    const name = String(p[0] || '').trim(), role = String(p[1] || ''), email = String(p[2] || '').trim();
+    if (!name || !/ассистент/i.test(role) || !/@/.test(email)) return;
+    const key = 'MANUAL_SENT_' + email.toLowerCase();
+    if (!force && props.getProperty(key) === doc.getId()) return;
+    try { doc.addViewer(email); } catch (e) { /* доступ уже есть */ }
+    const html = '<p>Здравствуйте!</p>' +
+      '<p>Высылаю пошаговую инструкцию по работе в нашей системе эксклюзивов — что делать каждый день и каждую неделю:</p>' +
+      '<p><a href="' + doc.getUrl() + '"><b>' + doc.getName() + '</b></a></p>' +
+      '<p>Главное:</p><ul>' +
+      '<li>каждый будний день в 9:00 на почту приходит «План на сегодня» — работаем по нему;</li>' +
+      '<li>задачи со сроками будут в вашем Google Календаре;</li>' +
+      '<li>каждый звонок и КП вносим в 03_ОБЗВОН_И_КП в тот же день, аудиторию — только из списка;</li>' +
+      '<li>в пятницу до 19:00 закрываем задачи недели — в 20:00 отчёты уходят собственникам автоматически.</li></ul>' +
+      '<p><a href="' + ss_().getUrl() + '">Открыть систему</a></p><p>' + boss + '</p>';
+    MailApp.sendEmail({ to: email, subject: 'Инструкция по работе в системе эксклюзивов', htmlBody: html, name: boss });
+    props.setProperty(key, doc.getId());
+    sent.push(name);
+  });
+  return sent;
+}
+
+/** Меню: отправить инструкцию ассистенту ещё раз. */
+function sendAssistantManual() {
+  const s = sendAssistantManual_(true);
+  toast_(s.length ? 'Инструкция отправлена: ' + s.join(', ') : 'Не найден документ «' + ASSISTANT_MANUAL_TITLE + '…» или у ассистента нет email в 07_СПРАВОЧНИКИ.', 'Инструкция', 8);
 }
