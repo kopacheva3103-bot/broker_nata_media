@@ -18,6 +18,7 @@ function onOpen() {
     .addSeparator()
     .addItem('➜ Промпт для Claude по объекту', 'promptForObject')
     .addItem('➜ Вставить стратегию из Claude', 'importStrategy')
+    .addItem('Обновить шаблон анализа аналогов', 'updateAnalogTemplate')
     .addItem('➜ Обновить статистику соцсетей', 'refreshSocialStats')
     .addItem('➜ Отправить отмеченные в CRM', 'crmSendPending')
     .addItem('➜ Отправить отчёт клиенту в CRM', 'crmSendReport')

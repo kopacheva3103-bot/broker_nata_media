@@ -1,12 +1,12 @@
 """Шаблон «Анализ аналогов (конкуренты)»: сбор объявлений с ЦИАН/Авито + корректировки + итоговая цена.
-Запуск: python3 tools/build_analogs_template.py → templates/Шаблон_Анализ_аналогов.xlsx (загружается в 02_ШАБЛОНЫ как Google Таблица)."""
+Запуск: python3 tools/build_analogs_template.py → templates/analogs_template.xlsx (загружается в 02_ШАБЛОНЫ как Google Таблица)."""
 import os
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.comments import Comment
 
-OUT = os.path.join(os.path.dirname(__file__), '..', 'templates', 'Шаблон_Анализ_аналогов.xlsx')
+OUT = os.path.join(os.path.dirname(__file__), '..', 'templates', 'analogs_template.xlsx')
 wb = Workbook()
 HEAD = PatternFill('solid', fgColor='1F3864'); SUB = PatternFill('solid', fgColor='D9E2F3')
 INP = PatternFill('solid', fgColor='FFF2CC'); CALC = PatternFill('solid', fgColor='EDEDED'); RES = PatternFill('solid', fgColor='E2EFDA')
