@@ -35,15 +35,20 @@ function importStrategy() {
 
 /** Текст ответа → {sections: {KEY: [[...]]}, kv: {key: value}}. */
 function parseStrategy_(text) {
-  const out = { tables: {}, kv: {}, taskLines: [] };
+  const out = { tables: {}, kv: {}, taskLines: [], baseLines: [] };
   let cur = null;
   String(text || '').split(/\r?\n/).forEach(raw => {
     const line = raw.trim();
     if (!line) return;
     const h = /^#{1,4}\s*(.+)$/.exec(line) || /^\*\*(.+?)\*\*:?$/.exec(line);
-    if (h) { cur = /^задач/i.test(h[1].trim()) ? { tasks: true } : STRAT_SECTIONS.find(s => s.re.test(h[1])) || null; return; }
+    if (h) {
+      const t = h[1].trim();
+      cur = /^задач/i.test(t) ? { tasks: true } : /^база/i.test(t) ? { base: true } : STRAT_SECTIONS.find(s => s.re.test(t)) || null;
+      return;
+    }
     if (!cur) return;
     if (cur.tasks) { out.taskLines.push(line); return; }
+    if (cur.base) { out.baseLines.push(line); return; }
     if (cur.kv) {
       const m = /^[-•*\s]*(.+?)\s*[:—|]\s*(.+)$/.exec(line);
       if (!m) return;
@@ -62,6 +67,32 @@ function parseStrategy_(text) {
     (out.tables[cur.key] = out.tables[cur.key] || []).push(cells);
   });
   return out;
+}
+
+/** «Аудитория | Компания | Сайт | Кому звонить | Почему подходит» → строки 03_ОБЗВОН_И_КП (без дублей по компании у объекта). */
+function strategyBaseRows_(obj, lines, plan) {
+  const norm = x => String(x || '').trim().toLowerCase().replace(/[«»"']/g, '');
+  const have = readTable_('BASE').rows.filter(r => String(r.obj_id) === String(obj.id)).map(r => norm(r.company));
+  const owner = teamDefaults_().assistant || '';
+  const out = [];
+  lines.forEach(line => {
+    if (line.indexOf('|') < 0 || /^\|?\s*:?-{2,}/.test(line)) return;
+    const c = line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(x => x.trim().replace(/^\*\*|\*\*$/g, ''));
+    if (c.length < 2 || !c[1] || /^компания$/i.test(c[1]) || /^аудитори/i.test(c[0]) && /компани/i.test(c[1])) return;
+    if (have.indexOf(norm(c[1])) >= 0) { plan.skipped++; return; }
+    have.push(norm(c[1]));
+    const site = /^(https?:\/\/|www\.|[\w-]+\.[a-zа-я]{2,})/i.test(c[2] || '') ? c[2] : '';
+    out.push({ obj_id: String(obj.id), audience: c[0], company: c[1], site: site, contact: c[3] || '', fit_note: c[4] || '', owner: owner });
+  });
+  return out;
+}
+
+/** Добавляет компании в 03_ОБЗВОН_И_КП и ставит в строках список аудиторий объекта. */
+function addBaseRows_(rows) {
+  const cache = {};
+  const now = new Date(), user = userEmail_();
+  appendRows_('BASE', rows.map(r => Object.assign({ id: nextId_('BASE', cache), created_at: now, author: user }, r)));
+  try { refreshBaseAudienceLists_(rows.map(r => r.obj_id)); } catch (e) { /* списки обновятся утром */ }
 }
 
 const KV_LABELS = { rec_price: 'Рекомендуемая цена', min_price: 'Минимальная цена', positioning: 'Позиционирование', price_note: 'Вывод по цене' };
@@ -124,7 +155,8 @@ function strategyPlan_(objId, text) {
     kv[k] = v;
     if (!empty) kvOld[k] = old;
   });
-  const plan = { obj: obj, tab: tab, rows: {}, kv: kv, kvOld: kvOld, skipped: 0, tasks: [], taskErrors: [] };
+  const plan = { obj: obj, tab: tab, rows: {}, kv: kv, kvOld: kvOld, skipped: 0, tasks: [], taskErrors: [], base: [] };
+  if (parsed.baseLines.length) plan.base = strategyBaseRows_(obj, parsed.baseLines, plan);
   if (parsed.taskLines.length) {
     const t = parseMeetingTasks_(parsed.taskLines.join('\n'), obj.id);
     const norm = x => String(x || '').trim().toLowerCase();
@@ -161,6 +193,7 @@ function previewStrategy(objId, text) {
     return n ? s.name + ': ' + n + ' строк' : '';
   }).filter(Boolean);
   if (p.tasks.length) parts.push('Задачи в 02_ЗАДАЧИ: ' + p.tasks.length);
+  if (p.base.length) parts.push('Компании в 03_ОБЗВОН_И_КП: ' + p.base.length);
   const total = parts.length;
   const errs = p.taskErrors.length ? '<br><span style="color:#B71C1C">' + p.taskErrors.map(htmlEscape_).join('<br>') + '</span>' : '';
   return {
@@ -198,11 +231,12 @@ function runStrategyImport(objId, text) {
     }
     let tasks = 0;
     if (p.tasks.length) tasks = addMeetingTasks_({ ok: p.tasks, errors: [] }, 'Стратегия').tasks;
+    if (p.base.length) addBaseRows_(p.base);
     let docNote = '';
     try { if (n || tasks) { appendStrategyDoc_(p.obj, 'стратегия из Claude', strategyThesis_(p)); docNote = ' Документ «' + strategyDocName_(p.obj) + '» в папке объекта пополнен.'; } }
     catch (e) { docNote = ' ⚠ Документ стратегии не пополнен: ' + e.message; }
-    logHistory_(kvHist.concat([{ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: 'Стратегия', old: '', new: 'вставлено из Claude: ' + n + (tasks ? ', задач: ' + tasks : ''), kind: HIST_KIND.CHANGE }]), userEmail_());
-    return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (tasks ? ', задач в 02_ЗАДАЧИ: ' + tasks : '') + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '.' + docNote + ' Проверьте вкладку.';
+    logHistory_(kvHist.concat([{ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: 'Стратегия', old: '', new: 'вставлено из Claude: ' + n + (tasks ? ', задач: ' + tasks : '') + (p.base.length ? ', компаний в базу: ' + p.base.length : ''), kind: HIST_KIND.CHANGE }]), userEmail_());
+    return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (tasks ? ', задач в 02_ЗАДАЧИ: ' + tasks : '') + (p.base.length ? ', компаний в 03_ОБЗВОН_И_КП: ' + p.base.length : '') + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '.' + docNote + ' Проверьте вкладку.';
   } finally {
     lock.releaseLock();
   }

@@ -68,6 +68,9 @@ function dailyJobs() {
   try { backupObjectTabs_(); } catch (e) { Logger.log('Копии вкладок: ' + e.message); }
   try { tabsWork_(); protectAll_(); } catch (e) { Logger.log('Вкладки / защита: ' + e.message); }
   try { ensureMediaTasks_(); } catch (e) { Logger.log('Задачи фото и видео: ' + e.message); }
+  try { scheduleFollowUps_(); } catch (e) { Logger.log('Повторные контакты: ' + e.message); }
+  try { refreshBaseAudienceLists_(); } catch (e) { Logger.log('Списки аудиторий: ' + e.message); }
+  try { sendDailyDigest_(); } catch (e) { Logger.log('Утренняя сводка: ' + e.message); }
 }
 
 function enableDailyJobs() {

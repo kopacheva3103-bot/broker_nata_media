@@ -107,6 +107,8 @@ function cfgDefs_() {
     { key: 'EXEC_NAME', label: 'Исполнитель (как в договоре)', value: 'ИП Копачева Н.А.' },
     { key: 'EXEC_HEADER', label: 'Шапка отчёта (реквизиты, строки через « | »)', value: 'Индивидуальный предприниматель Копачева Наталья Анатольевна | Свидетельство № 312744805300028 | тел.: 8(925)5617004 | sdelka77.ru' },
     { key: 'MANAGER_NAME', label: 'Подпись под отчётом', value: 'Наталья Копачева' },
+    { group: 'Команда' },
+    { key: 'DIGEST_ON', label: 'Утренняя сводка сотрудникам на почту в будни около 7:00 (ДА / НЕТ): задачи на сегодня и просроченные, звонки и повторные контакты', value: 'ДА' },
     { group: 'Объявления (ЦИАН, Авито)' },
     { key: 'AD_FOOTER', label: 'Финальный блок каждого объявления (для аренды «по продаже» заменяется на «по аренде»)', value: 'Рассматриваем все варианты расчетов. Документы готовы к сделке.\n\nКомментарий эксперта: Меня зовут Копачева Наталья, брокер по продаже данного лота.\n\nПредоставлю расширенную презентацию объекта. Организую индивидуальный показ.\n\nСвяжитесь со мной, чтобы получить полную информацию по объекту и согласовать удобное время просмотра.' },
     { group: 'Служебное — заполняет скрипт' },
@@ -827,6 +829,7 @@ function setupSystem() {
   } catch (err) { warn += '\n\n⚠ Защита: ' + err.message; }
   try { const nd = ensureAllStrategyDocs_(start); if (nd) log.push('Документы «Маркетинговая стратегия» в папках объектов: ' + nd); } catch (err) { warn += '\n\n⚠ Документы стратегии: ' + err.message; }
   try { const mt = ensureMediaTasks_(); if (mt) log.push('Задачи «фото и видео на Яндекс Диске» новым объектам: ' + mt); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
+  try { const nb = refreshBaseAudienceLists_(); if (nb) log.push('03_ОБЗВОН_И_КП: списки аудиторий в строках: ' + nb); } catch (err) { warn += '\n\n⚠ Списки аудиторий: ' + err.message; }
   try { const at = ensureAnalogTemplate_(); if (at) log.push(at); } catch (err) { warn += '\n\n⚠ Шаблон анализа аналогов: ' + err.message; }
   const tabs = objectTabs_().length;
   if (tabs) {
@@ -2235,6 +2238,9 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
     const r = syncObjectTab_(o, 'create');
     if (r && r.built) toast_('Создана вкладка «' + r.sheet.getName() + '» — там стратегия объекта.', 'Новый объект', 8);
   });
+  if (code === 'BASE' && editedKeys.indexOf('obj_id') >= 0) {
+    try { refreshBaseAudienceLists_(vals.map(v => String(v[spec.fields.findIndex(f => f.key === 'obj_id')] || '')).filter(Boolean)); } catch (err) { /* список поставится утром */ }
+  }
   if (code === 'OBJ' && tabSync.length) {
     try { const nt = ensureMediaTasks_(); if (nt) toast_('Ассистенту поставлена задача: фото и видео объекта на Яндекс Диске.', 'Новый объект', 6); } catch (err) { /* поставится утром */ }
   }
@@ -3500,12 +3506,32 @@ function libraryDefaults_() {
       '## Выводы\nВывод | Что делаем дальше\n(2–4 строки: цена, что сказать собственнику, что досмотреть на рынке)\n\n' +
       '## Разговор с собственником\n(это во вкладку не вставляется — для брокера)\n3–5 аргументов простым языком с цифрами из анализа: где наша цена относительно рынка, сколько висят конкуренты по такой цене, что будет при текущей цене и при рекомендуемой. Если цена собственника в рынке — аргументы, почему её держим.\n\n' +
       '## Не учтено\n(для ассистента — во вкладку не вставляется) объявление — причина'],
-    [PR, 'Сценарии использования и неочевидные аудитории', 'Разделы «Сценарии» и «Аудитории»',
-      'Объект: {описание, площадь, этажи, потолки, мощность, входы, мокрые точки, окружение: метро, бизнес-центры, школы, посольства, вокзалы, аэропорт}. Предложи 8–10 сценариев использования (продажа / аренда), включая неочевидные. Для каждого: кому (конкретные типы компаний или людей), почему объект им подходит, что проверить до предложения (документы, лицензии, технические требования), риски, приоритет ★–★★★. Отдельно — 3 идеи, которые обычный брокер не заметит.'],
-    [PR, 'Портрет целевой аудитории', 'Раздел «Аудитории»',
-      'Аудитория: {например, сети медцентров}. Объект: {кратко}. Опиши: кто принимает решение (должность), чего он боится и что ему важно в помещении, какие цифры он захочет увидеть в КП, где искать контакты (реестры, 2ГИС, сайты, ассоциации, Telegram-каналы), как лучше выйти на ЛПР. Дай список из 20 конкретных компаний Москвы с сайтами, если уверен в них (помечай, что проверить).'],
-    [PR, 'КП клиенту и партнёру', 'Раздел «КП и материалы»',
-      'Подготовь текст КП для {аудитория} по объекту {описание}. Структура: заголовок-выгода, 5 ключевых фактов (цифры), почему подходит именно под их бизнес, экономика (ставка / цена / окупаемость), следующий шаг. Версия 1 — клиенту (с контактами агентства). Версия 2 — партнёру для пересылки: без контактов агентства и собственника, нейтральный тон.'],
+    [PR, 'Целевые аудитории объекта — для вставки', 'Раздел 4 «Аудитории» + база обзвона в 03_ОБЗВОН_И_КП → меню «Вставить стратегию из Claude»',
+      'Ты — маркетолог-аналитик по элитной и коммерческой недвижимости Москвы и МО. Работаешь на брокера с эксклюзивом.\n' +
+      'Задача: определить, КОМУ продавать / сдавать объект, и дать ассистенту готовый план обзвона. Ассистент в неделю делает около 10 звонков и 8 КП — план должен быть реальным.\n\n' +
+      'ПРАВИЛА\n' +
+      '1. Аудитория — конкретный тип покупателя / арендатора, а не «бизнесмены». Название короткое (2–4 слова): по нему ассистент ведёт базу обзвона, пиши его одинаково во всех разделах.\n' +
+      '2. Для каждой аудитории: кто ЛПР (должность), зачем им ИМЕННО этот объект (опираясь на его параметры: площадь, локация, планировка, условия), где найти контакты.\n' +
+      '3. Отдельно — партнёры-посредники, которые могут привести клиента (УК, консьерж-сервисы, relocation, архитекторы, брокеры деловой авиации, банки private banking…). Если в данных объекта есть вознаграждение партнёрам — используй его.\n' +
+      '4. Учитывай ограничения собственника и условия сделки. Аудитории, которым объект не подходит, не предлагай.\n' +
+      '5. Компании — только реальные, которые можно проверить поиском. Сайт указывай, только если открыл его. Не уверен в компании — не пиши её. Если поиска нет — вместо компаний напиши, где ассистенту их искать (2ГИС-рубрика, реестр, ассоциация).\n' +
+      '6. Приоритет: ★★★ — первая волна (2–3 аудитории на ближайшие 2 недели), ★★ — вторая, ★ — гипотеза.\n' +
+      '7. Если во вкладке уже есть аудитории (см. данные объекта) — не повторяй их, а дополни или предложи, какие убрать.\n\n' +
+      'ШАГ 1 — если не хватает данных о покупателе (кто уже интересовался, кто купил / снимал похожее, что говорит собственник о прошлых клиентах, есть ли вознаграждение партнёрам) — задай до 5 коротких вопросов и ЖДИ ответа. Иначе — шаг 2.\n\n' +
+      'ШАГ 2 — ответ строго в формате ниже, без вступлений; строки через «|», без строки заголовков таблицы:\n\n' +
+      '## Аудитории\nАудитория | Кто (Компании / Физлица / Инвесторы / Партнёры-посредники) | Портрет: ЛПР и зачем им объект | Где искать | Приоритет (★★★ / ★★ / ★)\n(5–8 аудиторий, из них 2–3 неочевидные — с пометкой «неочевидная» в портрете)\n\n' +
+      '## База для обзвона\nАудитория (точно как в разделе выше) | Компания | Сайт (или пусто) | Кому звонить: должность / отдел | Почему подходит (1 фраза)\n(только аудитории ★★★, по 5–10 реальных компаний на аудиторию)\n\n' +
+      '## Каналы\nКанал / партнёр | Что делаем и что предлагаем\n\n' +
+      '## Выводы\nВывод | Что делаем дальше\n(2–4 строки: с каких аудиторий начинаем и почему; какие не берём и почему)'],
+    [PR, 'Портрет ЛПР и выход на него', 'Одна аудитория подробно: для скрипта звонка и КП',
+      'Ты — маркетолог B2B / B2C в недвижимости. Объект — в данных ниже. Аудитория: {аудитория — впишите название из вкладки}.\n\n' +
+      'Опиши подробно, коротко и по делу:\n' +
+      '1. Кто принимает решение и кто влияет (должности); кто «привратник» (секретарь, ресепшн, администратор) и как его пройти.\n' +
+      '2. Что для ЛПР важно в объекте, чего он боится, какие цифры захочет увидеть в КП (с опорой на параметры нашего объекта).\n' +
+      '3. 5 главных возражений и короткие ответы на них.\n' +
+      '4. Лучший канал первого контакта (звонок / письмо / мессенджер / через партнёра / мероприятие) и почему.\n' +
+      '5. Первая фраза звонка (до 20 слов) и тема письма (до 60 знаков).\n' +
+      'Не выдумывай фактов об объекте: чего нет в данных — так и напиши «уточнить».'],
     [PR, 'Скрипт звонка и письма', 'Работа с базой (03_ОБЗВОН_И_КП)',
       'Составь для ассистента: 1) скрипт звонка в колл-центр / приёмную сети {аудитория} с целью выйти на отдел развития (3 варианта обхода «секретаря»); 2) короткое письмо с КП (до 700 знаков) с просьбой переслать ЛПР; 3) текст для формы обратной связи на сайте; 4) ответы на 5 типовых возражений. Объект: {кратко}.'],
     [PR, 'Сценарий рилс', 'Контент (04_КОНТЕНТ)',
@@ -3521,8 +3547,14 @@ function libraryDefaults_() {
   ];
 }
 
+/** Системные записи, которые заменены новыми: удаляются из 06_БИБЛИОТЕКА, если их никто не правил (автор «система»). */
+const LIB_RETIRED = ['Сценарии использования и неочевидные аудитории', 'Портрет целевой аудитории'];
+
 function seedLibrary_() {
-  const t = readTable_('LIB');
+  let t = readTable_('LIB');
+  const retire = t.rows.filter(r => LIB_RETIRED.indexOf(String(r.title).trim()) >= 0 && r.author === 'система').map(r => r._row).sort((x, y) => y - x);
+  retire.forEach(r => t.sh.deleteRow(r));
+  if (retire.length) t = readTable_('LIB');
   const have = {};
   t.rows.forEach(r => { have[String(r.title).trim()] = true; });
   // записи, которые никто не правил (автор «система»), обновляются до новой версии текста
@@ -4288,6 +4320,9 @@ function dailyJobs() {
   try { backupObjectTabs_(); } catch (e) { Logger.log('Копии вкладок: ' + e.message); }
   try { tabsWork_(); protectAll_(); } catch (e) { Logger.log('Вкладки / защита: ' + e.message); }
   try { ensureMediaTasks_(); } catch (e) { Logger.log('Задачи фото и видео: ' + e.message); }
+  try { scheduleFollowUps_(); } catch (e) { Logger.log('Повторные контакты: ' + e.message); }
+  try { refreshBaseAudienceLists_(); } catch (e) { Logger.log('Списки аудиторий: ' + e.message); }
+  try { sendDailyDigest_(); } catch (e) { Logger.log('Утренняя сводка: ' + e.message); }
 }
 
 function enableDailyJobs() {
@@ -5644,15 +5679,20 @@ function importStrategy() {
 
 /** Текст ответа → {sections: {KEY: [[...]]}, kv: {key: value}}. */
 function parseStrategy_(text) {
-  const out = { tables: {}, kv: {}, taskLines: [] };
+  const out = { tables: {}, kv: {}, taskLines: [], baseLines: [] };
   let cur = null;
   String(text || '').split(/\r?\n/).forEach(raw => {
     const line = raw.trim();
     if (!line) return;
     const h = /^#{1,4}\s*(.+)$/.exec(line) || /^\*\*(.+?)\*\*:?$/.exec(line);
-    if (h) { cur = /^задач/i.test(h[1].trim()) ? { tasks: true } : STRAT_SECTIONS.find(s => s.re.test(h[1])) || null; return; }
+    if (h) {
+      const t = h[1].trim();
+      cur = /^задач/i.test(t) ? { tasks: true } : /^база/i.test(t) ? { base: true } : STRAT_SECTIONS.find(s => s.re.test(t)) || null;
+      return;
+    }
     if (!cur) return;
     if (cur.tasks) { out.taskLines.push(line); return; }
+    if (cur.base) { out.baseLines.push(line); return; }
     if (cur.kv) {
       const m = /^[-•*\s]*(.+?)\s*[:—|]\s*(.+)$/.exec(line);
       if (!m) return;
@@ -5671,6 +5711,32 @@ function parseStrategy_(text) {
     (out.tables[cur.key] = out.tables[cur.key] || []).push(cells);
   });
   return out;
+}
+
+/** «Аудитория | Компания | Сайт | Кому звонить | Почему подходит» → строки 03_ОБЗВОН_И_КП (без дублей по компании у объекта). */
+function strategyBaseRows_(obj, lines, plan) {
+  const norm = x => String(x || '').trim().toLowerCase().replace(/[«»"']/g, '');
+  const have = readTable_('BASE').rows.filter(r => String(r.obj_id) === String(obj.id)).map(r => norm(r.company));
+  const owner = teamDefaults_().assistant || '';
+  const out = [];
+  lines.forEach(line => {
+    if (line.indexOf('|') < 0 || /^\|?\s*:?-{2,}/.test(line)) return;
+    const c = line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(x => x.trim().replace(/^\*\*|\*\*$/g, ''));
+    if (c.length < 2 || !c[1] || /^компания$/i.test(c[1]) || /^аудитори/i.test(c[0]) && /компани/i.test(c[1])) return;
+    if (have.indexOf(norm(c[1])) >= 0) { plan.skipped++; return; }
+    have.push(norm(c[1]));
+    const site = /^(https?:\/\/|www\.|[\w-]+\.[a-zа-я]{2,})/i.test(c[2] || '') ? c[2] : '';
+    out.push({ obj_id: String(obj.id), audience: c[0], company: c[1], site: site, contact: c[3] || '', fit_note: c[4] || '', owner: owner });
+  });
+  return out;
+}
+
+/** Добавляет компании в 03_ОБЗВОН_И_КП и ставит в строках список аудиторий объекта. */
+function addBaseRows_(rows) {
+  const cache = {};
+  const now = new Date(), user = userEmail_();
+  appendRows_('BASE', rows.map(r => Object.assign({ id: nextId_('BASE', cache), created_at: now, author: user }, r)));
+  try { refreshBaseAudienceLists_(rows.map(r => r.obj_id)); } catch (e) { /* списки обновятся утром */ }
 }
 
 const KV_LABELS = { rec_price: 'Рекомендуемая цена', min_price: 'Минимальная цена', positioning: 'Позиционирование', price_note: 'Вывод по цене' };
@@ -5733,7 +5799,8 @@ function strategyPlan_(objId, text) {
     kv[k] = v;
     if (!empty) kvOld[k] = old;
   });
-  const plan = { obj: obj, tab: tab, rows: {}, kv: kv, kvOld: kvOld, skipped: 0, tasks: [], taskErrors: [] };
+  const plan = { obj: obj, tab: tab, rows: {}, kv: kv, kvOld: kvOld, skipped: 0, tasks: [], taskErrors: [], base: [] };
+  if (parsed.baseLines.length) plan.base = strategyBaseRows_(obj, parsed.baseLines, plan);
   if (parsed.taskLines.length) {
     const t = parseMeetingTasks_(parsed.taskLines.join('\n'), obj.id);
     const norm = x => String(x || '').trim().toLowerCase();
@@ -5770,6 +5837,7 @@ function previewStrategy(objId, text) {
     return n ? s.name + ': ' + n + ' строк' : '';
   }).filter(Boolean);
   if (p.tasks.length) parts.push('Задачи в 02_ЗАДАЧИ: ' + p.tasks.length);
+  if (p.base.length) parts.push('Компании в 03_ОБЗВОН_И_КП: ' + p.base.length);
   const total = parts.length;
   const errs = p.taskErrors.length ? '<br><span style="color:#B71C1C">' + p.taskErrors.map(htmlEscape_).join('<br>') + '</span>' : '';
   return {
@@ -5807,11 +5875,12 @@ function runStrategyImport(objId, text) {
     }
     let tasks = 0;
     if (p.tasks.length) tasks = addMeetingTasks_({ ok: p.tasks, errors: [] }, 'Стратегия').tasks;
+    if (p.base.length) addBaseRows_(p.base);
     let docNote = '';
     try { if (n || tasks) { appendStrategyDoc_(p.obj, 'стратегия из Claude', strategyThesis_(p)); docNote = ' Документ «' + strategyDocName_(p.obj) + '» в папке объекта пополнен.'; } }
     catch (e) { docNote = ' ⚠ Документ стратегии не пополнен: ' + e.message; }
-    logHistory_(kvHist.concat([{ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: 'Стратегия', old: '', new: 'вставлено из Claude: ' + n + (tasks ? ', задач: ' + tasks : ''), kind: HIST_KIND.CHANGE }]), userEmail_());
-    return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (tasks ? ', задач в 02_ЗАДАЧИ: ' + tasks : '') + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '.' + docNote + ' Проверьте вкладку.';
+    logHistory_(kvHist.concat([{ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: 'Стратегия', old: '', new: 'вставлено из Claude: ' + n + (tasks ? ', задач: ' + tasks : '') + (p.base.length ? ', компаний в базу: ' + p.base.length : ''), kind: HIST_KIND.CHANGE }]), userEmail_());
+    return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (tasks ? ', задач в 02_ЗАДАЧИ: ' + tasks : '') + (p.base.length ? ', компаний в 03_ОБЗВОН_И_КП: ' + p.base.length : '') + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '.' + docNote + ' Проверьте вкладку.';
   } finally {
     lock.releaseLock();
   }
@@ -6010,4 +6079,105 @@ function workdayAfter_(d, n) {
   let x = d;
   while (n > 0) { x = addDays_(x, 1); if (x.getDay() !== 0 && x.getDay() !== 6) n--; }
   return x;
+}
+
+// ═════════════ 26_BaseTools.gs ═════════════
+/**
+ * 26_BaseTools — помощь ассистенту в 03_ОБЗВОН_И_КП:
+ *  - выпадающий список «Аудитория» в каждой строке — аудитории из вкладки объекта (цифры во вкладке считаются только при точном совпадении);
+ *  - напоминание о повторном контакте: КП отправлено, ответа нет 3 рабочих дня, следующий шаг не назначен → шаг и дата ставятся сами;
+ *  - утренняя сводка каждому сотруднику с email: просроченные задачи, звонки и повторные контакты на сегодня.
+ */
+
+const FOLLOWUP_DAYS = 3;
+const FOLLOWUP_TEXT = 'Повторный контакт: получили ли КП, есть ли вопросы';
+
+/** Аудитории объекта из раздела 4 его вкладки. */
+function objectAudiences_(objId) {
+  const obj = objectById_(objId);
+  const tab = obj ? findObjectTab_(obj) : null;
+  if (!tab) return [];
+  const rows = readObjectTab_(tab).tables.AUD || [];
+  const out = [];
+  rows.forEach(r => { const a = String(r[0] || '').trim(); if (a && out.indexOf(a) < 0) out.push(a); });
+  return out;
+}
+
+/** Ставит в столбце «Аудитория» 03_ОБЗВОН_И_КП список аудиторий объекта строки. objIds — только эти объекты (по умолчанию все). */
+function refreshBaseAudienceLists_(objIds) {
+  const t = readTable_('BASE');
+  const col = sheetSpecs_().BASE.fields.findIndex(f => f.key === 'audience') + 1;
+  const only = objIds ? objIds.map(String) : null;
+  const lists = {};
+  let n = 0;
+  // соседние строки одного объекта — одним диапазоном
+  let start = 0, prevId = '', prevRow = 0;
+  const flush = (endRow) => {
+    if (!start || !prevId) return;
+    const list = lists[prevId];
+    const rng = t.sh.getRange(start, col, endRow - start + 1, 1);
+    if (list.length) {
+      rng.setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(list, true).setAllowInvalid(false)
+        .setHelpText('Аудитории из вкладки объекта. Нужной нет — сначала добавьте её во вкладку (раздел 4).').build());
+      n += endRow - start + 1;
+    }
+  };
+  t.rows.forEach(r => {
+    const id = String(r.obj_id || '');
+    const use = id && (!only || only.indexOf(id) >= 0);
+    if (use && !(id in lists)) lists[id] = objectAudiences_(id);
+    if (use && id === prevId && r._row === prevRow + 1) { prevRow = r._row; return; }
+    flush(prevRow);
+    start = use ? r._row : 0; prevId = use ? id : ''; prevRow = r._row;
+  });
+  flush(prevRow);
+  return n;
+}
+
+/** КП без ответа дольше FOLLOWUP_DAYS рабочих дней и без следующего шага → «Повторный контакт» на сегодня. */
+function scheduleFollowUps_() {
+  const t = readTable_('BASE');
+  const today = today_();
+  let n = 0;
+  t.rows.forEach(r => {
+    if (!(r.kp_date instanceof Date) || r.next_step || r.next_date) return;
+    const cls = r.response ? dictClassOf_('responses', r.response) : 'NONE';
+    if (cls && cls !== 'NONE') return;
+    if (workdayAfter_(r.kp_date, FOLLOWUP_DAYS) > today) return;
+    writeFields_(t.sh, 'BASE', r._row, { next_step: FOLLOWUP_TEXT, next_date: today });
+    n++;
+  });
+  return n;
+}
+
+/** Утренняя сводка на почту каждому сотруднику, у кого указан email (08_НАСТРОЙКИ → «Утренняя сводка» = ДА). */
+function sendDailyDigest_(now) {
+  if (String(cfgGet_('DIGEST_ON') || 'ДА').trim().toUpperCase() !== 'ДА') return 0;
+  const today = now || today_();
+  if (today.getDay() === 0 || today.getDay() === 6) return 0;
+  const people = dictRows_('people').filter(p => p[0] && /@/.test(String(p[2] || '')));
+  if (!people.length) return 0;
+  const objName = {};
+  readTable_('OBJ').rows.forEach(o => { objName[String(o.id)] = o.name; });
+  const tasks = readTable_('TASK').rows.filter(r => r.task && dictClassOf_('task_status', r.status) === CLS.OPEN && r.deadline instanceof Date && r.deadline <= today);
+  const base = readTable_('BASE').rows.filter(r => r.company && r.next_date instanceof Date && r.next_date <= today);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const d = x => fmtDate_(x);
+  let sent = 0;
+  people.forEach(p => {
+    const name = String(p[0]).trim(), email = String(p[2]).trim();
+    const my = tasks.filter(r => r.owner === name);
+    const calls = base.filter(r => r.owner === name);
+    if (!my.length && !calls.length) return;
+    const li = arr => '<ul>' + arr.join('') + '</ul>';
+    let html = '<p>Доброе утро! План на ' + d(today) + ':</p>';
+    if (my.length) html += '<p><b>Задачи со сроком сегодня и просроченные (' + my.length + ')</b></p>' +
+      li(my.map(r => '<li>' + esc(objName[String(r.obj_id)] || r.obj_id) + ': ' + esc(r.task) + ' — срок ' + d(r.deadline) + (r.deadline < today ? ' <b style="color:#B71C1C">просрочено</b>' : '') + '</li>'));
+    if (calls.length) html += '<p><b>Звонки и повторные контакты (' + calls.length + ')</b></p>' +
+      li(calls.map(r => '<li>' + esc(r.company) + ' (' + esc(objName[String(r.obj_id)] || r.obj_id) + ')' + (r.contact ? ', ' + esc(r.contact) : '') + ' — ' + esc(r.next_step || 'следующий шаг') + '</li>'));
+    html += '<p><a href="' + ss_().getUrl() + '">Открыть систему</a></p>';
+    MailApp.sendEmail({ to: email, subject: 'План на ' + d(today) + ': задач ' + my.length + ', контактов ' + calls.length, htmlBody: html, name: 'Система эксклюзивов' });
+    sent++;
+  });
+  return sent;
 }

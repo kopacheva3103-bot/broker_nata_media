@@ -166,6 +166,9 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
     const r = syncObjectTab_(o, 'create');
     if (r && r.built) toast_('Создана вкладка «' + r.sheet.getName() + '» — там стратегия объекта.', 'Новый объект', 8);
   });
+  if (code === 'BASE' && editedKeys.indexOf('obj_id') >= 0) {
+    try { refreshBaseAudienceLists_(vals.map(v => String(v[spec.fields.findIndex(f => f.key === 'obj_id')] || '')).filter(Boolean)); } catch (err) { /* список поставится утром */ }
+  }
   if (code === 'OBJ' && tabSync.length) {
     try { const nt = ensureMediaTasks_(); if (nt) toast_('Ассистенту поставлена задача: фото и видео объекта на Яндекс Диске.', 'Новый объект', 6); } catch (err) { /* поставится утром */ }
   }

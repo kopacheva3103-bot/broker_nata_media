@@ -431,3 +431,30 @@ console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПр
   const t = X.readTable_('TASK').rows.filter(r => r.obj_id === '777001');
   console.log('media task:', t.map(r => [r.block, r.owner, r.source, X.fmtDate_(r.deadline), r.task.slice(0, 40)].join(' / ')).join(' ; '));
 }
+
+// аудитории: база обзвона из ответа Claude, списки аудиторий, повторный контакт, утренняя сводка
+{
+  const ans = ['## Аудитории', 'Сети стоматологий | Компании | ЛПР — директор по развитию, расширяют сеть | 2ГИС | ★★★',
+    '## База для обзвона', 'Аудитория | Компания | Сайт | Кому звонить | Почему подходит',
+    'Сети стоматологий | Стоматология «Тест-Дент» | test-dent.ru | директор по развитию | ищут 200+ м²',
+    'Сети стоматологий | Клиника Пример | — | отдел аренды | филиалы в ЦАО'].join('\n');
+  console.log('aud preview:', X.previewStrategy('4801', ans).html.replace(/<[^>]+>/g, ' '));
+  console.log(X.runStrategyImport('4801', ans));
+  const b = X.readTable_('BASE').rows.filter(r => /Тест-Дент|Пример/.test(r.company));
+  console.log('base rows:', b.map(r => [r.obj_id, r.audience, r.company, r.site, r.contact, r.owner].join(' / ')).join(' ; '));
+  console.log('again base (no dups):', X.previewStrategy('4801', ans).html.replace(/<[^>]+>/g, ' ').slice(0, 120));
+  console.log('aud lists rows:', X.refreshBaseAudienceLists_(['4801']), '| audiences:', X.objectAudiences_('4801').join(', '));
+  const t = X.readTable_('BASE');
+  const r = t.rows.find(x => /Тест-Дент/.test(x.company));
+  X.writeFields_(t.sh, 'BASE', r._row, { kp_date: X.addDays_(X.today_(), -7), owner: 'Мария' });
+  console.log('followups:', X.scheduleFollowUps_(), '| again:', X.scheduleFollowUps_());
+  const r2 = X.readTable_('BASE').rows.find(x => /Тест-Дент/.test(x.company));
+  console.log('followup row:', r2.next_step, X.fmtDate_(r2.next_date));
+  MAILS.length = 0;
+  console.log('digest sent:', X.sendDailyDigest_(), MAILS.map(m => m.to + ': ' + m.subject).join(' ; '));
+}
+{
+  MAILS.length = 0;
+  console.log('digest weekday:', X.sendDailyDigest_(X.addDays_(X.today_(), 1)), MAILS.map(m => m.to + ': ' + m.subject).join(' ; '));
+  if (MAILS[0]) console.log(MAILS[0].htmlBody.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 400));
+}
