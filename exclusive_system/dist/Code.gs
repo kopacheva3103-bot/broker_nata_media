@@ -823,6 +823,7 @@ function setupSystem() {
     if (isOwner_()) log.push('Защита: ID и названия объектов, служебная часть вкладок (' + nt + ') — удалять объекты может только руководитель');
     backupObjectTabs_();
   } catch (err) { warn += '\n\n⚠ Защита: ' + err.message; }
+  try { const nd = ensureAllStrategyDocs_(start); if (nd) log.push('Документы «Маркетинговая стратегия» в папках объектов: ' + nd); } catch (err) { warn += '\n\n⚠ Документы стратегии: ' + err.message; }
   const tabs = objectTabs_().length;
   if (tabs) {
     try { startTabRebuild_(); const r = tabsWork_(start); applyTabVisibility_(); log.push('Вкладки объектов: ' + tabsWorkText_(r)); } catch (err) { warn += '\n\n⚠ Вкладки объектов: ' + err.message + '\nЗапустите «Сервис → Обновить все вкладки объектов».'; }
@@ -1793,6 +1794,7 @@ function syncObjectTab_(obj, mode) {
     }
   }
   if (built) { try { protectObjectTab_(sh); } catch (e) { /* защиту поставит «Обновить» владельца */ } }
+  if (built && mode === 'create') { try { ensureStrategyDoc_(obj); } catch (e) { /* создастся при первой вставке стратегии */ } }
   if (built || mode === 'files') {
     try { fillObjectFiles_(sh, obj); } catch (e) { /* Drive недоступен — список обновится позже */ }
   }
@@ -3429,6 +3431,7 @@ function libraryDefaults_() {
       '## Сценарии\nСценарий | Чек-лист (одно из: {чек-листы}; или пусто) | Что проверить / какие документы запросить | Кого привлечь (консультанты, подрядчики) | Вывод\n(5–8 сценариев, включая неочевидные)\n\n' +
       '## Аудитории\nАудитория (коротко, как её будет писать ассистент в базе обзвона) | Кто (Компании / Физлица / Инвесторы / Партнёры-посредники) | Портрет: зачем им объект | Где искать | Приоритет (★★★ / ★★ / ★)\n(6–10 аудиторий, 2–3 неочевидные)\n\n' +
       '## Каналы\nКанал / партнёр | Что делаем\n(ЦИАН / Авито / Яндекс, соцсети, брокеры, УК, консультанты, ассоциации, рассылки — 6–10 строк)\n\n' +
+      '## Материалы\nМатериал | Какое (КП клиенту / КП партнёру / Презентация под аудиторию / Письмо без вложения) | Для аудитории / сценария | Что должно быть внутри\n\n' +
       '## Выводы\nВывод | Что делаем дальше\n(3–5 главных решений на ближайшие 2 недели)'],
     [PR, 'Анализ цены по аналогам', 'Раздел «Аналитика и цена» вкладки объекта',
       'Ты — аналитик коммерческой / жилой недвижимости Москвы. Объект: {адрес, площадь, этаж, назначение, особенности}. Текущая цена: {цена}. Аналоги с ЦИАН: {таблица аналогов из вкладки}.\nСделай: 1) медиану и разброс цены за м² по сопоставимым аналогам (отдельно отбрось несопоставимые и объясни почему); 2) поправки на этаж, вход, высоту, мощность, готовность под бизнес; 3) рекомендованный диапазон цены, консервативную цену и минимальную цену сделки; 4) 3 аргумента для собственника, если цена выше рынка. Ответ — таблица + короткий вывод.'],
@@ -3457,6 +3460,13 @@ function seedLibrary_() {
   const t = readTable_('LIB');
   const have = {};
   t.rows.forEach(r => { have[String(r.title).trim()] = true; });
+  // записи, которые никто не правил (автор «система»), обновляются до новой версии текста
+  const defs = {};
+  libraryDefaults_().forEach(d => { defs[d[1]] = d; });
+  t.rows.forEach(r => {
+    const d = defs[String(r.title).trim()];
+    if (d && r.author === 'система' && String(r.text) !== d[3]) writeFields_(t.sh, 'LIB', r._row, { applies: d[2], text: d[3], updated_at: new Date() });
+  });
   const cache = {};
   const add = libraryDefaults_().filter(d => !have[d[1]]).map(d => ({
     id: nextId_('LIB', cache), kind: d[0], title: d[1], applies: d[2], text: d[3], updated_at: new Date(), author: 'система',
@@ -4037,6 +4047,10 @@ function addMeetingTasks(text) {
       hist.push({ sheet: tab.getName(), record_id: 'раздел 7', obj_id: o.obj_id, field: '7. ВЫВОДЫ И РЕШЕНИЯ · с оперативки', old: '', new: o.decision, kind: HIST_KIND.CREATE });
       dec++;
     });
+    // решения с оперативки — в документ стратегии каждого объекта
+    const byObj = {};
+    r.ok.filter(o => o.decision).forEach(o => { (byObj[o.obj_id] = byObj[o.obj_id] || []).push(o.decision + (o.task ? ' → ' + o.task : '')); });
+    Object.keys(byObj).forEach(id => { const obj = objectById_(id); if (obj) { try { appendStrategyDoc_(obj, 'решения с оперативки', [{ title: 'Решения', lines: byObj[id] }]); } catch (e) { /* документ пополнится вручную */ } } });
     logHistory_(hist, user);
     return 'Внесено задач: ' + rows.length + (dec ? ', решений во вкладки объектов: ' + dec : '') + (r.errors.length ? '. Пропущено строк: ' + r.errors.length : '') + '.';
   } finally {
@@ -5512,6 +5526,7 @@ const STRAT_SECTIONS = [
   { re: /сценари/i, key: 'SCEN', idx: [0, 1, 2, 3, 4], name: 'Сценарии' },           // Сценарий | Чек-лист | Что проверить | Консультанты | Вывод
   { re: /аудитор/i, key: 'AUD', idx: [0, 1, 2, 3, 4], name: 'Аудитории' },           // Аудитория | Кто | Портрет | Где искать | Приоритет
   { re: /канал|партн[её]р/i, key: 'CHAN', idx: [0, 1], name: 'Каналы и партнёры' },   // Канал | Что делаем
+  { re: /материал|презентац|^кп\b|кп и/i, key: 'KP', idx: [0, 1, 2, 5], name: 'КП и материалы' },  // Материал | Какое | Для аудитории | Комментарий
   { re: /вывод|решени/i, key: 'DEC', idx: [1, 3], name: 'Выводы и решения' },         // Вывод | Что делаем дальше
 ];
 
@@ -5555,7 +5570,7 @@ function parseStrategy_(text) {
     }
     if (line.indexOf('|') < 0 || /^\|?\s*:?-{2,}/.test(line)) return;
     const cells = line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim().replace(/^\*\*|\*\*$/g, ''));
-    const isHeader = /^(аналог|адрес|сценари|аудитори|канал|вывод)/i.test(cells[0]) && cells[0].length < 30 &&
+    const isHeader = /^(аналог|адрес|сценари|аудитори|канал|вывод|материал)/i.test(cells[0]) && cells[0].length < 30 &&
       /назначен|чек-лист|кто|что делаем|что проверить|портрет|площадь/i.test(cells.slice(1).join(' '));
     if (!cells[0] || isHeader) return; // строка заголовка таблицы
     (out.tables[cur.key] = out.tables[cur.key] || []).push(cells);
@@ -5597,6 +5612,7 @@ function strategyRow_(sec, cells) {
   });
   if (sec.key === 'SCEN' && row[5] === undefined) row[5] = dictValues_('scenario_status')[0] || '';
   if (sec.key === 'CHAN' && row[3] === undefined) row[3] = dictValues_('work_status')[0] || '';
+  if (sec.key === 'KP' && row[4] === undefined) row[4] = dictValues_('work_status')[0] || '';
   if (sec.key === 'DEC') { row[0] = today_(); const p = personByEmail_(userEmail_()); if (p) row[2] = p; }
   return row;
 }
@@ -5663,9 +5679,105 @@ function runStrategyImport(objId, text) {
         if (i >= 0 && sh.getRange(i + 1, 3).getValue() === '') { sh.getRange(i + 1, 3).setValue(p.kv[k]); n++; }
       });
     }
+    let docNote = '';
+    try { if (n) { appendStrategyDoc_(p.obj, 'стратегия из Claude', strategyThesis_(p)); docNote = ' Документ «' + strategyDocName_(p.obj) + '» в папке объекта пополнен.'; } }
+    catch (e) { docNote = ' ⚠ Документ стратегии не пополнен: ' + e.message; }
     logHistory_([{ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: 'Стратегия', old: '', new: 'вставлено из Claude: ' + n, kind: HIST_KIND.CHANGE }], userEmail_());
-    return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '. Проверьте вкладку.';
+    return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '.' + docNote + ' Проверьте вкладку.';
   } finally {
     lock.releaseLock();
   }
+}
+
+// ═════════════ 23_StrategyDoc.gs ═════════════
+/**
+ * 23_StrategyDoc — документ «Маркетинговая стратегия — <объект>» в папке каждого объекта (Google Doc).
+ * Один файл на объект, он только пополняется: каждая вставка стратегии из Claude и решения с оперативки
+ * дописываются блоком «дата · кто добавил» → тезисы по разделам. Старое не удаляется — это история стратегии.
+ * Аналитика (цены, аналоги, расчёты) — отдельные файлы в папке «Аналитика».
+ */
+
+const STRATEGY_DOC_PREFIX = 'Маркетинговая стратегия — ';
+
+function strategyDocName_(obj) { return STRATEGY_DOC_PREFIX + obj.name; }
+
+/** Документ стратегии объекта: найти в папке объекта (по началу названия) или создать. */
+function ensureStrategyDoc_(obj) {
+  const folder = ensureObjectFolder_(obj.id, 'ROOT');
+  const it = folder.getFiles();
+  while (it.hasNext()) {
+    const f = it.next();
+    if (f.getName().indexOf(STRATEGY_DOC_PREFIX) === 0 && !f.isTrashed() && String(f.getMimeType()).indexOf('document') >= 0) return f;
+  }
+  const doc = DocumentApp.create(strategyDocName_(obj));
+  const b = doc.getBody();
+  b.getParagraphs()[0].setText('Маркетинговая стратегия: ' + obj.name);
+  b.getParagraphs()[0].setHeading(DocumentApp.ParagraphHeading.TITLE);
+  b.appendParagraph([obj.address, obj.kind, obj.deal, obj.area ? obj.area + ' м²' : '', 'ID ' + obj.id].filter(Boolean).join(' · '));
+  b.appendParagraph('Документ пополняется: новые записи добавляются ниже — сначала дата, затем тезисы. Старое не удаляем — это история стратегии. Аналитика — отдельные файлы в папке «Аналитика».')
+    .editAsText().setItalic(true).setFontSize(10);
+  doc.saveAndClose();
+  const file = DriveApp.getFileById(doc.getId());
+  file.moveTo(folder);
+  return file;
+}
+
+/**
+ * Дописать блок в документ стратегии.
+ * sections: [{title: 'Сценарии', lines: ['…', '…']}, …]; пустые разделы пропускаются.
+ */
+function appendStrategyDoc_(obj, source, sections) {
+  const secs = sections.filter(s => s.lines && s.lines.length);
+  if (!secs.length) return '';
+  const file = ensureStrategyDoc_(obj);
+  const doc = DocumentApp.openById(file.getId());
+  const b = doc.getBody();
+  const who = personByEmail_(userEmail_()) || userEmail_();
+  b.appendParagraph(fmtDate_(new Date(), 'dd.MM.yyyy') + (source ? ' · ' + source : '') + (who ? ' · ' + who : ''))
+    .setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  secs.forEach(s => {
+    b.appendParagraph(s.title).setHeading(DocumentApp.ParagraphHeading.HEADING3);
+    s.lines.forEach(l => b.appendListItem(String(l)).setGlyphType(DocumentApp.GlyphType.BULLET));
+  });
+  doc.saveAndClose();
+  return file.getUrl();
+}
+
+/** Тезисы по разделам из вставленных строк вкладки (для документа стратегии). */
+function strategyThesis_(plan) {
+  const cols = {};
+  objTabSections_().forEach(s => { if (s.cols) cols[s.key] = s.cols; });
+  const money = v => typeof v === 'number' ? v.toLocaleString('ru-RU') + ' ₽' : v;
+  const j = (row, map) => map.map(m => {
+    const v = row[m[0]];
+    if (v === undefined || v === '') return '';
+    return (m[1] ? m[1] + ': ' : '') + (m[2] ? m[2](v) : v);
+  }).filter(Boolean);
+  const rows = key => plan.rows[key] || [];
+  const out = [];
+  const kv = plan.kv;
+  const price = [];
+  if (kv.positioning) price.push('Позиционирование: ' + kv.positioning);
+  if (kv.rec_price) price.push('Рекомендуемая цена: ' + money(kv.rec_price));
+  if (kv.min_price) price.push('Минимальная цена: ' + money(kv.min_price));
+  if (kv.price_note) price.push('Вывод по цене: ' + kv.price_note);
+  out.push({ title: 'Цена и позиционирование', lines: price });
+  out.push({ title: 'Аналоги', lines: rows('ANALOG').map(r => { const p = j(r, [[1], [2, '', v => v + ' м²'], [3, '', money]]); return r[0] + (p.length ? ' — ' + p.join(', ') : '') + (r[6] ? '. ' + r[6] : ''); }) });
+  out.push({ title: 'Сценарии использования', lines: rows('SCEN').map(r => r[0] + (r[4] ? ' — ' + r[4] : '') + (r[5] ? ' [' + r[5] + ']' : '') + (j(r, [[2, 'проверить'], [3, 'привлечь']]).length ? '. ' + j(r, [[2, 'проверить'], [3, 'привлечь']]).join('; ') : '')) });
+  out.push({ title: 'Целевые аудитории', lines: rows('AUD').map(r => (r[4] ? r[4] + ' ' : '') + r[0] + (r[1] ? ' (' + r[1] + ')' : '') + (r[2] ? ' — ' + r[2] : '') + (r[3] ? '. Где искать: ' + r[3] : '')) });
+  out.push({ title: 'Каналы и партнёры', lines: rows('CHAN').map(r => r[0] + (r[1] ? ' — ' + r[1] : '')) });
+  out.push({ title: 'КП и материалы', lines: rows('KP').map(r => r[0] + (r[1] ? ' (' + r[1] + ')' : '') + (r[2] ? ' — для: ' + r[2] : '') + (r[5] ? '. ' + r[5] : '')) });
+  out.push({ title: 'Выводы и решения', lines: rows('DEC').map(r => r[1] + (r[3] ? ' → ' + r[3] : '')) });
+  return out;
+}
+
+/** Меню / установка: документ стратегии у каждого объекта. */
+function ensureAllStrategyDocs_(start) {
+  start = start || Date.now();
+  let n = 0;
+  readTable_('OBJ').rows.forEach(o => {
+    if (!o.id || !o.name || Date.now() - start > 4 * 60000) return;
+    try { ensureStrategyDoc_(o); n++; } catch (e) { Logger.log('Стратегия ' + o.id + ': ' + e.message); }
+  });
+  return n;
 }

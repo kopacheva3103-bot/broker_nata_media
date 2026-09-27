@@ -439,6 +439,7 @@ function syncObjectTab_(obj, mode) {
     }
   }
   if (built) { try { protectObjectTab_(sh); } catch (e) { /* защиту поставит «Обновить» владельца */ } }
+  if (built && mode === 'create') { try { ensureStrategyDoc_(obj); } catch (e) { /* создастся при первой вставке стратегии */ } }
   if (built || mode === 'files') {
     try { fillObjectFiles_(sh, obj); } catch (e) { /* Drive недоступен — список обновится позже */ }
   }

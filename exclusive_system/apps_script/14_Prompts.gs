@@ -125,6 +125,10 @@ function addMeetingTasks(text) {
       hist.push({ sheet: tab.getName(), record_id: 'раздел 7', obj_id: o.obj_id, field: '7. ВЫВОДЫ И РЕШЕНИЯ · с оперативки', old: '', new: o.decision, kind: HIST_KIND.CREATE });
       dec++;
     });
+    // решения с оперативки — в документ стратегии каждого объекта
+    const byObj = {};
+    r.ok.filter(o => o.decision).forEach(o => { (byObj[o.obj_id] = byObj[o.obj_id] || []).push(o.decision + (o.task ? ' → ' + o.task : '')); });
+    Object.keys(byObj).forEach(id => { const obj = objectById_(id); if (obj) { try { appendStrategyDoc_(obj, 'решения с оперативки', [{ title: 'Решения', lines: byObj[id] }]); } catch (e) { /* документ пополнится вручную */ } } });
     logHistory_(hist, user);
     return 'Внесено задач: ' + rows.length + (dec ? ', решений во вкладки объектов: ' + dec : '') + (r.errors.length ? '. Пропущено строк: ' + r.errors.length : '') + '.';
   } finally {

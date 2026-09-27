@@ -10,6 +10,7 @@ const STRAT_SECTIONS = [
   { re: /сценари/i, key: 'SCEN', idx: [0, 1, 2, 3, 4], name: 'Сценарии' },           // Сценарий | Чек-лист | Что проверить | Консультанты | Вывод
   { re: /аудитор/i, key: 'AUD', idx: [0, 1, 2, 3, 4], name: 'Аудитории' },           // Аудитория | Кто | Портрет | Где искать | Приоритет
   { re: /канал|партн[её]р/i, key: 'CHAN', idx: [0, 1], name: 'Каналы и партнёры' },   // Канал | Что делаем
+  { re: /материал|презентац|^кп\b|кп и/i, key: 'KP', idx: [0, 1, 2, 5], name: 'КП и материалы' },  // Материал | Какое | Для аудитории | Комментарий
   { re: /вывод|решени/i, key: 'DEC', idx: [1, 3], name: 'Выводы и решения' },         // Вывод | Что делаем дальше
 ];
 
@@ -53,7 +54,7 @@ function parseStrategy_(text) {
     }
     if (line.indexOf('|') < 0 || /^\|?\s*:?-{2,}/.test(line)) return;
     const cells = line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim().replace(/^\*\*|\*\*$/g, ''));
-    const isHeader = /^(аналог|адрес|сценари|аудитори|канал|вывод)/i.test(cells[0]) && cells[0].length < 30 &&
+    const isHeader = /^(аналог|адрес|сценари|аудитори|канал|вывод|материал)/i.test(cells[0]) && cells[0].length < 30 &&
       /назначен|чек-лист|кто|что делаем|что проверить|портрет|площадь/i.test(cells.slice(1).join(' '));
     if (!cells[0] || isHeader) return; // строка заголовка таблицы
     (out.tables[cur.key] = out.tables[cur.key] || []).push(cells);
@@ -95,6 +96,7 @@ function strategyRow_(sec, cells) {
   });
   if (sec.key === 'SCEN' && row[5] === undefined) row[5] = dictValues_('scenario_status')[0] || '';
   if (sec.key === 'CHAN' && row[3] === undefined) row[3] = dictValues_('work_status')[0] || '';
+  if (sec.key === 'KP' && row[4] === undefined) row[4] = dictValues_('work_status')[0] || '';
   if (sec.key === 'DEC') { row[0] = today_(); const p = personByEmail_(userEmail_()); if (p) row[2] = p; }
   return row;
 }
@@ -161,8 +163,11 @@ function runStrategyImport(objId, text) {
         if (i >= 0 && sh.getRange(i + 1, 3).getValue() === '') { sh.getRange(i + 1, 3).setValue(p.kv[k]); n++; }
       });
     }
+    let docNote = '';
+    try { if (n) { appendStrategyDoc_(p.obj, 'стратегия из Claude', strategyThesis_(p)); docNote = ' Документ «' + strategyDocName_(p.obj) + '» в папке объекта пополнен.'; } }
+    catch (e) { docNote = ' ⚠ Документ стратегии не пополнен: ' + e.message; }
     logHistory_([{ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: 'Стратегия', old: '', new: 'вставлено из Claude: ' + n, kind: HIST_KIND.CHANGE }], userEmail_());
-    return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '. Проверьте вкладку.';
+    return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '.' + docNote + ' Проверьте вкладку.';
   } finally {
     lock.releaseLock();
   }

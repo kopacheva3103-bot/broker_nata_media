@@ -22,7 +22,7 @@ const F2 = inFile('F_TIME', 'ВРЕМЯ-1 Новая презентация по
 const F3 = inFile('F_RENT', 'Тверская 15 — аренда.pdf', 'application/pdf');
 INBOX.files.push(F1, F2, F3);
 const PROPS = { getProperty: k => (k in PSTORE ? PSTORE[k] : null), setProperty: (k, v) => { PSTORE[k] = v; }, deleteProperty: k => { delete PSTORE[k]; } };
-const FETCHED = []; const NOTES = []; const MAILS = [];
+const FETCHED = []; const NOTES = []; const MAILS = []; const DOCS = {};
 function FETCH(u, o) {
   FETCHED.push(u);
   const J = o => ({ getContentText: () => JSON.stringify(o), getResponseCode: () => 200 });
@@ -68,7 +68,18 @@ const X = loadGs({
   UrlFetchApp: { fetch: (u, o) => FETCH(u, o) },
   PropertiesService: { getScriptProperties: () => PROPS, getDocumentProperties: () => PROPS },
   CalendarApp: { getDefaultCalendar: () => CAL },
-  DriveApp: { getFolderById: id => { if (!FOLDERS[id]) throw new Error('no folder'); return FOLDERS[id]; }, getFileById: id => ({ setTrashed: () => { TRASHED.push(id); } }) },
+  DriveApp: { getFolderById: id => { if (!FOLDERS[id]) throw new Error('no folder'); return FOLDERS[id]; }, getFileById: id => DOCS[id] ? DOCS[id].file : ({ setTrashed: () => { TRASHED.push(id); } }) },
+  DocumentApp: {
+    ParagraphHeading: { TITLE: 'T', HEADING2: 'H2', HEADING3: 'H3' }, GlyphType: { BULLET: 'B' },
+    create: name => { const id = 'DOC' + Object.keys(DOCS).length; const lines = [];
+      const para = t => { const p = { setText: x => { p.t = x; lines[0] = x; return p; }, setHeading: h => { p.h = h; return p; }, setGlyphType: () => p, editAsText: () => ({ setItalic: () => ({ setFontSize: () => {} }) }), t: t }; return p; };
+      const body = { getParagraphs: () => [para('')], appendParagraph: t => { lines.push(t); return para(t); }, appendListItem: t => { lines.push('• ' + t); return para(t); } };
+      const doc = { getId: () => id, getBody: () => body, saveAndClose: () => {} };
+      const file = { getId: () => id, getName: () => name, getMimeType: () => 'application/vnd.google-apps.document', isTrashed: () => false, getUrl: () => 'https://docs/' + id, getLastUpdated: () => new Date(),
+        moveTo: f => { f.files.push(file); } };
+      DOCS[id] = { doc, file, lines }; return doc; },
+    openById: id => DOCS[id].doc,
+  },
   ScriptApp: { getOAuthToken: () => 'tok' },
   Utilities2: null,
   Logger: { log: () => {} },
@@ -362,3 +373,14 @@ console.log('saved people:', PSTORE.TOPNLAB_PEOPLE);
   console.log('analog:', JSON.stringify(d.tables.ANALOG), '| kv:', d.kv.rec_price, d.kv.min_price, d.kv.positioning, '| aud:', JSON.stringify(d.tables.AUD), '| scen:', JSON.stringify(d.tables.SCEN), '| dec:', JSON.stringify(d.tables.DEC));
   console.log('again (no dups):', X.previewStrategy('4801', ans).total);
 }
+
+// документ «Маркетинговая стратегия» пополняется при вставке
+{
+  const ans2 = ['## Аудитории', 'Семьи дипломатов | Физлица | приёмы и персонал | посольства | ★★', '## Выводы', 'Только долгосрочная аренда семье | Запустить блок Внуково-3'].join('\n');
+  console.log(X.runStrategyImport('4801', ans2));
+  const d = Object.values(DOCS).find(x => x.file.getName().indexOf('Маркетинговая стратегия — КП') === 0);
+  console.log('strategy doc:', d && d.file.getName(), '|', d && d.lines.slice(2).join(' / ').slice(0, 500));
+  X.runStrategyImport('4801', ['## Каналы', 'RUBAE | экспоненты'].join('\n'));
+  console.log('same doc appended:', Object.values(DOCS).filter(x => x.file.getName().indexOf('Маркетинговая стратегия — КП') === 0).length, d.lines.slice(-3).join(' / '));
+}
+console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПрезентация «Две страны» | Презентация под аудиторию | предприниматели Дубай — Москва | 13 слайдов').html.replace(/<[^>]+>/g, ' '));

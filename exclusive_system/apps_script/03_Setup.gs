@@ -47,6 +47,7 @@ function setupSystem() {
     if (isOwner_()) log.push('Защита: ID и названия объектов, служебная часть вкладок (' + nt + ') — удалять объекты может только руководитель');
     backupObjectTabs_();
   } catch (err) { warn += '\n\n⚠ Защита: ' + err.message; }
+  try { const nd = ensureAllStrategyDocs_(start); if (nd) log.push('Документы «Маркетинговая стратегия» в папках объектов: ' + nd); } catch (err) { warn += '\n\n⚠ Документы стратегии: ' + err.message; }
   const tabs = objectTabs_().length;
   if (tabs) {
     try { startTabRebuild_(); const r = tabsWork_(start); applyTabVisibility_(); log.push('Вкладки объектов: ' + tabsWorkText_(r)); } catch (err) { warn += '\n\n⚠ Вкладки объектов: ' + err.message + '\nЗапустите «Сервис → Обновить все вкладки объектов».'; }
