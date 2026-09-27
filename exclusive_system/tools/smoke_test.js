@@ -476,3 +476,22 @@ console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПр
   console.log('dup:', X.companyElsewhere_('Клиника Фомина. Рядом', '4801').length, '| lib retired:', X.readTable_('LIB').rows.filter(x => /неочевидные аудитории|Портрет целевой/.test(x.title)).length);
   console.log('report lines:', X.audienceReportLines_('4801', wk).join(' | '));
 }
+
+// серия рилс: промпт из Google Doc + дополнения системы; контент-план → 04_КОНТЕНТ; отчёт клиенту без охвата
+{
+  DOCS.REELSDOC1234567890abcdef = { doc: { getBody: () => ({ getText: () => 'Инструкция для пользователя\n═══ НАЧАЛО ПРОМПТА ═══\nТы — команда из шести специалистов. Цена $100\n═══ КОНЕЦ ПРОМПТА ═══\nХвост' }) } };
+  X.cfgSet_('REELS_PROMPT_DOC', 'https://docs.google.com/document/d/REELSDOC1234567890abcdef/edit');
+  X.seedLibrary_();
+  const lib = X.readTable_('LIB').rows.find(x => x.title === 'Серия рилс на объект');
+  const pt = X.getPromptText('4801', lib.id, '');
+  console.log('reels prompt:', pt.indexOf('Ты — команда из шести специалистов. Цена $100') === 0, '| addon:', /ДОПОЛНЕНИЯ СИСТЕМЫ/.test(pt), '| tail cut:', pt.indexOf('Хвост') < 0, '| id:', /\n4801 \| Блок/.test(pt), '| left:', (pt.match(/\{[^}]+\}/g) || []).join(','));
+  console.log('old reels retired:', !X.readTable_('LIB').rows.some(x => x.title === 'Сценарий рилс'));
+  const ans = ['## Контент-план', 'Тема | Площадка | Формат | Цель | Дата | Кто делает | Сценарий',
+    'Ролик 1/5: Что было на этой земле | Instagram | Рилс | Все три | 01.10.2026 | | история места',
+    'Ролик 1/5: Что было на этой земле | ВК | Рилс | Все три | 01.10.2026 | | история места',
+    '## Задачи', '4801 | Фото и видео | Съёмка серии по шот-листу | SMM | | | 30.09.2026',
+    '4801 | Контент | Согласовать сценарии роликов 1–2 | Наталья | | | 29.09.2026'].join('\n');
+  console.log('cont preview:', X.previewStrategy('4801', ans).html.replace(/<[^>]+>/g, ' '));
+  console.log(X.runStrategyImport('4801', ans));
+  console.log('cont rows:', X.readTable_('CONT').rows.filter(r => /Ролик 1\/5/.test(r.topic)).map(r => [r.platform, r.format, r.goal, X.fmtDate_(r.pub_date), r.owner, r.status].join(' / ')).join(' ; '));
+}

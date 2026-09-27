@@ -35,7 +35,7 @@ function importStrategy() {
 
 /** Текст ответа → {sections: {KEY: [[...]]}, kv: {key: value}}. */
 function parseStrategy_(text) {
-  const out = { tables: {}, kv: {}, taskLines: [], baseLines: [] };
+  const out = { tables: {}, kv: {}, taskLines: [], baseLines: [], contLines: [] };
   let cur = null;
   String(text || '').split(/\r?\n/).forEach(raw => {
     const line = raw.trim();
@@ -43,12 +43,13 @@ function parseStrategy_(text) {
     const h = /^#{1,4}\s*(.+)$/.exec(line) || /^\*\*(.+?)\*\*:?$/.exec(line);
     if (h) {
       const t = h[1].trim();
-      cur = /^задач/i.test(t) ? { tasks: true } : /^база/i.test(t) ? { base: true } : STRAT_SECTIONS.find(s => s.re.test(t)) || null;
+      cur = /^задач/i.test(t) ? { tasks: true } : /^база/i.test(t) ? { base: true } : /^контент/i.test(t) ? { cont: true } : STRAT_SECTIONS.find(s => s.re.test(t)) || null;
       return;
     }
     if (!cur) return;
     if (cur.tasks) { out.taskLines.push(line); return; }
     if (cur.base) { out.baseLines.push(line); return; }
+    if (cur.cont) { out.contLines.push(line); return; }
     if (cur.kv) {
       const m = /^[-•*\s]*(.+?)\s*[:—|]\s*(.+)$/.exec(line);
       if (!m) return;
@@ -85,6 +86,34 @@ function strategyBaseRows_(obj, lines, plan) {
     out.push({ obj_id: String(obj.id), audience: c[0], company: c[1], site: site, contact: c[3] || '', fit_note: c[4] || '', owner: owner });
     const other = companyElsewhere_(c[1], obj.id);
     if (other.length) (plan.baseDup = plan.baseDup || []).push(c[1] + ' — уже по объекту ' + other.map(x => (objectById_(x.obj_id) || {}).name || x.obj_id).join(', '));
+  });
+  return out;
+}
+
+/** «Тема | Площадка | Формат | Цель | Дата | Кто делает | Сценарий» → строки 04_КОНТЕНТ (без дублей: объект + тема + площадка). */
+function strategyContentRows_(obj, lines, plan) {
+  const norm = x => String(x || '').trim().toLowerCase();
+  const pick = (dict, v, fallback) => {
+    const vals = dictValues_(dict), n = norm(v);
+    if (!n) return fallback;
+    return vals.find(x => norm(x) === n) || vals.find(x => n.indexOf(norm(x).split(' ')[0]) >= 0 || norm(x).indexOf(n) >= 0) ||
+      (dict === 'platforms' && /vk|вк/.test(n) ? vals.find(x => /vk/i.test(x)) : '') || (dict === 'platforms' && /youtube|ютуб|shorts/.test(n) ? vals.find(x => /youtube/i.test(x)) : '') || fallback;
+  };
+  const people = dictRows_('people');
+  const smm = (people.find(p => /smm/i.test(String(p[1]))) || [])[0] || '';
+  const have = readTable_('CONT').rows.filter(r => String(r.obj_id) === String(obj.id)).map(r => norm(r.topic) + '|' + norm(r.platform));
+  const out = [];
+  lines.forEach(line => {
+    if (line.indexOf('|') < 0 || /^\|?\s*:?-{2,}/.test(line)) return;
+    const c = line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(x => x.trim().replace(/^\*\*|\*\*$/g, ''));
+    if (!c[0] || /^(ролик|тема)$/i.test(c[0]) || /площадк/i.test(c[1] || '') && /^(ролик|тема)/i.test(c[0])) return;
+    const platform = pick('platforms', c[1], dictValues_('platforms').indexOf('Другое') >= 0 ? 'Другое' : '');
+    const key = norm(c[0]) + '|' + norm(platform);
+    if (have.indexOf(key) >= 0) { plan.skipped++; return; }
+    have.push(key);
+    const owner = people.map(p => p[0]).find(p => norm(p) === norm(c[5])) || smm;
+    out.push({ obj_id: String(obj.id), topic: c[0], platform: platform, format: pick('content_formats', c[2], 'Рилс'), goal: pick('content_goals', c[3], ''),
+      pub_date: parseRuDate_(c[4]) || '', owner: owner, script: c[6] || '', status: dictValues_('content_status')[0] || '' });
   });
   return out;
 }
@@ -159,6 +188,7 @@ function strategyPlan_(objId, text) {
   });
   const plan = { obj: obj, tab: tab, rows: {}, kv: kv, kvOld: kvOld, skipped: 0, tasks: [], taskErrors: [], base: [] };
   if (parsed.baseLines.length) plan.base = strategyBaseRows_(obj, parsed.baseLines, plan);
+  plan.cont = parsed.contLines.length ? strategyContentRows_(obj, parsed.contLines, plan) : [];
   if (parsed.taskLines.length) {
     const t = parseMeetingTasks_(parsed.taskLines.join('\n'), obj.id);
     const norm = x => String(x || '').trim().toLowerCase();
@@ -196,6 +226,7 @@ function previewStrategy(objId, text) {
   }).filter(Boolean);
   if (p.tasks.length) parts.push('Задачи в 02_ЗАДАЧИ: ' + p.tasks.length);
   if (p.base.length) parts.push('Компании в 03_ОБЗВОН_И_КП: ' + p.base.length);
+  if (p.cont.length) parts.push('Публикации в 04_КОНТЕНТ: ' + p.cont.length);
   const dupNote = p.baseDup && p.baseDup.length ? '<br><span style="color:#E65100">Уже в работе по другим объектам (согласуйте, чтобы не звонить дважды):<br>' + p.baseDup.map(htmlEscape_).join('<br>') + '</span>' : '';
   const total = parts.length;
   const errs = p.taskErrors.length ? '<br><span style="color:#B71C1C">' + p.taskErrors.map(htmlEscape_).join('<br>') + '</span>' : '';
@@ -235,12 +266,13 @@ function runStrategyImport(objId, text) {
     let tasks = 0;
     if (p.tasks.length) tasks = addMeetingTasks_({ ok: p.tasks, errors: [] }, 'Стратегия').tasks;
     if (p.base.length) addBaseRows_(p.base);
+    if (p.cont.length) { const cc = {}; appendRows_('CONT', p.cont.map(r => Object.assign({ id: nextId_('CONT', cc), created_at: new Date(), author: userEmail_() }, r))); }
     try { refreshIdleAudiences_(); } catch (e) { /* обновится утром */ }
     let docNote = '';
     try { if (n || tasks) { appendStrategyDoc_(p.obj, 'стратегия из Claude', strategyThesis_(p)); docNote = ' Документ «' + strategyDocName_(p.obj) + '» в папке объекта пополнен.'; } }
     catch (e) { docNote = ' ⚠ Документ стратегии не пополнен: ' + e.message; }
-    logHistory_(kvHist.concat([{ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: 'Стратегия', old: '', new: 'вставлено из Claude: ' + n + (tasks ? ', задач: ' + tasks : '') + (p.base.length ? ', компаний в базу: ' + p.base.length : ''), kind: HIST_KIND.CHANGE }]), userEmail_());
-    return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (tasks ? ', задач в 02_ЗАДАЧИ: ' + tasks : '') + (p.base.length ? ', компаний в 03_ОБЗВОН_И_КП: ' + p.base.length : '') + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '.' + docNote + ' Проверьте вкладку.';
+    logHistory_(kvHist.concat([{ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: 'Стратегия', old: '', new: 'вставлено из Claude: ' + n + (tasks ? ', задач: ' + tasks : '') + (p.base.length ? ', компаний в базу: ' + p.base.length : '') + (p.cont.length ? ', публикаций: ' + p.cont.length : ''), kind: HIST_KIND.CHANGE }]), userEmail_());
+    return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (tasks ? ', задач в 02_ЗАДАЧИ: ' + tasks : '') + (p.base.length ? ', компаний в 03_ОБЗВОН_И_КП: ' + p.base.length : '') + (p.cont.length ? ', публикаций в 04_КОНТЕНТ: ' + p.cont.length : '') + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '.' + docNote + ' Проверьте вкладку.';
   } finally {
     lock.releaseLock();
   }

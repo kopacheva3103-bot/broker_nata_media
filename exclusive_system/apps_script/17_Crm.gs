@@ -121,12 +121,20 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
   const notDone = week.filter(x => cls(x) !== CLS.DONE);
   const overdue = tasks.filter(x => cls(x) === CLS.OPEN && x.deadline instanceof Date && x.deadline < today_());
   const own = String(internal || '').trim();
+  let content = '';
+  if (wk) {
+    const pubs = readTable_('CONT').rows.filter(x => String(x.obj_id) === String(obj.id) && x.pub_date instanceof Date && isoWeekKey_(x.pub_date) === wk && dictClassOf_('content_status', x.status) === CLS.DONE);
+    const sum = k => pubs.reduce((a, x) => a + (Number(x[k]) || 0), 0);
+    if (pubs.length) content = '\nКонтент за неделю: публикаций ' + pubs.length + ', просмотры ' + sum('views').toLocaleString('ru-RU') + ', охват ' + sum('reach').toLocaleString('ru-RU') +
+      ', сохранения ' + sum('saves') + ', заявки ' + sum('leads') + '\n' + pubs.map(x => '• ' + x.topic + ' (' + x.platform + '): просмотры ' + (x.views || 0) + ', охват ' + (x.reach || 0)).join('\n');
+  }
   const line = x => '• ' + x.task + ' (' + (x.owner || '—') + (x.status ? ', ' + x.status : '') + (x.deadline instanceof Date ? ', срок ' + fmtDate_(x.deadline) : '') + ')';
   const inner = [
     'ДЛЯ РУКОВОДИТЕЛЯ (клиенту не отправляется) — отчёт №' + (kv.REPORT_NO || '') + ' за ' + (kv.PERIOD || '') + ' — ' + obj.name,
     '\nВыполнение задач недели: ' + (week.length ? done.length + ' из ' + week.length + ' (' + Math.round(done.length / week.length * 100) + '%)' : 'задачи на неделю не внесены'),
     notDone.length ? '\nНе выполнено:\n' + notDone.slice(0, 15).map(line).join('\n') : '',
     '\nПросрочено задач: ' + overdue.length + (overdue.length ? '\n' + overdue.slice(0, 10).map(line).join('\n') : ''),
+    content,
     own ? '\nКомментарий руководителя:\n' + own : '',
   ].filter(Boolean).join('\n');
   return { client: client, inner: inner };

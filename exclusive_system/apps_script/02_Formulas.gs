@@ -274,10 +274,10 @@ function reportRows_() {
         'n_resp,COUNTIF(' + bKey('resp_week') + ',' + cw + ')-COUNTIF(' + bKey('resp_week') + '&"|"&[[BASE.resp_class]],' + cw + '&"|NONE"),' +
         'n_yes,COUNTIF(' + bKey('resp_week') + '&"|"&[[BASE.resp_class]],' + cw + '&"|YES"),' +
         'n_pub,COUNTIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]]&"|"&[[CONT.status_class]],' + cw + '&"|DONE"),' +
-        'n_views,SUMIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]],' + cw + ',[[CONT.views]]),n_reach,SUMIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]],' + cw + ',[[CONT.reach]]),' +
+        'n_list,IFERROR(TEXTJOIN(CHAR(10),TRUE,FILTER("• "&[[CONT.topic]]&" — "&[[CONT.platform]]&", "&TEXT([[CONT.pub_date]],"dd.mm.yyyy")&IF([[CONT.link]]="",""," — "&[[CONT.link]]),[[CONT.obj_id]]&"|"&[[CONT.pub_week]]&"|"&[[CONT.status_class]]=' + cw + '&"|DONE")),""),' +
         'n_txt,TEXTJOIN(CHAR(10),TRUE,IF(n_call>0,"Обзвонено компаний: "&n_call,""),IF(n_kp>0,"Направлено коммерческих предложений: "&n_kp,""),' +
         'IF(n_resp>0,"Получено ответов: "&n_resp&IF(n_yes>0,", из них заинтересованы: "&n_yes,""),""),' +
-        'IF(n_pub>0,"Опубликовано материалов об объекте: "&n_pub&IF(n_views>0,", просмотры: "&TEXT(n_views,"#,##0"),"")&IF(n_reach>0,", охват: "&TEXT(n_reach,"#,##0"),""),"")),' +
+        'IF(n_pub>0,"Опубликовано материалов об объекте: "&n_pub&CHAR(10)&n_list,"")),' +
         'n_txt)))',
     },
     { ph: 'COMMENT', label: 'Комментарий для клиента', f: '=$B$5' },

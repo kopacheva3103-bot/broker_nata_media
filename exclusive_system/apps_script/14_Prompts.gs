@@ -45,6 +45,7 @@ function getPromptText(objId, libId, audience) {
   text = text.replace(/\{объекты\}/g, readTable_('OBJ').rows.filter(o => o.id && o.name && o.in_work !== 'НЕТ').map(o => o.id + ' — ' + o.name).join('; '));
   text = text.replace(/\{сотрудники\}/g, dictValues_('people').join(', '));
   text = text.replace(/\{чек-листы\}/g, readTable_('LIB').rows.filter(r => r.kind === 'Чек-лист' && r.title).map(r => r.title).join('; '));
+  if (text.indexOf('{промпт серии рилс из документа}') >= 0) { const doc = promptFromDoc_(cfgGet_('REELS_PROMPT_DOC')); text = text.replace('{промпт серии рилс из документа}', () => doc); }
   if (text.indexOf('{финальный блок объявления}') >= 0) {
     let footer = String(cfgGet_('AD_FOOTER') || (cfgDefs_().find(d => d.key === 'AD_FOOTER') || {}).value || '').trim();
     if (obj && /аренд/i.test(String(obj.deal))) footer = footer.replace(/по продаже/g, 'по аренде');
@@ -56,6 +57,16 @@ function getPromptText(objId, libId, audience) {
   const out = text + (obj ? '\n\n' + objectContext_(obj) : '');
   logHistory_([{ sheet: 'Claude (подписка)', record_id: p.id, obj_id: obj ? obj.id : '', field: 'Промпт: ' + p.title, old: '', new: 'сформирован для копирования', kind: 'Промпт' }], userEmail_());
   return out;
+}
+
+/** Текст промпта из Google Doc (между строками «НАЧАЛО ПРОМПТА» и «КОНЕЦ ПРОМПТА»; без меток — весь документ). */
+function promptFromDoc_(link) {
+  const id = (/\/d\/([\w-]{20,})/.exec(String(link || '')) || [])[1] || (/^[\w-]{20,}$/.test(String(link || '').trim()) ? String(link).trim() : '');
+  if (!id) throw new Error('Не указана ссылка на документ с промптом: 08_НАСТРОЙКИ → «Ссылка на Google Doc с промптом «Серия рилс на объект»».');
+  const text = DocumentApp.openById(id).getBody().getText();
+  const lines = text.split(/\r?\n/);
+  const a = lines.findIndex(l => /НАЧАЛО ПРОМПТА/.test(l)), b = lines.findIndex(l => /КОНЕЦ ПРОМПТА/.test(l));
+  return (a >= 0 && b > a ? lines.slice(a + 1, b) : lines).join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /** Выбранная аудитория с портретом из вкладки (или все аудитории объекта). */

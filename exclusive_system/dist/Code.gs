@@ -109,6 +109,8 @@ function cfgDefs_() {
     { key: 'MANAGER_NAME', label: 'Подпись под отчётом', value: 'Наталья Копачева' },
     { group: 'Команда' },
     { key: 'DIGEST_ON', label: 'Утренняя сводка сотрудникам на почту в будни около 7:00 (ДА / НЕТ): задачи на сегодня и просроченные, звонки и повторные контакты', value: 'ДА' },
+    { group: 'Контент' },
+    { key: 'REELS_PROMPT_DOC', label: 'Ссылка на Google Doc с промптом «Серия рилс на объект» (текст между «НАЧАЛО ПРОМПТА» и «КОНЕЦ ПРОМПТА»)', value: '' },
     { group: 'Объявления (ЦИАН, Авито)' },
     { key: 'AD_FOOTER', label: 'Финальный блок каждого объявления (для аренды «по продаже» заменяется на «по аренде»)', value: 'Рассматриваем все варианты расчетов. Документы готовы к сделке.\n\nКомментарий эксперта: Меня зовут Копачева Наталья, брокер по продаже данного лота.\n\nПредоставлю расширенную презентацию объекта. Организую индивидуальный показ.\n\nСвяжитесь со мной, чтобы получить полную информацию по объекту и согласовать удобное время просмотра.' },
     { group: 'Служебное — заполняет скрипт' },
@@ -160,12 +162,12 @@ function dictDefs_() {
         ['Нет ответа', 'NONE'], ['Интересно', 'YES'], ['Просят позже', 'LATER'], ['Не интересно', 'NO'], ['Переслали ЛПР', 'LATER'],
       ],
     },
-    { key: 'platforms', cols: ['Площадка'], values: [['Instagram'], ['Telegram'], ['Threads'], ['YouTube Shorts'], ['ЦИАН / Авито (видео)'], ['Другое']] },
+    { key: 'platforms', cols: ['Площадка'], values: [['Instagram'], ['Telegram'], ['Threads'], ['YouTube Shorts'], ['VK Клипы'], ['ЦИАН / Авито (видео)'], ['Другое']] },
     { key: 'content_formats', cols: ['Формат'], values: [['Рилс'], ['Пост'], ['Сторис'], ['Шортс'], ['Карусель'], ['Статья']] },
     { key: 'content_goals', cols: ['Цель контента'], values: [['Найти покупателя / арендатора'], ['Показать работу собственнику'], ['Бренд агентства'], ['Все три']] },
     {
       key: 'content_status', cols: ['Статус контента', 'Класс'], values: [
-        ['Идея', 'OPEN'], ['Сценарий', 'OPEN'], ['Снято', 'OPEN'], ['Опубликовано', 'DONE'], ['Отменено', 'CANCEL'],
+        ['Идея', 'OPEN'], ['Сценарий', 'OPEN'], ['Снято', 'OPEN'], ['Смонтировано', 'OPEN'], ['Опубликовано', 'DONE'], ['Отменено', 'CANCEL'],
       ],
     },
     { key: 'scenario_status', cols: ['Статус сценария'], values: [['Идея'], ['Проверяем'], ['Подтверждён'], ['Отклонён']] },
@@ -690,10 +692,10 @@ function reportRows_() {
         'n_resp,COUNTIF(' + bKey('resp_week') + ',' + cw + ')-COUNTIF(' + bKey('resp_week') + '&"|"&[[BASE.resp_class]],' + cw + '&"|NONE"),' +
         'n_yes,COUNTIF(' + bKey('resp_week') + '&"|"&[[BASE.resp_class]],' + cw + '&"|YES"),' +
         'n_pub,COUNTIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]]&"|"&[[CONT.status_class]],' + cw + '&"|DONE"),' +
-        'n_views,SUMIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]],' + cw + ',[[CONT.views]]),n_reach,SUMIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]],' + cw + ',[[CONT.reach]]),' +
+        'n_list,IFERROR(TEXTJOIN(CHAR(10),TRUE,FILTER("• "&[[CONT.topic]]&" — "&[[CONT.platform]]&", "&TEXT([[CONT.pub_date]],"dd.mm.yyyy")&IF([[CONT.link]]="",""," — "&[[CONT.link]]),[[CONT.obj_id]]&"|"&[[CONT.pub_week]]&"|"&[[CONT.status_class]]=' + cw + '&"|DONE")),""),' +
         'n_txt,TEXTJOIN(CHAR(10),TRUE,IF(n_call>0,"Обзвонено компаний: "&n_call,""),IF(n_kp>0,"Направлено коммерческих предложений: "&n_kp,""),' +
         'IF(n_resp>0,"Получено ответов: "&n_resp&IF(n_yes>0,", из них заинтересованы: "&n_yes,""),""),' +
-        'IF(n_pub>0,"Опубликовано материалов об объекте: "&n_pub&IF(n_views>0,", просмотры: "&TEXT(n_views,"#,##0"),"")&IF(n_reach>0,", охват: "&TEXT(n_reach,"#,##0"),""),"")),' +
+        'IF(n_pub>0,"Опубликовано материалов об объекте: "&n_pub&CHAR(10)&n_list,"")),' +
         'n_txt)))',
     },
     { ph: 'COMMENT', label: 'Комментарий для клиента', f: '=$B$5' },
@@ -1006,6 +1008,12 @@ function buildDict_() {
       const firstVal = sh.getRange(2, c).getValue();
       if (current[0] !== d.cols[0] || firstVal === '') {
         sh.getRange(2, c, d.values.length, d.cols.length).setValues(d.values);
+      } else if (d.key !== 'people') { // новые значения из новой версии системы дописываются в конец списка; правки команды (и список сотрудников) не трогаются
+        const have = sh.getRange(2, c, sh.getMaxRows() - 1, 1).getValues().map(v => String(v[0]).trim());
+        let last = 0;
+        have.forEach((v, i) => { if (v !== '') last = i + 1; });
+        const add = d.values.filter(v => have.indexOf(String(v[0]).trim()) < 0);
+        if (add.length) sh.getRange(2 + last, c, add.length, d.cols.length).setValues(add);
       }
       styleHeaderRow_(hdr, 'input');
       if (d.cols.length > 1) sh.getRange(1, c + 1, 1, d.cols.length - 1).setBackground(COLORS.HDR_FORMULA_BG).setFontColor(COLORS.HDR_FORMULA_FG);
@@ -3577,8 +3585,24 @@ function libraryDefaults_() {
       '## Мессенджер\nСообщение до 300 знаков для WhatsApp / Telegram после звонка.\n\n' +
       '## Форма на сайте\nТекст до 500 знаков для формы обратной связи.\n\n' +
       '## Повторный контакт\nСообщение через 3 дня, если нет ответа (до 300 знаков).'],
-    [PR, 'Сценарий рилс', 'Контент (04_КОНТЕНТ)',
-      'Сценарий вертикального видео 30–45 сек по объекту {описание}. Три цели: найти покупателя / арендатора ({аудитория}), показать собственнику работу, бренд агентства. Дай: хук на 2 секунды, раскадровку по 5–7 планам (что снимать, текст на экране, закадровый текст), призыв к действию, подпись к посту и 10 хэштегов. Варианты для Instagram, Telegram, YouTube Shorts, Threads.'],
+    [PR, 'Серия рилс на объект', 'Контент: 5 роликов на объект → «Вставить стратегию из Claude» (контент-план в 04_КОНТЕНТ, задачи SMM в 02_ЗАДАЧИ)',
+      '{промпт серии рилс из документа}\n\n' +
+      '═══════════ ДОПОЛНЕНИЯ СИСТЕМЫ (где они расходятся с текстом выше — следуй дополнениям) ═══════════\n\n' +
+      '1. ВВОДНЫЕ ПО ОБЪЕКТУ бери из раздела «ДАННЫЕ ОБЪЕКТА» в самом конце: адрес, тип, сделка, площадь, цена, позиционирование, ограничения собственника, аудитории ★★★ (для кого — в ролике 5). Чего там нет (кодовое слово, что уже снято, соцсети, доступ к закрытым продажам, название рубрики, дата старта серии) — спроси в шаге 1 одним списком.\n\n' +
+      '2. СЕРИЯ ИЗ 5 РОЛИКОВ ДЕЛАЕМ ДЛЯ КАЖДОГО ОБЪЕКТА. Линия серии зависит от типа объекта и сделки («квартира» в тексте выше = наш объект):\n' +
+      '• Исторический дом / усадьба — как в промпте выше.\n' +
+      '• Новостройка / клубный дом: ролик 1 — история района и места (оставляем); ролик 2 — люди и деньги этого места ИЛИ архитектура, застройщик, как рождается квартал; ролик 3 — дом и район сегодня и завтра (точки роста, инфраструктура, цены); ролик 4 — атмосфера; ролик 5 — продажа.\n' +
+      '• Загородный дом: ролик 1 — направление и локация: природа, реки, озёра, леса, время до Москвы, парки, торговые центры, школы, фишки территории и направления; ролик 2 — если у места есть сильные исторические факты, история (связанная с землёй и домами), иначе — жизнь на этом направлении: кто здесь живёт, сценарий выходных; ролик 3 — посёлок и дом сегодня; ролик 4 — атмосфера; ролик 5 — продажа.\n' +
+      '• Коммерция: ролик 1 — исторические денежные дела этой локации (торговля, купцы, промыслы, ярмарки, доходные дома); ролик 2 — почему локация приносит деньги сегодня: трафик, окружение, кто рядом зарабатывает; ролик 3 — развитие территории (КРТ, стройки, метро, рост населения); ролик 4 — атмосфера помещения; ролик 5 — продажа / аренда: для какого бизнеса, цифры.\n' +
+      '• Аренда (любой тип): ролик 5 — «жизнь здесь» и приглашение на просмотр; не «купить», а «арендовать»; кодовое слово — для аренды.\n\n' +
+      '3. ХУК — до 10 слов (3–4 с).\n\n' +
+      '4. ОБЛОЖКИ: сетка профиля Instagram теперь вертикальная 3:4 (1080×1440). Заголовок и номер выпуска — в безопасной зоне 3:4; сам ролик — 9:16.\n\n' +
+      '5. ПОДАЧА КАЖДОГО РОЛИКА — укажи одну: «Наталья в кадре» / «закадровый голос (озвучка)» / «только надписи». Для озвучки — отдельный текст диктору с паузами (/) и ударными словами (КАПС), хронометраж по числу слов.\n\n' +
+      '6. ШАГ 4 ДЕЛИТСЯ: 4а — материалы, архив, единый шот-лист серии, атмосферные кадры, промпты генерации; 4б — покадровое ТЗ монтажёру (по 1–2 ролика за ответ, если не помещается).\n\n' +
+      '7. Маркировка рекламы в сценариях и подписях не нужна.\n\n' +
+      '8. ШАГ 5: шаблон еженедельного отчёта собственнику НЕ нужен — отчёт формирует система. Вместо него в конце шага 5 выдай два раздела для вставки в систему (строки через «|», без строки заголовков):\n\n' +
+      '## Контент-план\nТема (Ролик N/5: название) | Площадка (Instagram / VK Клипы / Telegram / YouTube Shorts) | Формат (Рилс) | Цель (Найти покупателя / арендатора, Бренд агентства или Все три) | Дата публикации (дд.мм.гггг) | Кто делает | Сценарий — одной фразой\n(строка на каждый ролик и каждую площадку; график — 4–5 публикаций в неделю, серия за 7–10 дней; если SMM несколько — распредели ролики между ними)\n\n' +
+      '## Задачи\n{ID объекта} | Блок (Фото и видео или Контент) | Задача | Исполнитель | Единица | План | Срок (дд.мм.гггг)\n(съёмка по шот-листу — 1–2 выезда; озвучка, если есть; монтаж каждого ролика; согласование сценариев и готовых роликов с Натальей до публикации. Исполнитель — из: {сотрудники}; съёмка, монтаж, озвучка — SMM, согласование — Наталья)'],
     [PR, 'Оперативка → задачи', 'Расшифровка Zoom / заметки встречи → меню «Внести задачи с оперативки»',
       'Вот расшифровка оперативки агентства недвижимости: {текст}.\nСписок объектов (ID — название): {объекты}. Сотрудники: {сотрудники}.\nВыдели все поручения и решения. Ответ — ТОЛЬКО таблица без пояснений, 8 столбцов через символ «|»:\nID объекта | Блок стратегии | Задача | Исполнитель | Единица | План | Срок | Решение\nПравила: ID объекта — строго из списка; Блок — одно из: Аналитика и цена, Сценарии использования, Целевые аудитории, КП и материалы, База и рассылки, Каналы и партнёры, Контент, Фото и видео, Объявления, Отчётность, Другое; Исполнитель — строго из списка сотрудников; Единица — звонков / КП / ответов / публикаций / писем / встреч / документов / шт или пусто; План — число или пусто; Срок — дд.мм.гггг; Решение — вывод или решение по стратегии объекта, если прозвучал (иначе пусто). Задачу формулируй так, чтобы её можно было показать собственнику объекта.'],
     [RG, 'Регламент недели', 'Вся команда',
@@ -3591,7 +3615,7 @@ function libraryDefaults_() {
 }
 
 /** Системные записи, которые заменены новыми: удаляются из 06_БИБЛИОТЕКА, если их никто не правил (автор «система»). */
-const LIB_RETIRED = ['Сценарии использования и неочевидные аудитории', 'Портрет целевой аудитории'];
+const LIB_RETIRED = ['Сценарии использования и неочевидные аудитории', 'Портрет целевой аудитории', 'Сценарий рилс'];
 
 function seedLibrary_() {
   let t = readTable_('LIB');
@@ -4118,6 +4142,7 @@ function getPromptText(objId, libId, audience) {
   text = text.replace(/\{объекты\}/g, readTable_('OBJ').rows.filter(o => o.id && o.name && o.in_work !== 'НЕТ').map(o => o.id + ' — ' + o.name).join('; '));
   text = text.replace(/\{сотрудники\}/g, dictValues_('people').join(', '));
   text = text.replace(/\{чек-листы\}/g, readTable_('LIB').rows.filter(r => r.kind === 'Чек-лист' && r.title).map(r => r.title).join('; '));
+  if (text.indexOf('{промпт серии рилс из документа}') >= 0) { const doc = promptFromDoc_(cfgGet_('REELS_PROMPT_DOC')); text = text.replace('{промпт серии рилс из документа}', () => doc); }
   if (text.indexOf('{финальный блок объявления}') >= 0) {
     let footer = String(cfgGet_('AD_FOOTER') || (cfgDefs_().find(d => d.key === 'AD_FOOTER') || {}).value || '').trim();
     if (obj && /аренд/i.test(String(obj.deal))) footer = footer.replace(/по продаже/g, 'по аренде');
@@ -4129,6 +4154,16 @@ function getPromptText(objId, libId, audience) {
   const out = text + (obj ? '\n\n' + objectContext_(obj) : '');
   logHistory_([{ sheet: 'Claude (подписка)', record_id: p.id, obj_id: obj ? obj.id : '', field: 'Промпт: ' + p.title, old: '', new: 'сформирован для копирования', kind: 'Промпт' }], userEmail_());
   return out;
+}
+
+/** Текст промпта из Google Doc (между строками «НАЧАЛО ПРОМПТА» и «КОНЕЦ ПРОМПТА»; без меток — весь документ). */
+function promptFromDoc_(link) {
+  const id = (/\/d\/([\w-]{20,})/.exec(String(link || '')) || [])[1] || (/^[\w-]{20,}$/.test(String(link || '').trim()) ? String(link).trim() : '');
+  if (!id) throw new Error('Не указана ссылка на документ с промптом: 08_НАСТРОЙКИ → «Ссылка на Google Doc с промптом «Серия рилс на объект»».');
+  const text = DocumentApp.openById(id).getBody().getText();
+  const lines = text.split(/\r?\n/);
+  const a = lines.findIndex(l => /НАЧАЛО ПРОМПТА/.test(l)), b = lines.findIndex(l => /КОНЕЦ ПРОМПТА/.test(l));
+  return (a >= 0 && b > a ? lines.slice(a + 1, b) : lines).join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /** Выбранная аудитория с портретом из вкладки (или все аудитории объекта). */
@@ -4874,12 +4909,20 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
   const notDone = week.filter(x => cls(x) !== CLS.DONE);
   const overdue = tasks.filter(x => cls(x) === CLS.OPEN && x.deadline instanceof Date && x.deadline < today_());
   const own = String(internal || '').trim();
+  let content = '';
+  if (wk) {
+    const pubs = readTable_('CONT').rows.filter(x => String(x.obj_id) === String(obj.id) && x.pub_date instanceof Date && isoWeekKey_(x.pub_date) === wk && dictClassOf_('content_status', x.status) === CLS.DONE);
+    const sum = k => pubs.reduce((a, x) => a + (Number(x[k]) || 0), 0);
+    if (pubs.length) content = '\nКонтент за неделю: публикаций ' + pubs.length + ', просмотры ' + sum('views').toLocaleString('ru-RU') + ', охват ' + sum('reach').toLocaleString('ru-RU') +
+      ', сохранения ' + sum('saves') + ', заявки ' + sum('leads') + '\n' + pubs.map(x => '• ' + x.topic + ' (' + x.platform + '): просмотры ' + (x.views || 0) + ', охват ' + (x.reach || 0)).join('\n');
+  }
   const line = x => '• ' + x.task + ' (' + (x.owner || '—') + (x.status ? ', ' + x.status : '') + (x.deadline instanceof Date ? ', срок ' + fmtDate_(x.deadline) : '') + ')';
   const inner = [
     'ДЛЯ РУКОВОДИТЕЛЯ (клиенту не отправляется) — отчёт №' + (kv.REPORT_NO || '') + ' за ' + (kv.PERIOD || '') + ' — ' + obj.name,
     '\nВыполнение задач недели: ' + (week.length ? done.length + ' из ' + week.length + ' (' + Math.round(done.length / week.length * 100) + '%)' : 'задачи на неделю не внесены'),
     notDone.length ? '\nНе выполнено:\n' + notDone.slice(0, 15).map(line).join('\n') : '',
     '\nПросрочено задач: ' + overdue.length + (overdue.length ? '\n' + overdue.slice(0, 10).map(line).join('\n') : ''),
+    content,
     own ? '\nКомментарий руководителя:\n' + own : '',
   ].filter(Boolean).join('\n');
   return { client: client, inner: inner };
@@ -5738,7 +5781,7 @@ function importStrategy() {
 
 /** Текст ответа → {sections: {KEY: [[...]]}, kv: {key: value}}. */
 function parseStrategy_(text) {
-  const out = { tables: {}, kv: {}, taskLines: [], baseLines: [] };
+  const out = { tables: {}, kv: {}, taskLines: [], baseLines: [], contLines: [] };
   let cur = null;
   String(text || '').split(/\r?\n/).forEach(raw => {
     const line = raw.trim();
@@ -5746,12 +5789,13 @@ function parseStrategy_(text) {
     const h = /^#{1,4}\s*(.+)$/.exec(line) || /^\*\*(.+?)\*\*:?$/.exec(line);
     if (h) {
       const t = h[1].trim();
-      cur = /^задач/i.test(t) ? { tasks: true } : /^база/i.test(t) ? { base: true } : STRAT_SECTIONS.find(s => s.re.test(t)) || null;
+      cur = /^задач/i.test(t) ? { tasks: true } : /^база/i.test(t) ? { base: true } : /^контент/i.test(t) ? { cont: true } : STRAT_SECTIONS.find(s => s.re.test(t)) || null;
       return;
     }
     if (!cur) return;
     if (cur.tasks) { out.taskLines.push(line); return; }
     if (cur.base) { out.baseLines.push(line); return; }
+    if (cur.cont) { out.contLines.push(line); return; }
     if (cur.kv) {
       const m = /^[-•*\s]*(.+?)\s*[:—|]\s*(.+)$/.exec(line);
       if (!m) return;
@@ -5788,6 +5832,34 @@ function strategyBaseRows_(obj, lines, plan) {
     out.push({ obj_id: String(obj.id), audience: c[0], company: c[1], site: site, contact: c[3] || '', fit_note: c[4] || '', owner: owner });
     const other = companyElsewhere_(c[1], obj.id);
     if (other.length) (plan.baseDup = plan.baseDup || []).push(c[1] + ' — уже по объекту ' + other.map(x => (objectById_(x.obj_id) || {}).name || x.obj_id).join(', '));
+  });
+  return out;
+}
+
+/** «Тема | Площадка | Формат | Цель | Дата | Кто делает | Сценарий» → строки 04_КОНТЕНТ (без дублей: объект + тема + площадка). */
+function strategyContentRows_(obj, lines, plan) {
+  const norm = x => String(x || '').trim().toLowerCase();
+  const pick = (dict, v, fallback) => {
+    const vals = dictValues_(dict), n = norm(v);
+    if (!n) return fallback;
+    return vals.find(x => norm(x) === n) || vals.find(x => n.indexOf(norm(x).split(' ')[0]) >= 0 || norm(x).indexOf(n) >= 0) ||
+      (dict === 'platforms' && /vk|вк/.test(n) ? vals.find(x => /vk/i.test(x)) : '') || (dict === 'platforms' && /youtube|ютуб|shorts/.test(n) ? vals.find(x => /youtube/i.test(x)) : '') || fallback;
+  };
+  const people = dictRows_('people');
+  const smm = (people.find(p => /smm/i.test(String(p[1]))) || [])[0] || '';
+  const have = readTable_('CONT').rows.filter(r => String(r.obj_id) === String(obj.id)).map(r => norm(r.topic) + '|' + norm(r.platform));
+  const out = [];
+  lines.forEach(line => {
+    if (line.indexOf('|') < 0 || /^\|?\s*:?-{2,}/.test(line)) return;
+    const c = line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(x => x.trim().replace(/^\*\*|\*\*$/g, ''));
+    if (!c[0] || /^(ролик|тема)$/i.test(c[0]) || /площадк/i.test(c[1] || '') && /^(ролик|тема)/i.test(c[0])) return;
+    const platform = pick('platforms', c[1], dictValues_('platforms').indexOf('Другое') >= 0 ? 'Другое' : '');
+    const key = norm(c[0]) + '|' + norm(platform);
+    if (have.indexOf(key) >= 0) { plan.skipped++; return; }
+    have.push(key);
+    const owner = people.map(p => p[0]).find(p => norm(p) === norm(c[5])) || smm;
+    out.push({ obj_id: String(obj.id), topic: c[0], platform: platform, format: pick('content_formats', c[2], 'Рилс'), goal: pick('content_goals', c[3], ''),
+      pub_date: parseRuDate_(c[4]) || '', owner: owner, script: c[6] || '', status: dictValues_('content_status')[0] || '' });
   });
   return out;
 }
@@ -5862,6 +5934,7 @@ function strategyPlan_(objId, text) {
   });
   const plan = { obj: obj, tab: tab, rows: {}, kv: kv, kvOld: kvOld, skipped: 0, tasks: [], taskErrors: [], base: [] };
   if (parsed.baseLines.length) plan.base = strategyBaseRows_(obj, parsed.baseLines, plan);
+  plan.cont = parsed.contLines.length ? strategyContentRows_(obj, parsed.contLines, plan) : [];
   if (parsed.taskLines.length) {
     const t = parseMeetingTasks_(parsed.taskLines.join('\n'), obj.id);
     const norm = x => String(x || '').trim().toLowerCase();
@@ -5899,6 +5972,7 @@ function previewStrategy(objId, text) {
   }).filter(Boolean);
   if (p.tasks.length) parts.push('Задачи в 02_ЗАДАЧИ: ' + p.tasks.length);
   if (p.base.length) parts.push('Компании в 03_ОБЗВОН_И_КП: ' + p.base.length);
+  if (p.cont.length) parts.push('Публикации в 04_КОНТЕНТ: ' + p.cont.length);
   const dupNote = p.baseDup && p.baseDup.length ? '<br><span style="color:#E65100">Уже в работе по другим объектам (согласуйте, чтобы не звонить дважды):<br>' + p.baseDup.map(htmlEscape_).join('<br>') + '</span>' : '';
   const total = parts.length;
   const errs = p.taskErrors.length ? '<br><span style="color:#B71C1C">' + p.taskErrors.map(htmlEscape_).join('<br>') + '</span>' : '';
@@ -5938,12 +6012,13 @@ function runStrategyImport(objId, text) {
     let tasks = 0;
     if (p.tasks.length) tasks = addMeetingTasks_({ ok: p.tasks, errors: [] }, 'Стратегия').tasks;
     if (p.base.length) addBaseRows_(p.base);
+    if (p.cont.length) { const cc = {}; appendRows_('CONT', p.cont.map(r => Object.assign({ id: nextId_('CONT', cc), created_at: new Date(), author: userEmail_() }, r))); }
     try { refreshIdleAudiences_(); } catch (e) { /* обновится утром */ }
     let docNote = '';
     try { if (n || tasks) { appendStrategyDoc_(p.obj, 'стратегия из Claude', strategyThesis_(p)); docNote = ' Документ «' + strategyDocName_(p.obj) + '» в папке объекта пополнен.'; } }
     catch (e) { docNote = ' ⚠ Документ стратегии не пополнен: ' + e.message; }
-    logHistory_(kvHist.concat([{ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: 'Стратегия', old: '', new: 'вставлено из Claude: ' + n + (tasks ? ', задач: ' + tasks : '') + (p.base.length ? ', компаний в базу: ' + p.base.length : ''), kind: HIST_KIND.CHANGE }]), userEmail_());
-    return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (tasks ? ', задач в 02_ЗАДАЧИ: ' + tasks : '') + (p.base.length ? ', компаний в 03_ОБЗВОН_И_КП: ' + p.base.length : '') + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '.' + docNote + ' Проверьте вкладку.';
+    logHistory_(kvHist.concat([{ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: 'Стратегия', old: '', new: 'вставлено из Claude: ' + n + (tasks ? ', задач: ' + tasks : '') + (p.base.length ? ', компаний в базу: ' + p.base.length : '') + (p.cont.length ? ', публикаций: ' + p.cont.length : ''), kind: HIST_KIND.CHANGE }]), userEmail_());
+    return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (tasks ? ', задач в 02_ЗАДАЧИ: ' + tasks : '') + (p.base.length ? ', компаний в 03_ОБЗВОН_И_КП: ' + p.base.length : '') + (p.cont.length ? ', публикаций в 04_КОНТЕНТ: ' + p.cont.length : '') + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '.' + docNote + ' Проверьте вкладку.';
   } finally {
     lock.releaseLock();
   }

@@ -224,6 +224,12 @@ function buildDict_() {
       const firstVal = sh.getRange(2, c).getValue();
       if (current[0] !== d.cols[0] || firstVal === '') {
         sh.getRange(2, c, d.values.length, d.cols.length).setValues(d.values);
+      } else if (d.key !== 'people') { // новые значения из новой версии системы дописываются в конец списка; правки команды (и список сотрудников) не трогаются
+        const have = sh.getRange(2, c, sh.getMaxRows() - 1, 1).getValues().map(v => String(v[0]).trim());
+        let last = 0;
+        have.forEach((v, i) => { if (v !== '') last = i + 1; });
+        const add = d.values.filter(v => have.indexOf(String(v[0]).trim()) < 0);
+        if (add.length) sh.getRange(2 + last, c, add.length, d.cols.length).setValues(add);
       }
       styleHeaderRow_(hdr, 'input');
       if (d.cols.length > 1) sh.getRange(1, c + 1, 1, d.cols.length - 1).setBackground(COLORS.HDR_FORMULA_BG).setFontColor(COLORS.HDR_FORMULA_FG);
