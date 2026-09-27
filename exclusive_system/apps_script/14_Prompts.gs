@@ -100,8 +100,7 @@ function previewMeetingTasks(text) {
 function addMeetingTasks(text) {
   const r = parseMeetingTasks_(text);
   if (!r.ok.length) return 'Нет задач для внесения.';
-  const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  const lock = userLock_();
   try {
     const cache = {};
     const openName = dictFirstByClass_('task_status', CLS.OPEN);

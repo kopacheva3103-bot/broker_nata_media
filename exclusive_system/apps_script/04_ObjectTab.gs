@@ -466,6 +466,7 @@ function objTabInsertIndex_() {
 // ───────────── создание / пересборка вкладок с учётом лимита Google (6 минут на запуск) ─────────────
 
 const TAB_BUDGET_MS = 4.5 * 60000;
+const TAB_JOB_SLICE_MS = 60000; // фоновая пересборка — порциями по ~1 минуте, между ними таблица свободна
 
 function tabToken_() { return PropertiesService.getDocumentProperties().getProperty('TAB_TOKEN') || ''; }
 
@@ -524,7 +525,7 @@ function tabsJob() {
   const lock = LockService.getDocumentLock();
   if (!lock.tryLock(10000)) { scheduleTabsJob_(true); return; }
   try {
-    tabsWork_();
+    tabsWork_(Date.now() - TAB_BUDGET_MS + TAB_JOB_SLICE_MS); // короткая порция: не держим таблицу занятой надолго
     orderSheets_();
     applyTabVisibility_();
   } finally {

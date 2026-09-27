@@ -1821,6 +1821,7 @@ function objTabInsertIndex_() {
 // ───────────── создание / пересборка вкладок с учётом лимита Google (6 минут на запуск) ─────────────
 
 const TAB_BUDGET_MS = 4.5 * 60000;
+const TAB_JOB_SLICE_MS = 60000; // фоновая пересборка — порциями по ~1 минуте, между ними таблица свободна
 
 function tabToken_() { return PropertiesService.getDocumentProperties().getProperty('TAB_TOKEN') || ''; }
 
@@ -1879,7 +1880,7 @@ function tabsJob() {
   const lock = LockService.getDocumentLock();
   if (!lock.tryLock(10000)) { scheduleTabsJob_(true); return; }
   try {
-    tabsWork_();
+    tabsWork_(Date.now() - TAB_BUDGET_MS + TAB_JOB_SLICE_MS); // короткая порция: не держим таблицу занятой надолго
     orderSheets_();
     applyTabVisibility_();
   } finally {
@@ -3858,6 +3859,16 @@ function fixObjIdColumns_() {
   });
 }
 
+/**
+ * Блокировка для действий пользователя: ждём до 2 минут (фоновые задания работают короткими порциями).
+ * Не дождались — понятное сообщение вместо «Тайм-аут блокировки».
+ */
+function userLock_() {
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(120000)) throw new Error('Система сейчас занята фоновым обновлением (вкладки объектов, входящие или отчёты). Подождите 1–2 минуты и нажмите ещё раз — вставленный текст останется в окне.');
+  return lock;
+}
+
 // ═════════════ 13_Menu.gs ═════════════
 /**
  * 13_Menu — меню «МАРКЕТИНГ ОБЪЕКТОВ».
@@ -4022,8 +4033,7 @@ function previewMeetingTasks(text) {
 function addMeetingTasks(text) {
   const r = parseMeetingTasks_(text);
   if (!r.ok.length) return 'Нет задач для внесения.';
-  const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  const lock = userLock_();
   try {
     const cache = {};
     const openName = dictFirstByClass_('task_status', CLS.OPEN);
@@ -4887,8 +4897,7 @@ function previewObjectsImport(text) {
 
 function runObjectsImport(text) {
   const r = parseObjectsImport_(text);
-  const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  const lock = userLock_();
   const start = Date.now();
   let tabRes = { created: 0, rebuilt: 0, left: 0 };
   try {
@@ -5493,8 +5502,7 @@ function deleteObject() {
 }
 
 function deleteObject_(obj) {
-  const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  const lock = userLock_();
   try {
     const tab = findObjectTab_(obj);
     if (tab) ss_().deleteSheet(tab);
@@ -5657,8 +5665,7 @@ function previewStrategy(objId, text) {
 }
 
 function runStrategyImport(objId, text) {
-  const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  const lock = userLock_();
   try {
     const p = strategyPlan_(objId, text);
     const sh = p.tab;

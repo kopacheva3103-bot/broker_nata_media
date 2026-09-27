@@ -39,8 +39,7 @@ function previewObjectsImport(text) {
 
 function runObjectsImport(text) {
   const r = parseObjectsImport_(text);
-  const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  const lock = userLock_();
   const start = Date.now();
   let tabRes = { created: 0, rebuilt: 0, left: 0 };
   try {

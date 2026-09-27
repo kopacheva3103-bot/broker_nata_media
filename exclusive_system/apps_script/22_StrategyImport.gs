@@ -141,8 +141,7 @@ function previewStrategy(objId, text) {
 }
 
 function runStrategyImport(objId, text) {
-  const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  const lock = userLock_();
   try {
     const p = strategyPlan_(objId, text);
     const sh = p.tab;

@@ -117,8 +117,7 @@ function deleteObject() {
 }
 
 function deleteObject_(obj) {
-  const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  const lock = userLock_();
   try {
     const tab = findObjectTab_(obj);
     if (tab) ss_().deleteSheet(tab);
