@@ -67,6 +67,7 @@ function dailyJobs() {
   try { refreshObjectFiles_(); } catch (e) { Logger.log('Документы: ' + e.message); }
   try { backupObjectTabs_(); } catch (e) { Logger.log('Копии вкладок: ' + e.message); }
   try { tabsWork_(); protectAll_(); } catch (e) { Logger.log('Вкладки / защита: ' + e.message); }
+  try { ensureMediaTasks_(); } catch (e) { Logger.log('Задачи фото и видео: ' + e.message); }
 }
 
 function enableDailyJobs() {

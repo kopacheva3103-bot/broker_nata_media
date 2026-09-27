@@ -64,6 +64,7 @@ function runObjectsImport(text) {
     SpreadsheetApp.flush();
     hist.push.apply(hist, r.add.map(o => ({ sheet: SHEET_NAMES.OBJ, record_id: o.id, obj_id: o.id, field: 'Объект', old: '', new: o.name, kind: HIST_KIND.CREATE, note: 'Загрузка списком' })));
     logHistory_(hist, userEmail_());
+    try { ensureMediaTasks_(); } catch (e) { /* поставится утром */ }
     fixObjIdColumns_();
     r.upd.filter(o => o._from).forEach(o => { const obj = objectById_(o.id); if (obj) syncObjectTab_(obj, 'rename'); });
     tabRes = tabsWork_(start);

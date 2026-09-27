@@ -421,3 +421,13 @@ console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПр
   const d = X.readObjectTab_(X.findObjectTab_(X.objectById_('4801')));
   console.log('price after:', d.kv.rec_price, d.kv.min_price, '| hist:', X.readTable_('HIST').rows.filter(r => /Рекомендуемая/.test(r.field)).map(r => r.old + '→' + r.new).join(','));
 }
+
+// автозадача «фото и видео на Яндекс Диске» для новых объектов
+{
+  delete PSTORE.MEDIA_TASK_KNOWN;
+  console.log('media first run:', X.ensureMediaTasks_(), '| known:', JSON.parse(PSTORE.MEDIA_TASK_KNOWN).length);
+  X.appendRow_('OBJ', { id: '777001', name: 'Тестовый новый объект', status: 'В работе', created_at: X.today_() });
+  console.log('media new:', X.ensureMediaTasks_(), '| again:', X.ensureMediaTasks_());
+  const t = X.readTable_('TASK').rows.filter(r => r.obj_id === '777001');
+  console.log('media task:', t.map(r => [r.block, r.owner, r.source, X.fmtDate_(r.deadline), r.task.slice(0, 40)].join(' / ')).join(' ; '));
+}

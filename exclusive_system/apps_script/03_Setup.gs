@@ -48,6 +48,7 @@ function setupSystem() {
     backupObjectTabs_();
   } catch (err) { warn += '\n\n⚠ Защита: ' + err.message; }
   try { const nd = ensureAllStrategyDocs_(start); if (nd) log.push('Документы «Маркетинговая стратегия» в папках объектов: ' + nd); } catch (err) { warn += '\n\n⚠ Документы стратегии: ' + err.message; }
+  try { const mt = ensureMediaTasks_(); if (mt) log.push('Задачи «фото и видео на Яндекс Диске» новым объектам: ' + mt); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
   try { const at = ensureAnalogTemplate_(); if (at) log.push(at); } catch (err) { warn += '\n\n⚠ Шаблон анализа аналогов: ' + err.message; }
   const tabs = objectTabs_().length;
   if (tabs) {

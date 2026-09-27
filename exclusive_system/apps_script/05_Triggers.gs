@@ -166,6 +166,9 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
     const r = syncObjectTab_(o, 'create');
     if (r && r.built) toast_('Создана вкладка «' + r.sheet.getName() + '» — там стратегия объекта.', 'Новый объект', 8);
   });
+  if (code === 'OBJ' && tabSync.length) {
+    try { const nt = ensureMediaTasks_(); if (nt) toast_('Ассистенту поставлена задача: фото и видео объекта на Яндекс Диске.', 'Новый объект', 6); } catch (err) { /* поставится утром */ }
+  }
   logHistory_(hist, user);
   if (crmRows.length) {
     try { crmOnEdit_(sh, crmRows); } catch (err) { toast_('CRM: ' + err.message, 'Внимание', 8); }

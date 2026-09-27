@@ -93,6 +93,7 @@ function processInbox_() {
     }
   }
   logHistory_(hist, userEmail_());
+  try { ensureMediaTasks_(); } catch (e) { /* поставится утром */ }
   return res;
 }
 
