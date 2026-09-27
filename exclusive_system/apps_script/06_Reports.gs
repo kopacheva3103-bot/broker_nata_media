@@ -34,6 +34,10 @@ function generateReport_(id, wk, opts) {
   const obj = objectById_(id);
   if (!obj) throw new Error('Объект ' + id + ' не найден в ' + SHEET_NAMES.OBJ);
   const values = readReportValues_();
+  try {
+    const aud = audienceReportLines_(id, wk);
+    if (aud.length) values.kv.SUMMARY = [String(values.kv.SUMMARY || '').trim(), aud.join('\n')].filter(Boolean).join('\n');
+  } catch (e) { /* без цифр по аудиториям */ }
   const arch = readTable_('ARCH');
   const existing = arch.rows.filter(r => r.obj_id === id && r.week === wk && r.status === REPORT_STATUS.ACTUAL);
   if (existing.length && opts.interactive) {

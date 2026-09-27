@@ -83,6 +83,8 @@ function strategyBaseRows_(obj, lines, plan) {
     have.push(norm(c[1]));
     const site = /^(https?:\/\/|www\.|[\w-]+\.[a-zа-я]{2,})/i.test(c[2] || '') ? c[2] : '';
     out.push({ obj_id: String(obj.id), audience: c[0], company: c[1], site: site, contact: c[3] || '', fit_note: c[4] || '', owner: owner });
+    const other = companyElsewhere_(c[1], obj.id);
+    if (other.length) (plan.baseDup = plan.baseDup || []).push(c[1] + ' — уже по объекту ' + other.map(x => (objectById_(x.obj_id) || {}).name || x.obj_id).join(', '));
   });
   return out;
 }
@@ -194,11 +196,12 @@ function previewStrategy(objId, text) {
   }).filter(Boolean);
   if (p.tasks.length) parts.push('Задачи в 02_ЗАДАЧИ: ' + p.tasks.length);
   if (p.base.length) parts.push('Компании в 03_ОБЗВОН_И_КП: ' + p.base.length);
+  const dupNote = p.baseDup && p.baseDup.length ? '<br><span style="color:#E65100">Уже в работе по другим объектам (согласуйте, чтобы не звонить дважды):<br>' + p.baseDup.map(htmlEscape_).join('<br>') + '</span>' : '';
   const total = parts.length;
   const errs = p.taskErrors.length ? '<br><span style="color:#B71C1C">' + p.taskErrors.map(htmlEscape_).join('<br>') + '</span>' : '';
   return {
     total: total,
-    html: total ? 'Будет добавлено во вкладку «' + htmlEscape_(p.obj.name) + '»:<br>• ' + parts.map(htmlEscape_).join('<br>• ') + (p.skipped ? '<br><span style="color:#80868B">Уже есть во вкладке, пропущено: ' + p.skipped + '</span>' : '') + errs
+    html: total ? 'Будет добавлено во вкладку «' + htmlEscape_(p.obj.name) + '»:<br>• ' + parts.map(htmlEscape_).join('<br>• ') + (p.skipped ? '<br><span style="color:#80868B">Уже есть во вкладке, пропущено: ' + p.skipped + '</span>' : '') + errs + dupNote
       : p.skipped ? '<span style="color:#2E7D32">✓ Всё из этого текста уже есть во вкладке «' + htmlEscape_(p.obj.name) + '» (строк: ' + p.skipped + ') — повторно вставлять не нужно.</span>'
       : '<span style="color:#B71C1C">Не нашла разделов. Нужен ответ по промпту «Стратегия объекта — для вставки во вкладку»: заголовки «## Аналоги», «## Сценарии»… и строки через «|».</span>',
   };
@@ -232,6 +235,7 @@ function runStrategyImport(objId, text) {
     let tasks = 0;
     if (p.tasks.length) tasks = addMeetingTasks_({ ok: p.tasks, errors: [] }, 'Стратегия').tasks;
     if (p.base.length) addBaseRows_(p.base);
+    try { refreshIdleAudiences_(); } catch (e) { /* обновится утром */ }
     let docNote = '';
     try { if (n || tasks) { appendStrategyDoc_(p.obj, 'стратегия из Claude', strategyThesis_(p)); docNote = ' Документ «' + strategyDocName_(p.obj) + '» в папке объекта пополнен.'; } }
     catch (e) { docNote = ' ⚠ Документ стратегии не пополнен: ' + e.message; }

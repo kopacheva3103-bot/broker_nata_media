@@ -15,25 +15,29 @@ function promptForObject() {
   const prompts = readTable_('LIB').rows.filter(r => r.kind === 'Промпт' && r.title);
   if (!prompts.length) { SpreadsheetApp.getUi().alert('В 06_БИБЛИОТЕКА нет промптов (раздел «Промпт»).'); return; }
   const options = prompts.map(p => '<option value="' + htmlEscape_(p.id) + '">' + htmlEscape_(p.title) + '</option>').join('');
+  let auds = [];
+  try { auds = obj ? objectAudienceRows_(obj.id).map(a => a.name) : []; } catch (e) { /* без вкладки — без списка */ }
+  const audOptions = '<option value="">— все аудитории объекта —</option>' + auds.map(a => '<option>' + htmlEscape_(a) + '</option>').join('');
   const html = HtmlService.createHtmlOutput(
     '<div style="font:14px Arial,sans-serif">' +
     '<div>Объект: <b>' + htmlEscape_(obj ? obj.name + ' (' + obj.id + ')' : 'не выбран — промпт без данных объекта') + '</b></div>' +
     '<div style="margin:8px 0">Промпт: <select id="p" style="max-width:420px">' + options + '</select></div>' +
+    (auds.length ? '<div style="margin:8px 0">Аудитория: <select id="a" style="max-width:420px">' + audOptions + '</select> <span style="color:#80868B;font-size:12px">для скрипта, КП, портрета ЛПР</span></div>' : '<input type="hidden" id="a" value="">') +
     '<textarea id="t" style="width:100%;height:330px;font:12px monospace"></textarea>' +
     '<div style="margin-top:8px"><button onclick="copyIt()">Скопировать</button> ' +
     '<a href="https://claude.ai/new" target="_blank">Открыть Claude</a> <span id="s" style="color:#2E7D32"></span></div>' +
     '<div style="color:#80868B;font-size:12px;margin-top:6px">Вставьте текст в Claude (ваша подписка). Ответ перенесите в нужный раздел вкладки объекта. Использование промпта записывается в 09_ИСТОРИЯ.</div></div>' +
     '<script>' +
     'const objId=' + JSON.stringify(obj ? obj.id : '') + ';' +
-    'function load(){document.getElementById("t").value="Собираю…";google.script.run.withSuccessHandler(function(x){document.getElementById("t").value=x;}).withFailureHandler(function(e){document.getElementById("t").value="Ошибка: "+e.message;}).getPromptText(objId,document.getElementById("p").value);}' +
+    'function load(){document.getElementById("t").value="Собираю…";google.script.run.withSuccessHandler(function(x){document.getElementById("t").value=x;}).withFailureHandler(function(e){document.getElementById("t").value="Ошибка: "+e.message;}).getPromptText(objId,document.getElementById("p").value,document.getElementById("a").value);}' +
     'function copyIt(){const t=document.getElementById("t");t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand("copy");}document.getElementById("s").textContent="Скопировано";}' +
-    'document.getElementById("p").onchange=load;load();' +
+    'document.getElementById("p").onchange=load;document.getElementById("a").onchange=load;load();' +
     '</script>').setWidth(620).setHeight(520);
   SpreadsheetApp.getUi().showModalDialog(html, 'Промпт для Claude');
 }
 
 /** Вызывается из диалога: текст промпта с данными объекта. */
-function getPromptText(objId, libId) {
+function getPromptText(objId, libId, audience) {
   const p = readTable_('LIB').rows.find(r => r.id === libId);
   if (!p) throw new Error('Промпт не найден');
   const obj = objId ? objectById_(objId) : null;
@@ -47,10 +51,21 @@ function getPromptText(objId, libId) {
     text = text.replace(/\{финальный блок объявления\}/g, footer);
   }
   if (obj) text = text.replace(/\{ID объекта\}/g, obj.id);
+  if (obj && /\{аудитори[^}]*\}/i.test(text)) text = text.replace(/\{аудитори[^}]*\}/gi, audiencePromptText_(obj.id, audience));
   if (obj) text = text.replace(/\{(?!текст\})[^{}]{2,80}\}/g, '(см. «Данные объекта» ниже)');
   const out = text + (obj ? '\n\n' + objectContext_(obj) : '');
   logHistory_([{ sheet: 'Claude (подписка)', record_id: p.id, obj_id: obj ? obj.id : '', field: 'Промпт: ' + p.title, old: '', new: 'сформирован для копирования', kind: 'Промпт' }], userEmail_());
   return out;
+}
+
+/** Выбранная аудитория с портретом из вкладки (или все аудитории объекта). */
+function audiencePromptText_(objId, audience) {
+  const rows = objectAudienceRows_(objId);
+  const one = audience ? rows.filter(a => a.name === audience) : rows;
+  if (!one.length) return audience || '(аудитории — в разделе «Целевые аудитории» данных объекта ниже)';
+  const st = audienceStats_(objId);
+  return one.map(a => '«' + a.name + '»' + (a.who ? ' (' + a.who + ')' : '') + (a.portrait ? ' — ' + a.portrait : '') + (a.where ? '; где искать: ' + a.where : '') +
+    (st[a.name] ? '; уже в работе: компаний ' + st[a.name].total + ', КП ' + st[a.name].kp + ', интерес ' + st[a.name].yes : '')).join('\n');
 }
 
 /** Данные объекта текстом: реестр + то, что внесено во вкладку. */

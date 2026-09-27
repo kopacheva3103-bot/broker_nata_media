@@ -181,7 +181,7 @@ function dashLayout_() {
 
   // по объектам
   const oF = DASH.OBJ_FIRST, oL = DASH.OBJ_LAST;
-  cells.push({ a1: 'A' + (DASH.OBJ_HDR - 1), v: 'ПО ОБЪЕКТАМ (в работе) — неделя из фильтра выше', style: 'section', spanCols: 17 });
+  cells.push({ a1: 'A' + (DASH.OBJ_HDR - 1), v: 'ПО ОБЪЕКТАМ (в работе) — неделя из фильтра выше', style: 'section', spanCols: 18 });
   const K = '$B$' + oF + ':$B$' + oL;
   const c = K + '&"|"&' + wk;
   const look = f => 'IFERROR(VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.' + f + ']]},2,FALSE),"")';
@@ -203,6 +203,7 @@ function dashLayout_() {
     ['Охват', 'SUMIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]],' + c + ',[[CONT.reach]])', '#,##0'],
     ['Последнее изменение', 'IFERROR(VLOOKUP(' + K + ',SORT(FILTER({[[HIST.obj_id]],[[HIST.ts]]},[[HIST.obj_id]]<>""),2,FALSE),2,FALSE),"")', 'datetime'],
     ['Дней без работы', 'IF($P$' + oF + ':$P$' + oL + '="",IFERROR(TODAY()-VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.date_sign]]},2,FALSE),""),INT(TODAY()-$P$' + oF + ':$P$' + oL + '))', '0'],
+    ['Аудитории ★★★ без базы', look('idle_aud')],
   ];
   const objLetter = {};
   objCols.forEach((col, i) => {

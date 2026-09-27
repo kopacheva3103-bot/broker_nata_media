@@ -234,6 +234,7 @@ function sheetSpecs_() {
       F('tab_name', 'Имя вкладки', 'sys', { helper: true }),
       F('tab_url', 'Адрес вкладки', 'sys', { helper: true, d: '#gid=… — внутренняя ссылка на вкладку объекта.' }),
       F('created_at', 'Создан', 'sys', { helper: true, fmt: 'date' }),
+      F('idle_aud', 'Аудитории ★★★ без базы', 'sys', { w: 200, d: 'Аудитории первой волны из вкладки объекта, по которым в 03_ОБЗВОН_И_КП нет ни одной компании. Обновляется каждое утро и после вставки из Claude.' }),
     ],
   };
 
@@ -596,7 +597,7 @@ function dashLayout_() {
 
   // по объектам
   const oF = DASH.OBJ_FIRST, oL = DASH.OBJ_LAST;
-  cells.push({ a1: 'A' + (DASH.OBJ_HDR - 1), v: 'ПО ОБЪЕКТАМ (в работе) — неделя из фильтра выше', style: 'section', spanCols: 17 });
+  cells.push({ a1: 'A' + (DASH.OBJ_HDR - 1), v: 'ПО ОБЪЕКТАМ (в работе) — неделя из фильтра выше', style: 'section', spanCols: 18 });
   const K = '$B$' + oF + ':$B$' + oL;
   const c = K + '&"|"&' + wk;
   const look = f => 'IFERROR(VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.' + f + ']]},2,FALSE),"")';
@@ -618,6 +619,7 @@ function dashLayout_() {
     ['Охват', 'SUMIF([[CONT.obj_id]]&"|"&[[CONT.pub_week]],' + c + ',[[CONT.reach]])', '#,##0'],
     ['Последнее изменение', 'IFERROR(VLOOKUP(' + K + ',SORT(FILTER({[[HIST.obj_id]],[[HIST.ts]]},[[HIST.obj_id]]<>""),2,FALSE),2,FALSE),"")', 'datetime'],
     ['Дней без работы', 'IF($P$' + oF + ':$P$' + oL + '="",IFERROR(TODAY()-VLOOKUP(' + K + ',{[[OBJ.id]],[[OBJ.date_sign]]},2,FALSE),""),INT(TODAY()-$P$' + oF + ':$P$' + oL + '))', '0'],
+    ['Аудитории ★★★ без базы', look('idle_aud')],
   ];
   const objLetter = {};
   objCols.forEach((col, i) => {
@@ -829,6 +831,7 @@ function setupSystem() {
   } catch (err) { warn += '\n\n⚠ Защита: ' + err.message; }
   try { const nd = ensureAllStrategyDocs_(start); if (nd) log.push('Документы «Маркетинговая стратегия» в папках объектов: ' + nd); } catch (err) { warn += '\n\n⚠ Документы стратегии: ' + err.message; }
   try { const mt = ensureMediaTasks_(); if (mt) log.push('Задачи «фото и видео на Яндекс Диске» новым объектам: ' + mt); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
+  try { refreshIdleAudiences_(); } catch (err) { warn += '\n\n⚠ Аудитории без базы: ' + err.message; }
   try { const nb = refreshBaseAudienceLists_(); if (nb) log.push('03_ОБЗВОН_И_КП: списки аудиторий в строках: ' + nb); } catch (err) { warn += '\n\n⚠ Списки аудиторий: ' + err.message; }
   try { const at = ensureAnalogTemplate_(); if (at) log.push(at); } catch (err) { warn += '\n\n⚠ Шаблон анализа аналогов: ' + err.message; }
   const tabs = objectTabs_().length;
@@ -2220,6 +2223,13 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
       o._row = row;
       tabSync.push(o);
     }
+    if (code === 'BASE' && single && editedKeys[0] === 'company' && o.company) {
+      try {
+        const other = companyElsewhere_(o.company, o.obj_id);
+        if (other.length) toast_('«' + o.company + '» уже в базе: ' + other.map(x => (objectById_(x.obj_id) || {}).name || x.obj_id).join(', ') +
+          (other.some(x => x.kp_date) ? ' (КП уже отправляли)' : '') + '. Можно предложить и этот объект, но согласуйте, чтобы не звонить дважды.', 'Компания уже в работе', 10);
+      } catch (err) { /* не критично */ }
+    }
     if (code === 'BASE' && editedKeys.indexOf('to_crm') >= 0 && o.to_crm === true && String(o.crm_note).indexOf('✓') !== 0) { o._row = row; crmRows.push(o); }
     if (code === 'TASK' && !isNew && editedKeys.indexOf('status') >= 0 && dictClassOf_('task_status', o.status) === CLS.MOVED) {
       const newId = moveTask_(o, hist);
@@ -2401,6 +2411,10 @@ function generateReport_(id, wk, opts) {
   const obj = objectById_(id);
   if (!obj) throw new Error('Объект ' + id + ' не найден в ' + SHEET_NAMES.OBJ);
   const values = readReportValues_();
+  try {
+    const aud = audienceReportLines_(id, wk);
+    if (aud.length) values.kv.SUMMARY = [String(values.kv.SUMMARY || '').trim(), aud.join('\n')].filter(Boolean).join('\n');
+  } catch (e) { /* без цифр по аудиториям */ }
   const arch = readTable_('ARCH');
   const existing = arch.rows.filter(r => r.obj_id === id && r.week === wk && r.status === REPORT_STATUS.ACTUAL);
   if (existing.length && opts.interactive) {
@@ -2681,6 +2695,7 @@ function styleReportTable_(t, widths) {
  *  1) незакрытые задачи прошлых недель (по желанию) переносятся на выбранную неделю — исходные строки
  *     получают статус «Перенесено» и остаются в истории;
  *  2) добавляются задачи недели по умолчанию из 08_НАСТРОЙКИ (если такой задачи на эту неделю ещё нет).
+ *  3) по аудиториям первой волны (★★★ во вкладке), где в 03_ОБЗВОН_И_КП меньше 10 компаний, — задача собрать базу.
  * Исполнитель: звонки и КП — ассистент объекта, публикации — SMM объекта, остальное — ответственный.
  */
 
@@ -2700,6 +2715,8 @@ function createWeekPlan() {
     (res.skipped.length ? '\nБез ID / не в работе: ' + res.skipped.join(', ') : '') +
     '\n\nДопишите в 02_ЗАДАЧИ задачи по стратегии (сценарии, аудитории, КП) — они попадут в отчёт клиенту.', ui.ButtonSet.OK);
 }
+
+const AUD_BASE_TARGET = 10; // сколько компаний в базе должно быть по каждой аудитории первой волны
 
 function buildWeekPlan_(wk, opts) {
   opts = opts || {};
@@ -2737,6 +2754,23 @@ function buildWeekPlan_(wk, opts) {
       add.push({
         id: nextId_('TASK', cache), week: wk, obj_id: o.id, block: d.block, task: d.task, owner: owner || '', unit: d.unit, plan: d.plan,
         deadline: addDays_(mon, 4), status: openName, to_report: true, source: 'План недели', created_at: new Date(), author: userEmail_(),
+      });
+    });
+  });
+  // первая волна (★★★): если по аудитории в базе меньше 10 компаний — задача собрать базу
+  objs.forEach(o => {
+    let aud = [];
+    try { aud = objectAudienceRows_(o.id).filter(x => x.prio >= 3).slice(0, 3); } catch (e) { return; }
+    if (!aud.length) return;
+    const st = audienceStats_(o.id);
+    aud.forEach(x => {
+      const n = (st[x.name] || {}).total || 0;
+      if (n >= AUD_BASE_TARGET) return;
+      const task = 'База «' + x.name + '»: найти и внести в 03_ОБЗВОН_И_КП компании (ЛПР, контакт, сайт)';
+      if (have[o.id + '|' + wk + '|' + task]) return;
+      add.push({
+        id: nextId_('TASK', cache), week: wk, obj_id: o.id, block: 'База и рассылки', task: task, owner: o.assistant || o.manager || '', unit: 'шт',
+        plan: Math.max(5, AUD_BASE_TARGET - n), deadline: addDays_(mon, 4), status: openName, to_report: true, source: 'План недели', created_at: new Date(), author: userEmail_(),
       });
     });
   });
@@ -3532,8 +3566,17 @@ function libraryDefaults_() {
       '4. Лучший канал первого контакта (звонок / письмо / мессенджер / через партнёра / мероприятие) и почему.\n' +
       '5. Первая фраза звонка (до 20 слов) и тема письма (до 60 знаков).\n' +
       'Не выдумывай фактов об объекте: чего нет в данных — так и напиши «уточнить».'],
-    [PR, 'Скрипт звонка и письма', 'Работа с базой (03_ОБЗВОН_И_КП)',
-      'Составь для ассистента: 1) скрипт звонка в колл-центр / приёмную сети {аудитория} с целью выйти на отдел развития (3 варианта обхода «секретаря»); 2) короткое письмо с КП (до 700 знаков) с просьбой переслать ЛПР; 3) текст для формы обратной связи на сайте; 4) ответы на 5 типовых возражений. Объект: {кратко}.'],
+    [PR, 'Скрипт звонка и письма', 'Работа с базой (03_ОБЗВОН_И_КП): выберите аудиторию в окне промпта',
+      'Ты — эксперт по холодным продажам в недвижимости. Готовишь для ассистента брокера материалы для звонков и писем по объекту (данные ниже).\n' +
+      'Аудитория: {аудитория}\n\n' +
+      'ПРАВИЛА: пиши простым живым языком, без канцелярита и без «уникальных предложений». Только факты из данных объекта — чего нет, не придумывай. Цель первого контакта — не продать, а выйти на ЛПР и получить согласие посмотреть презентацию. Точный адрес не называй, если в данных есть ограничение.\n\n' +
+      'Ответ — строго по разделам:\n\n' +
+      '## Звонок\n1) Первая фраза (до 20 слов). 2) Как пройти секретаря / администратора — 3 варианта. 3) Разговор с ЛПР: 3–4 реплики, вопрос о потребности, предложение прислать презентацию. 4) Как закрепить договорённость (куда отправить, когда перезвонить).\n\n' +
+      '## Возражения\n5 типовых возражений этой аудитории → короткий ответ (1–2 предложения).\n\n' +
+      '## Письмо с КП\nТема (до 60 знаков) + текст до 700 знаков: зачем пишем, 3 факта-выгоды с цифрами, призыв к действию, просьба переслать ЛПР, если не по адресу.\n\n' +
+      '## Мессенджер\nСообщение до 300 знаков для WhatsApp / Telegram после звонка.\n\n' +
+      '## Форма на сайте\nТекст до 500 знаков для формы обратной связи.\n\n' +
+      '## Повторный контакт\nСообщение через 3 дня, если нет ответа (до 300 знаков).'],
     [PR, 'Сценарий рилс', 'Контент (04_КОНТЕНТ)',
       'Сценарий вертикального видео 30–45 сек по объекту {описание}. Три цели: найти покупателя / арендатора ({аудитория}), показать собственнику работу, бренд агентства. Дай: хук на 2 секунды, раскадровку по 5–7 планам (что снимать, текст на экране, закадровый текст), призыв к действию, подпись к посту и 10 хэштегов. Варианты для Instagram, Telegram, YouTube Shorts, Threads.'],
     [PR, 'Оперативка → задачи', 'Расшифровка Zoom / заметки встречи → меню «Внести задачи с оперативки»',
@@ -4045,25 +4088,29 @@ function promptForObject() {
   const prompts = readTable_('LIB').rows.filter(r => r.kind === 'Промпт' && r.title);
   if (!prompts.length) { SpreadsheetApp.getUi().alert('В 06_БИБЛИОТЕКА нет промптов (раздел «Промпт»).'); return; }
   const options = prompts.map(p => '<option value="' + htmlEscape_(p.id) + '">' + htmlEscape_(p.title) + '</option>').join('');
+  let auds = [];
+  try { auds = obj ? objectAudienceRows_(obj.id).map(a => a.name) : []; } catch (e) { /* без вкладки — без списка */ }
+  const audOptions = '<option value="">— все аудитории объекта —</option>' + auds.map(a => '<option>' + htmlEscape_(a) + '</option>').join('');
   const html = HtmlService.createHtmlOutput(
     '<div style="font:14px Arial,sans-serif">' +
     '<div>Объект: <b>' + htmlEscape_(obj ? obj.name + ' (' + obj.id + ')' : 'не выбран — промпт без данных объекта') + '</b></div>' +
     '<div style="margin:8px 0">Промпт: <select id="p" style="max-width:420px">' + options + '</select></div>' +
+    (auds.length ? '<div style="margin:8px 0">Аудитория: <select id="a" style="max-width:420px">' + audOptions + '</select> <span style="color:#80868B;font-size:12px">для скрипта, КП, портрета ЛПР</span></div>' : '<input type="hidden" id="a" value="">') +
     '<textarea id="t" style="width:100%;height:330px;font:12px monospace"></textarea>' +
     '<div style="margin-top:8px"><button onclick="copyIt()">Скопировать</button> ' +
     '<a href="https://claude.ai/new" target="_blank">Открыть Claude</a> <span id="s" style="color:#2E7D32"></span></div>' +
     '<div style="color:#80868B;font-size:12px;margin-top:6px">Вставьте текст в Claude (ваша подписка). Ответ перенесите в нужный раздел вкладки объекта. Использование промпта записывается в 09_ИСТОРИЯ.</div></div>' +
     '<script>' +
     'const objId=' + JSON.stringify(obj ? obj.id : '') + ';' +
-    'function load(){document.getElementById("t").value="Собираю…";google.script.run.withSuccessHandler(function(x){document.getElementById("t").value=x;}).withFailureHandler(function(e){document.getElementById("t").value="Ошибка: "+e.message;}).getPromptText(objId,document.getElementById("p").value);}' +
+    'function load(){document.getElementById("t").value="Собираю…";google.script.run.withSuccessHandler(function(x){document.getElementById("t").value=x;}).withFailureHandler(function(e){document.getElementById("t").value="Ошибка: "+e.message;}).getPromptText(objId,document.getElementById("p").value,document.getElementById("a").value);}' +
     'function copyIt(){const t=document.getElementById("t");t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand("copy");}document.getElementById("s").textContent="Скопировано";}' +
-    'document.getElementById("p").onchange=load;load();' +
+    'document.getElementById("p").onchange=load;document.getElementById("a").onchange=load;load();' +
     '</script>').setWidth(620).setHeight(520);
   SpreadsheetApp.getUi().showModalDialog(html, 'Промпт для Claude');
 }
 
 /** Вызывается из диалога: текст промпта с данными объекта. */
-function getPromptText(objId, libId) {
+function getPromptText(objId, libId, audience) {
   const p = readTable_('LIB').rows.find(r => r.id === libId);
   if (!p) throw new Error('Промпт не найден');
   const obj = objId ? objectById_(objId) : null;
@@ -4077,10 +4124,21 @@ function getPromptText(objId, libId) {
     text = text.replace(/\{финальный блок объявления\}/g, footer);
   }
   if (obj) text = text.replace(/\{ID объекта\}/g, obj.id);
+  if (obj && /\{аудитори[^}]*\}/i.test(text)) text = text.replace(/\{аудитори[^}]*\}/gi, audiencePromptText_(obj.id, audience));
   if (obj) text = text.replace(/\{(?!текст\})[^{}]{2,80}\}/g, '(см. «Данные объекта» ниже)');
   const out = text + (obj ? '\n\n' + objectContext_(obj) : '');
   logHistory_([{ sheet: 'Claude (подписка)', record_id: p.id, obj_id: obj ? obj.id : '', field: 'Промпт: ' + p.title, old: '', new: 'сформирован для копирования', kind: 'Промпт' }], userEmail_());
   return out;
+}
+
+/** Выбранная аудитория с портретом из вкладки (или все аудитории объекта). */
+function audiencePromptText_(objId, audience) {
+  const rows = objectAudienceRows_(objId);
+  const one = audience ? rows.filter(a => a.name === audience) : rows;
+  if (!one.length) return audience || '(аудитории — в разделе «Целевые аудитории» данных объекта ниже)';
+  const st = audienceStats_(objId);
+  return one.map(a => '«' + a.name + '»' + (a.who ? ' (' + a.who + ')' : '') + (a.portrait ? ' — ' + a.portrait : '') + (a.where ? '; где искать: ' + a.where : '') +
+    (st[a.name] ? '; уже в работе: компаний ' + st[a.name].total + ', КП ' + st[a.name].kp + ', интерес ' + st[a.name].yes : '')).join('\n');
 }
 
 /** Данные объекта текстом: реестр + то, что внесено во вкладку. */
@@ -4321,6 +4379,7 @@ function dailyJobs() {
   try { tabsWork_(); protectAll_(); } catch (e) { Logger.log('Вкладки / защита: ' + e.message); }
   try { ensureMediaTasks_(); } catch (e) { Logger.log('Задачи фото и видео: ' + e.message); }
   try { scheduleFollowUps_(); } catch (e) { Logger.log('Повторные контакты: ' + e.message); }
+  try { refreshIdleAudiences_(); } catch (e) { Logger.log('Аудитории без базы: ' + e.message); }
   try { refreshBaseAudienceLists_(); } catch (e) { Logger.log('Списки аудиторий: ' + e.message); }
   try { sendDailyDigest_(); } catch (e) { Logger.log('Утренняя сводка: ' + e.message); }
 }
@@ -5727,6 +5786,8 @@ function strategyBaseRows_(obj, lines, plan) {
     have.push(norm(c[1]));
     const site = /^(https?:\/\/|www\.|[\w-]+\.[a-zа-я]{2,})/i.test(c[2] || '') ? c[2] : '';
     out.push({ obj_id: String(obj.id), audience: c[0], company: c[1], site: site, contact: c[3] || '', fit_note: c[4] || '', owner: owner });
+    const other = companyElsewhere_(c[1], obj.id);
+    if (other.length) (plan.baseDup = plan.baseDup || []).push(c[1] + ' — уже по объекту ' + other.map(x => (objectById_(x.obj_id) || {}).name || x.obj_id).join(', '));
   });
   return out;
 }
@@ -5838,11 +5899,12 @@ function previewStrategy(objId, text) {
   }).filter(Boolean);
   if (p.tasks.length) parts.push('Задачи в 02_ЗАДАЧИ: ' + p.tasks.length);
   if (p.base.length) parts.push('Компании в 03_ОБЗВОН_И_КП: ' + p.base.length);
+  const dupNote = p.baseDup && p.baseDup.length ? '<br><span style="color:#E65100">Уже в работе по другим объектам (согласуйте, чтобы не звонить дважды):<br>' + p.baseDup.map(htmlEscape_).join('<br>') + '</span>' : '';
   const total = parts.length;
   const errs = p.taskErrors.length ? '<br><span style="color:#B71C1C">' + p.taskErrors.map(htmlEscape_).join('<br>') + '</span>' : '';
   return {
     total: total,
-    html: total ? 'Будет добавлено во вкладку «' + htmlEscape_(p.obj.name) + '»:<br>• ' + parts.map(htmlEscape_).join('<br>• ') + (p.skipped ? '<br><span style="color:#80868B">Уже есть во вкладке, пропущено: ' + p.skipped + '</span>' : '') + errs
+    html: total ? 'Будет добавлено во вкладку «' + htmlEscape_(p.obj.name) + '»:<br>• ' + parts.map(htmlEscape_).join('<br>• ') + (p.skipped ? '<br><span style="color:#80868B">Уже есть во вкладке, пропущено: ' + p.skipped + '</span>' : '') + errs + dupNote
       : p.skipped ? '<span style="color:#2E7D32">✓ Всё из этого текста уже есть во вкладке «' + htmlEscape_(p.obj.name) + '» (строк: ' + p.skipped + ') — повторно вставлять не нужно.</span>'
       : '<span style="color:#B71C1C">Не нашла разделов. Нужен ответ по промпту «Стратегия объекта — для вставки во вкладку»: заголовки «## Аналоги», «## Сценарии»… и строки через «|».</span>',
   };
@@ -5876,6 +5938,7 @@ function runStrategyImport(objId, text) {
     let tasks = 0;
     if (p.tasks.length) tasks = addMeetingTasks_({ ok: p.tasks, errors: [] }, 'Стратегия').tasks;
     if (p.base.length) addBaseRows_(p.base);
+    try { refreshIdleAudiences_(); } catch (e) { /* обновится утром */ }
     let docNote = '';
     try { if (n || tasks) { appendStrategyDoc_(p.obj, 'стратегия из Claude', strategyThesis_(p)); docNote = ' Документ «' + strategyDocName_(p.obj) + '» в папке объекта пополнен.'; } }
     catch (e) { docNote = ' ⚠ Документ стратегии не пополнен: ' + e.message; }
@@ -6161,6 +6224,8 @@ function sendDailyDigest_(now) {
   readTable_('OBJ').rows.forEach(o => { objName[String(o.id)] = o.name; });
   const tasks = readTable_('TASK').rows.filter(r => r.task && dictClassOf_('task_status', r.status) === CLS.OPEN && r.deadline instanceof Date && r.deadline <= today);
   const base = readTable_('BASE').rows.filter(r => r.company && r.next_date instanceof Date && r.next_date <= today);
+  let idle = [];
+  try { idle = idleAudiences_(); } catch (e) { /* без сигнала */ }
   const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   const d = x => fmtDate_(x);
   let sent = 0;
@@ -6168,16 +6233,93 @@ function sendDailyDigest_(now) {
     const name = String(p[0]).trim(), email = String(p[2]).trim();
     const my = tasks.filter(r => r.owner === name);
     const calls = base.filter(r => r.owner === name);
-    if (!my.length && !calls.length) return;
+    const myIdle = idle.filter(x => x.obj.assistant === name || x.obj.manager === name);
+    if (!my.length && !calls.length && !myIdle.length) return;
     const li = arr => '<ul>' + arr.join('') + '</ul>';
     let html = '<p>Доброе утро! План на ' + d(today) + ':</p>';
     if (my.length) html += '<p><b>Задачи со сроком сегодня и просроченные (' + my.length + ')</b></p>' +
       li(my.map(r => '<li>' + esc(objName[String(r.obj_id)] || r.obj_id) + ': ' + esc(r.task) + ' — срок ' + d(r.deadline) + (r.deadline < today ? ' <b style="color:#B71C1C">просрочено</b>' : '') + '</li>'));
     if (calls.length) html += '<p><b>Звонки и повторные контакты (' + calls.length + ')</b></p>' +
       li(calls.map(r => '<li>' + esc(r.company) + ' (' + esc(objName[String(r.obj_id)] || r.obj_id) + ')' + (r.contact ? ', ' + esc(r.contact) : '') + ' — ' + esc(r.next_step || 'следующий шаг') + '</li>'));
+    if (myIdle.length) html += '<p><b>Аудитории первой волны (★★★) без компаний в базе (' + myIdle.length + ')</b></p>' +
+      li(myIdle.map(x => '<li>' + esc(x.obj.name) + ': «' + esc(x.name) + '» — промпт «Целевые аудитории объекта» даст базу для обзвона</li>'));
     html += '<p><a href="' + ss_().getUrl() + '">Открыть систему</a></p>';
     MailApp.sendEmail({ to: email, subject: 'План на ' + d(today) + ': задач ' + my.length + ', контактов ' + calls.length, htmlBody: html, name: 'Система эксклюзивов' });
     sent++;
   });
   return sent;
+}
+
+// ───────────────────────── аудитории объекта: приоритеты и цифры ─────────────────────────
+
+/** Строки раздела 4 вкладки: [{name, who, portrait, where, prio (0–3)}]. */
+function objectAudienceRows_(objId) {
+  const obj = objectById_(objId);
+  const tab = obj ? findObjectTab_(obj) : null;
+  if (!tab) return [];
+  return (readObjectTab_(tab).tables.AUD || []).filter(r => String(r[0] || '').trim()).map(r => ({
+    name: String(r[0]).trim(), who: r[1], portrait: r[2], where: r[3], prio: (String(r[4] || '').match(/★/g) || []).length,
+  }));
+}
+
+/** Цифры по аудиториям объекта из 03_ОБЗВОН_И_КП: {аудитория: {total, calls, kp, yes, kpWeek}}. */
+function audienceStats_(objId, from, to) {
+  const out = {};
+  readTable_('BASE').rows.forEach(r => {
+    if (String(r.obj_id) !== String(objId) || !r.company) return;
+    const a = String(r.audience || '').trim() || 'Без аудитории';
+    const s = out[a] = out[a] || { total: 0, calls: 0, kp: 0, yes: 0, kpWeek: 0 };
+    s.total++;
+    if (r.call_date instanceof Date) s.calls++;
+    if (r.kp_date instanceof Date) { s.kp++; if (from && r.kp_date >= from && r.kp_date <= to) s.kpWeek++; }
+    if (r.response && dictClassOf_('responses', r.response) === 'YES') s.yes++;
+  });
+  return out;
+}
+
+/** Строки «по аудиториям» для отчёта собственнику. */
+function audienceReportLines_(objId, wk) {
+  const mon = wk ? mondayOfWeekKey_(wk) : null;
+  const st = audienceStats_(objId, mon, mon ? addDays_(mon, 6) : null);
+  const names = Object.keys(st);
+  if (!names.length) return [];
+  const order = objectAudienceRows_(objId).map(a => a.name);
+  names.sort((x, y) => (order.indexOf(x) < 0 ? 99 : order.indexOf(x)) - (order.indexOf(y) < 0 ? 99 : order.indexOf(y)));
+  return ['Работа по целевым аудиториям (всего с начала работы):'].concat(names.map(n => {
+    const s = st[n];
+    return '• ' + n + ': в работе компаний — ' + s.total + ', звонков — ' + s.calls + ', отправлено КП — ' + s.kp +
+      (s.kpWeek ? ' (за неделю — ' + s.kpWeek + ')' : '') + (s.yes ? ', проявили интерес — ' + s.yes : '');
+  }));
+}
+
+/** Аудитории первой волны (★★★), по которым в базе нет ни одной компании: [{obj, name}]. */
+function idleAudiences_() {
+  const out = [];
+  readTable_('OBJ').rows.filter(o => o.id && o.name && o.in_work !== 'НЕТ').forEach(o => {
+    const top = objectAudienceRows_(o.id).filter(a => a.prio >= 3);
+    if (!top.length) return;
+    const st = audienceStats_(o.id);
+    top.forEach(a => { if (!st[a.name]) out.push({ obj: o, name: a.name }); });
+  });
+  return out;
+}
+
+/** Записывает в 01_ОБЪЕКТЫ «Аудитории ★★★ без базы» (видно на дэшборде). */
+function refreshIdleAudiences_() {
+  const idle = idleAudiences_();
+  const t = readTable_('OBJ');
+  let n = 0;
+  t.rows.filter(o => o.id).forEach(o => {
+    const v = idle.filter(x => String(x.obj.id) === String(o.id)).map(x => x.name).join(', ');
+    if (String(o.idle_aud || '') !== v) { writeFields_(t.sh, 'OBJ', o._row, { idle_aud: v }); n++; }
+  });
+  return idle.length;
+}
+
+/** Компания уже есть в базе по другому объекту: [{obj_id, audience, kp_date, response}]. */
+function companyElsewhere_(company, objId) {
+  const norm = x => String(x || '').trim().toLowerCase().replace(/[«»"'.,]/g, '').replace(/\s+/g, ' ');
+  const key = norm(company);
+  if (!key) return [];
+  return readTable_('BASE').rows.filter(r => norm(r.company) === key && String(r.obj_id) !== String(objId));
 }

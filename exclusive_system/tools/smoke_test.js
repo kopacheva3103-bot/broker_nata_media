@@ -458,3 +458,21 @@ console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПр
   console.log('digest weekday:', X.sendDailyDigest_(X.addDays_(X.today_(), 1)), MAILS.map(m => m.to + ': ' + m.subject).join(' ; '));
   if (MAILS[0]) console.log(MAILS[0].htmlBody.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 400));
 }
+
+// A–E: план недели по аудиториям, подстановка аудитории в промпт, дубли компаний, простой аудиторий, строки отчёта
+{
+  const ans = ['## Аудитории', 'Клиенты деловой авиации | Партнёры-посредники | VIP-отдел, 10 минут до борта | Внуково-3 | ★★★'].join('\n');
+  X.runStrategyImport('4801', ans);
+  console.log('idle:', X.idleAudiences_().map(x => x.obj.id + ':' + x.name).join(', '), '| refresh:', X.refreshIdleAudiences_(), '| obj field:', X.objectById_('4801').idle_aud);
+  const wk = X.isoWeekKey_(X.addDays_(X.today_(), 7));
+  const r = X.buildWeekPlan_(wk, {});
+  const at = X.readTable_('TASK').rows.filter(t => t.week === wk && /^База «/.test(t.task));
+  console.log('week plan aud tasks:', at.map(t => t.obj_id + ' / ' + t.task.slice(0, 45) + ' / ' + t.plan + ' ' + t.unit + ' / ' + t.owner).join(' ; '));
+  const lib = X.readTable_('LIB').rows.find(x => x.title === 'Скрипт звонка и письма');
+  const pt = X.getPromptText('4801', lib.id, 'Сети стоматологий');
+  console.log('script prompt aud:', /Аудитория: «Сети стоматологий» \(Компании\) — ЛПР/.test(pt), '| placeholders left:', (pt.match(/\{[^}]+\}/g) || []).join(','));
+  const lib2 = X.readTable_('LIB').rows.find(x => x.title === 'Портрет ЛПР и выход на него');
+  console.log('portrait all aud:', (X.getPromptText('4801', lib2.id, '').match(/«[^»]+»/g) || []).length);
+  console.log('dup:', X.companyElsewhere_('Клиника Фомина. Рядом', '4801').length, '| lib retired:', X.readTable_('LIB').rows.filter(x => /неочевидные аудитории|Портрет целевой/.test(x.title)).length);
+  console.log('report lines:', X.audienceReportLines_('4801', wk).join(' | '));
+}

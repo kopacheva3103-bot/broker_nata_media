@@ -5,6 +5,7 @@
  *  1) незакрытые задачи прошлых недель (по желанию) переносятся на выбранную неделю — исходные строки
  *     получают статус «Перенесено» и остаются в истории;
  *  2) добавляются задачи недели по умолчанию из 08_НАСТРОЙКИ (если такой задачи на эту неделю ещё нет).
+ *  3) по аудиториям первой волны (★★★ во вкладке), где в 03_ОБЗВОН_И_КП меньше 10 компаний, — задача собрать базу.
  * Исполнитель: звонки и КП — ассистент объекта, публикации — SMM объекта, остальное — ответственный.
  */
 
@@ -24,6 +25,8 @@ function createWeekPlan() {
     (res.skipped.length ? '\nБез ID / не в работе: ' + res.skipped.join(', ') : '') +
     '\n\nДопишите в 02_ЗАДАЧИ задачи по стратегии (сценарии, аудитории, КП) — они попадут в отчёт клиенту.', ui.ButtonSet.OK);
 }
+
+const AUD_BASE_TARGET = 10; // сколько компаний в базе должно быть по каждой аудитории первой волны
 
 function buildWeekPlan_(wk, opts) {
   opts = opts || {};
@@ -61,6 +64,23 @@ function buildWeekPlan_(wk, opts) {
       add.push({
         id: nextId_('TASK', cache), week: wk, obj_id: o.id, block: d.block, task: d.task, owner: owner || '', unit: d.unit, plan: d.plan,
         deadline: addDays_(mon, 4), status: openName, to_report: true, source: 'План недели', created_at: new Date(), author: userEmail_(),
+      });
+    });
+  });
+  // первая волна (★★★): если по аудитории в базе меньше 10 компаний — задача собрать базу
+  objs.forEach(o => {
+    let aud = [];
+    try { aud = objectAudienceRows_(o.id).filter(x => x.prio >= 3).slice(0, 3); } catch (e) { return; }
+    if (!aud.length) return;
+    const st = audienceStats_(o.id);
+    aud.forEach(x => {
+      const n = (st[x.name] || {}).total || 0;
+      if (n >= AUD_BASE_TARGET) return;
+      const task = 'База «' + x.name + '»: найти и внести в 03_ОБЗВОН_И_КП компании (ЛПР, контакт, сайт)';
+      if (have[o.id + '|' + wk + '|' + task]) return;
+      add.push({
+        id: nextId_('TASK', cache), week: wk, obj_id: o.id, block: 'База и рассылки', task: task, owner: o.assistant || o.manager || '', unit: 'шт',
+        plan: Math.max(5, AUD_BASE_TARGET - n), deadline: addDays_(mon, 4), status: openName, to_report: true, source: 'План недели', created_at: new Date(), author: userEmail_(),
       });
     });
   });

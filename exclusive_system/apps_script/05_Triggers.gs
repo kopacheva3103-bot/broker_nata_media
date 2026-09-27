@@ -148,6 +148,13 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
       o._row = row;
       tabSync.push(o);
     }
+    if (code === 'BASE' && single && editedKeys[0] === 'company' && o.company) {
+      try {
+        const other = companyElsewhere_(o.company, o.obj_id);
+        if (other.length) toast_('«' + o.company + '» уже в базе: ' + other.map(x => (objectById_(x.obj_id) || {}).name || x.obj_id).join(', ') +
+          (other.some(x => x.kp_date) ? ' (КП уже отправляли)' : '') + '. Можно предложить и этот объект, но согласуйте, чтобы не звонить дважды.', 'Компания уже в работе', 10);
+      } catch (err) { /* не критично */ }
+    }
     if (code === 'BASE' && editedKeys.indexOf('to_crm') >= 0 && o.to_crm === true && String(o.crm_note).indexOf('✓') !== 0) { o._row = row; crmRows.push(o); }
     if (code === 'TASK' && !isNew && editedKeys.indexOf('status') >= 0 && dictClassOf_('task_status', o.status) === CLS.MOVED) {
       const newId = moveTask_(o, hist);
