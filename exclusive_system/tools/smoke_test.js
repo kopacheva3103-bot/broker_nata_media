@@ -345,3 +345,20 @@ console.log('saved people:', PSTORE.TOPNLAB_PEOPLE);
 // Instagram через ключ Facebook (EAA…): ID аккаунта находится сам, статистика — через graph.facebook.com
 { const r = X.saveSocialTokens('EAAtestFB', '', ''); console.log('fb ig:', r.msg, '| id:', PSTORE.IG_ACCOUNT_ID, '| status:', r.ig);
   const res = X.refreshSocialStats_(); console.log('fb stats:', JSON.stringify(res).slice(0, 200)); }
+// вставка стратегии из ответа Claude
+{
+  const ans = [
+    'Вот стратегия:', '## Аналоги', 'Аналог | Назначение / тип | Площадь | Цена | Ссылка | Комментарий', '|---|---|---|---|---|---|',
+    '| ЖК Пресня, ПСН 1 этаж | ПСН | 240 | 210 млн | https://cian.ru/1 | меньше потолки |',
+    'Мневники 5 | Офис | 180,5 | 160 000 000 |  | проверить на ЦИАН',
+    '## Цена', 'Рекомендуемая цена: 229 млн ₽', 'Минимальная цена: 215 000 000', 'Позиционирование: помещение под клинику у метро', 'Вывод по цене: в рынке',
+    '## Сценарии', 'Медцентр | Медицина: помещение под лицензию | вентиляция, мокрые точки | консультант по лицензированию | подходит',
+    '## Аудитории', 'Сети медцентров | Компании | расширение | 2ГИС | ★★★', 'Стоматологии | компании | филиал | ассоциации | ★★',
+    '## Каналы', 'ЦИАН | премиум-размещение', '## Выводы', 'Цена в рынке | Запустить обзвон сетей'].join('\n');
+  const pv = X.previewStrategy('4801', ans);
+  console.log('strategy preview:', pv.total, pv.html.replace(/<[^>]+>/g, ' ').slice(0, 220));
+  console.log(X.runStrategyImport('4801', ans));
+  const d = X.readObjectTab_(X.findObjectTab_(X.objectById_('4801')));
+  console.log('analog:', JSON.stringify(d.tables.ANALOG), '| kv:', d.kv.rec_price, d.kv.min_price, d.kv.positioning, '| aud:', JSON.stringify(d.tables.AUD), '| scen:', JSON.stringify(d.tables.SCEN), '| dec:', JSON.stringify(d.tables.DEC));
+  console.log('again (no dups):', X.previewStrategy('4801', ans).total);
+}

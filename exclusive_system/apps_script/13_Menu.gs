@@ -17,6 +17,7 @@ function onOpen() {
     .addItem('➜ Синхронизировать задачи с календарём', 'syncCalendar')
     .addSeparator()
     .addItem('➜ Промпт для Claude по объекту', 'promptForObject')
+    .addItem('➜ Вставить стратегию из Claude', 'importStrategy')
     .addItem('➜ Обновить статистику соцсетей', 'refreshSocialStats')
     .addItem('➜ Отправить отмеченные в CRM', 'crmSendPending')
     .addItem('➜ Отправить отчёт клиенту в CRM', 'crmSendReport')
