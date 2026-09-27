@@ -405,3 +405,19 @@ console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПр
   const sp = X.getPromptText('4801', libS.id);
   console.log('strategy prompt id:', sp.indexOf('4801 | Блок стратегии') >= 0, '| placeholders left:', (sp.match(/\{[^}]+\}/g) || []).join(','));
 }
+
+// ответ по промпту «Анализ цены по аналогам»: служебные разделы во вкладку не попадают
+{
+  const ans = ['## Аналоги', 'Мира 10 | ПСН | 480 | 150 000 000 | https://cian.ru/2 | 290 000 ₽/м², корр. 12 %',
+    '## Цена', 'Минимальная цена: 190 млн', '## Выводы', 'Цена выше рынка на 12 % | Обсудить с собственником',
+    '## Разговор с собственником', 'Конкуренты | висят 120 дней | по такой цене', '## Не учтено', 'Мира 12 | дубль'].join('\n');
+  const p = X.strategyPlan_('4801', ans);
+  console.log('price answer:', Object.keys(p.rows).map(k => k + ':' + p.rows[k].length).join(','), '| kv:', JSON.stringify(p.kv));
+}
+{
+  const ans = ['## Цена', 'Рекомендуемая цена: 240 млн', 'Минимальная цена: 215 000 000'].join('\n');
+  console.log('price update preview:', X.previewStrategy('4801', ans).html.replace(/<[^>]+>/g, ' '));
+  console.log(X.runStrategyImport('4801', ans));
+  const d = X.readObjectTab_(X.findObjectTab_(X.objectById_('4801')));
+  console.log('price after:', d.kv.rec_price, d.kv.min_price, '| hist:', X.readTable_('HIST').rows.filter(r => /Рекомендуемая/.test(r.field)).map(r => r.old + '→' + r.new).join(','));
+}

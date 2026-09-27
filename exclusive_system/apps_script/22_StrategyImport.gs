@@ -64,6 +64,10 @@ function parseStrategy_(text) {
   return out;
 }
 
+const KV_LABELS = { rec_price: 'Рекомендуемая цена', min_price: 'Минимальная цена', positioning: 'Позиционирование', price_note: 'Вывод по цене' };
+function kvLabel_(k) { return KV_LABELS[k] || k; }
+function fmtKv_(v) { return typeof v === 'number' ? v.toLocaleString('ru-RU') : String(v).length > 40 ? String(v).slice(0, 40) + '…' : String(v); }
+
 function moneyOf_(s) {
   const t = String(s).toLowerCase().replace(/\s| /g, '').replace(',', '.');
   const m = /(\d+(?:\.\d+)?)(млрд|млн|тыс)?/.exec(t);
@@ -110,9 +114,17 @@ function strategyPlan_(objId, text) {
   if (!tab) throw new Error('У объекта нет вкладки — «Обновить (ID, вкладки, строки)»');
   const parsed = parseStrategy_(text);
   const have = readObjectTab_(tab);
-  const kv = {};
-  Object.keys(parsed.kv).forEach(k => { if (parsed.kv[k] !== '' && (have.kv[k] === '' || have.kv[k] === undefined || have.kv[k] === null)) kv[k] = parsed.kv[k]; });
-  const plan = { obj: obj, tab: tab, rows: {}, kv: kv, skipped: 0, tasks: [], taskErrors: [] };
+  // цена и позиционирование: пустое заполняется, изменившееся — обновляется (прежнее значение уходит в 09_ИСТОРИЯ)
+  const kv = {}, kvOld = {};
+  Object.keys(parsed.kv).forEach(k => {
+    const v = parsed.kv[k], old = have.kv[k];
+    if (v === '' || v === undefined) return;
+    const empty = old === '' || old === undefined || old === null;
+    if (!empty && String(old).trim() === String(v).trim()) return;
+    kv[k] = v;
+    if (!empty) kvOld[k] = old;
+  });
+  const plan = { obj: obj, tab: tab, rows: {}, kv: kv, kvOld: kvOld, skipped: 0, tasks: [], taskErrors: [] };
   if (parsed.taskLines.length) {
     const t = parseMeetingTasks_(parsed.taskLines.join('\n'), obj.id);
     const norm = x => String(x || '').trim().toLowerCase();
@@ -141,7 +153,10 @@ function strategyPlan_(objId, text) {
 function previewStrategy(objId, text) {
   const p = strategyPlan_(objId, text);
   const parts = STRAT_SECTIONS.map(s => {
-    if (s.kv) { const n = Object.keys(p.kv).filter(k => p.kv[k] !== '').length; return n ? s.name + ': ' + n + ' поля' : ''; }
+    if (s.kv) {
+      const n = Object.keys(p.kv).length, upd = Object.keys(p.kvOld).length;
+      return n ? s.name + ': ' + n + ' поля' + (upd ? ' (обновится ' + upd + ': ' + Object.keys(p.kvOld).map(k => kvLabel_(k) + ' ' + fmtKv_(p.kvOld[k]) + ' → ' + fmtKv_(p.kv[k])).join('; ') + ')' : '') : '';
+    }
     const n = (p.rows[s.key] || []).length;
     return n ? s.name + ': ' + n + ' строк' : '';
   }).filter(Boolean);
@@ -170,12 +185,15 @@ function runStrategyImport(objId, text) {
         n++;
       });
     });
-    const kvKeys = Object.keys(p.kv).filter(k => p.kv[k] !== '');
+    const kvKeys = Object.keys(p.kv);
+    const kvHist = [];
     if (kvKeys.length) {
       const marks = sh.getRange(1, 1, sh.getLastRow(), 1).getValues();
       kvKeys.forEach(k => {
         const i = marks.findIndex(m => String(m[0]) === 'K:' + k);
-        if (i >= 0 && sh.getRange(i + 1, 3).getValue() === '') { sh.getRange(i + 1, 3).setValue(p.kv[k]); n++; }
+        if (i < 0) return;
+        sh.getRange(i + 1, 3).setValue(p.kv[k]); n++;
+        if (k in p.kvOld) kvHist.push({ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: '2. ' + kvLabel_(k), old: p.kvOld[k], new: p.kv[k], kind: HIST_KIND.CHANGE });
       });
     }
     let tasks = 0;
@@ -183,7 +201,7 @@ function runStrategyImport(objId, text) {
     let docNote = '';
     try { if (n || tasks) { appendStrategyDoc_(p.obj, 'стратегия из Claude', strategyThesis_(p)); docNote = ' Документ «' + strategyDocName_(p.obj) + '» в папке объекта пополнен.'; } }
     catch (e) { docNote = ' ⚠ Документ стратегии не пополнен: ' + e.message; }
-    logHistory_([{ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: 'Стратегия', old: '', new: 'вставлено из Claude: ' + n + (tasks ? ', задач: ' + tasks : ''), kind: HIST_KIND.CHANGE }], userEmail_());
+    logHistory_(kvHist.concat([{ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: 'Стратегия', old: '', new: 'вставлено из Claude: ' + n + (tasks ? ', задач: ' + tasks : ''), kind: HIST_KIND.CHANGE }]), userEmail_());
     return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (tasks ? ', задач в 02_ЗАДАЧИ: ' + tasks : '') + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '.' + docNote + ' Проверьте вкладку.';
   } finally {
     lock.releaseLock();
