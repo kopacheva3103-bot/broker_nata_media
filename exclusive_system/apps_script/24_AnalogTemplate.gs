@@ -4,7 +4,7 @@
  * Новая версия шаблона заменяет старую (старая — в корзину). Копии в папках объектов не трогаются.
  */
 
-const ANALOG_TEMPLATE_VERSION = '2';
+const ANALOG_TEMPLATE_VERSION = '3';
 const ANALOG_TEMPLATE_NAME = 'Шаблон — Анализ аналогов (конкуренты)';
 const ANALOG_TEMPLATE_URL = 'https://raw.githubusercontent.com/kopacheva3103-bot/broker_nata_media/claude/gallant-gauss-krudky/exclusive_system/templates/analogs_template.xlsx';
 
