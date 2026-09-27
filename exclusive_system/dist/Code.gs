@@ -835,10 +835,9 @@ function setupSystem() {
   try { const mt = ensureMediaTasks_(); if (mt) log.push('Задачи «фото и видео на Яндекс Диске» новым объектам: ' + mt); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
   try { refreshIdleAudiences_(); } catch (err) { warn += '\n\n⚠ Аудитории без базы: ' + err.message; }
   try { const nb = refreshBaseAudienceLists_(); if (nb) log.push('03_ОБЗВОН_И_КП: списки аудиторий в строках: ' + nb); } catch (err) { warn += '\n\n⚠ Списки аудиторий: ' + err.message; }
-  try {
-    if (ensureDigestTrigger_()) log.push('Утренняя сводка сотрудникам: каждый будний день в 9:00 по Москве');
-    if (!ScriptApp.getProjectTriggers().some(x => x.getHandlerFunction() === 'dailyJobs')) warn += '\n\n⚠ Ежедневное обновление выключено — повторные контакты и списки аудиторий не обновляются. Меню «Сервис» → «Включить ежедневное обновление».';
-  } catch (err) { warn += '\n\n⚠ Утренняя сводка: ' + err.message; }
+  try { const tr = ensureJobTriggers_(); if (tr.length) log.push('Автозапуски включены: ' + tr.join(', ')); } catch (err) { warn += '\n\n⚠ Автозапуски: ' + err.message + ' — меню «Сервис» → «Включить автообновление».'; }
+  try { const mb = backfillMediaTasks_(); if (mb) log.push('Задачи ассистенту «фото и видео на Яндекс Диске» по текущим объектам: ' + mb); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
+  try { const c = syncCalendar_(); log.push('Google Календарь: создано событий ' + c.created + ', обновлено ' + c.updated + (c.noEmail.length ? ' (нет email у: ' + c.noEmail.join(', ') + ')' : '')); } catch (err) { warn += '\n\n⚠ Календарь: ' + err.message; }
   try { if (!cfgGet_('REELS_PROMPT_DOC')) { const u = findReelsPromptDoc_(); log.push(u ? 'Промпт «Серия рилс на объект»: найден документ ' + u : '⚠ Промпт «Серия рилс на объект»: документ не найден — вставьте ссылку в 08_НАСТРОЙКИ'); } } catch (err) { warn += '\n\n⚠ Промпт серии рилс: ' + err.message; }
   try { const at = ensureAnalogTemplate_(); if (at) log.push(at); } catch (err) { warn += '\n\n⚠ Шаблон анализа аналогов: ' + err.message; }
   const tabs = objectTabs_().length;
@@ -4438,20 +4437,30 @@ function dailyJobs() {
   try { refreshBaseAudienceLists_(); } catch (e) { Logger.log('Списки аудиторий: ' + e.message); }
 }
 
+/** Задачи → Google Календарь каждый час (в течение дня новые задачи и сроки появляются у исполнителей). */
+function calendarJob() {
+  try { syncCalendar_(); } catch (e) { Logger.log('Календарь: ' + e.message); }
+}
+
+/** Ставит недостающие автозапуски: утреннее обновление 7:00, входящие каждые 10 минут, календарь каждый час, сводка 9:00. */
+function ensureJobTriggers_() {
+  const have = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
+  const added = [];
+  if (have.indexOf('dailyJobs') < 0) { ScriptApp.newTrigger('dailyJobs').timeBased().everyDays(1).atHour(7).inTimezone(SYS.TZ).create(); added.push('утреннее обновление 7:00'); }
+  if (have.indexOf('inboxJob') < 0) { ScriptApp.newTrigger('inboxJob').timeBased().everyMinutes(10).create(); added.push('входящие каждые 10 минут'); }
+  if (have.indexOf('calendarJob') < 0) { ScriptApp.newTrigger('calendarJob').timeBased().everyHours(1).create(); added.push('календарь каждый час'); }
+  if (have.indexOf('digestJob') < 0) { ScriptApp.newTrigger('digestJob').timeBased().everyDays(1).atHour(9).inTimezone(SYS.TZ).create(); added.push('сводка 9:00'); }
+  return added;
+}
+
 /** Утренняя сводка сотрудникам — отдельный запуск в 9:00 по Москве (после утреннего обновления в 7:00). */
 function digestJob() {
   try { sendDailyDigest_(); } catch (e) { Logger.log('Утренняя сводка: ' + e.message); }
 }
 
-/** Ставит запуск сводки в 9:00, если его ещё нет. */
-function ensureDigestTrigger_() {
-  if (ScriptApp.getProjectTriggers().some(x => x.getHandlerFunction() === 'digestJob')) return false;
-  ScriptApp.newTrigger('digestJob').timeBased().everyDays(1).atHour(9).inTimezone(SYS.TZ).create();
-  return true;
-}
-
 function enableDailyJobs() {
   disableDailyJobs_();
+  ScriptApp.newTrigger('calendarJob').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('dailyJobs').timeBased().everyDays(1).atHour(7).create();
   ScriptApp.newTrigger('inboxJob').timeBased().everyMinutes(10).create();
   ScriptApp.newTrigger('digestJob').timeBased().everyDays(1).atHour(9).inTimezone(SYS.TZ).create();
@@ -4464,7 +4473,7 @@ function disableDailyJobs() {
 }
 
 function disableDailyJobs_() {
-  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyJobs' || t.getHandlerFunction() === 'inboxJob' || t.getHandlerFunction() === 'digestJob') ScriptApp.deleteTrigger(t); });
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyJobs' || t.getHandlerFunction() === 'inboxJob' || t.getHandlerFunction() === 'digestJob' || t.getHandlerFunction() === 'calendarJob') ScriptApp.deleteTrigger(t); });
 }
 
 // ═════════════ 16_Social.gs ═════════════
@@ -6241,6 +6250,29 @@ function ensureMediaTasks_() {
     logHistory_(rows.map(r => ({ sheet: SHEET_NAMES.TASK, record_id: r.id, obj_id: r.obj_id, field: 'Задача', old: '', new: 'Фото и видео на Яндекс Диске', kind: HIST_KIND.CREATE, note: 'Автозадача для нового объекта' })), 'система');
   }
   props.setProperty('MEDIA_TASK_KNOWN', JSON.stringify(known.concat(fresh.map(o => String(o.id)))));
+  return rows.length;
+}
+
+/** Один раз: текущим объектам без такой задачи — задача ассистенту на следующий рабочий день. */
+function backfillMediaTasks_() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('MEDIA_TASK_BACKFILL') === 'done') return 0;
+  const objs = readTable_('OBJ').rows.filter(o => o.id && o.name && o.in_work !== 'НЕТ');
+  const tasks = readTable_('TASK').rows;
+  const hasTask = id => tasks.some(t => String(t.obj_id) === String(id) && String(t.task).indexOf(MEDIA_TASK_MARK) >= 0);
+  const owner = teamDefaults_().assistant || '';
+  const source = dictValues_('task_sources').indexOf('Система') >= 0 ? 'Система' : 'Вручную';
+  const deadline = workdayAfter_(today_(), 1);
+  const cache = {};
+  const rows = objs.filter(o => !hasTask(o.id)).map(o => ({
+    id: nextId_('TASK', cache), week: isoWeekKey_(deadline), obj_id: String(o.id), block: 'Фото и видео', task: MEDIA_TASK_TEXT,
+    owner: owner, unit: '', plan: '', deadline: deadline, status: dictFirstByClass_('task_status', CLS.OPEN),
+    to_report: false, source: source, created_at: new Date(), author: 'система',
+  }));
+  if (rows.length) appendRows_('TASK', rows);
+  props.setProperty('MEDIA_TASK_BACKFILL', 'done');
+  const known = JSON.parse(props.getProperty('MEDIA_TASK_KNOWN') || '[]');
+  props.setProperty('MEDIA_TASK_KNOWN', JSON.stringify(known.concat(objs.map(o => String(o.id)).filter(id => known.indexOf(id) < 0))));
   return rows.length;
 }
 

@@ -73,20 +73,30 @@ function dailyJobs() {
   try { refreshBaseAudienceLists_(); } catch (e) { Logger.log('Списки аудиторий: ' + e.message); }
 }
 
+/** Задачи → Google Календарь каждый час (в течение дня новые задачи и сроки появляются у исполнителей). */
+function calendarJob() {
+  try { syncCalendar_(); } catch (e) { Logger.log('Календарь: ' + e.message); }
+}
+
+/** Ставит недостающие автозапуски: утреннее обновление 7:00, входящие каждые 10 минут, календарь каждый час, сводка 9:00. */
+function ensureJobTriggers_() {
+  const have = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
+  const added = [];
+  if (have.indexOf('dailyJobs') < 0) { ScriptApp.newTrigger('dailyJobs').timeBased().everyDays(1).atHour(7).inTimezone(SYS.TZ).create(); added.push('утреннее обновление 7:00'); }
+  if (have.indexOf('inboxJob') < 0) { ScriptApp.newTrigger('inboxJob').timeBased().everyMinutes(10).create(); added.push('входящие каждые 10 минут'); }
+  if (have.indexOf('calendarJob') < 0) { ScriptApp.newTrigger('calendarJob').timeBased().everyHours(1).create(); added.push('календарь каждый час'); }
+  if (have.indexOf('digestJob') < 0) { ScriptApp.newTrigger('digestJob').timeBased().everyDays(1).atHour(9).inTimezone(SYS.TZ).create(); added.push('сводка 9:00'); }
+  return added;
+}
+
 /** Утренняя сводка сотрудникам — отдельный запуск в 9:00 по Москве (после утреннего обновления в 7:00). */
 function digestJob() {
   try { sendDailyDigest_(); } catch (e) { Logger.log('Утренняя сводка: ' + e.message); }
 }
 
-/** Ставит запуск сводки в 9:00, если его ещё нет. */
-function ensureDigestTrigger_() {
-  if (ScriptApp.getProjectTriggers().some(x => x.getHandlerFunction() === 'digestJob')) return false;
-  ScriptApp.newTrigger('digestJob').timeBased().everyDays(1).atHour(9).inTimezone(SYS.TZ).create();
-  return true;
-}
-
 function enableDailyJobs() {
   disableDailyJobs_();
+  ScriptApp.newTrigger('calendarJob').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('dailyJobs').timeBased().everyDays(1).atHour(7).create();
   ScriptApp.newTrigger('inboxJob').timeBased().everyMinutes(10).create();
   ScriptApp.newTrigger('digestJob').timeBased().everyDays(1).atHour(9).inTimezone(SYS.TZ).create();
@@ -99,5 +109,5 @@ function disableDailyJobs() {
 }
 
 function disableDailyJobs_() {
-  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyJobs' || t.getHandlerFunction() === 'inboxJob' || t.getHandlerFunction() === 'digestJob') ScriptApp.deleteTrigger(t); });
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyJobs' || t.getHandlerFunction() === 'inboxJob' || t.getHandlerFunction() === 'digestJob' || t.getHandlerFunction() === 'calendarJob') ScriptApp.deleteTrigger(t); });
 }

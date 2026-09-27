@@ -495,3 +495,8 @@ console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПр
   console.log(X.runStrategyImport('4801', ans));
   console.log('cont rows:', X.readTable_('CONT').rows.filter(r => /Ролик 1\/5/.test(r.topic)).map(r => [r.platform, r.format, r.goal, X.fmtDate_(r.pub_date), r.owner, r.status].join(' / ')).join(' ; '));
 }
+{
+  const before = X.readTable_('TASK').rows.filter(t => /Яндекс Диск/.test(t.task)).length;
+  const n = X.backfillMediaTasks_();
+  console.log('media backfill:', n, '| before:', before, '| again:', X.backfillMediaTasks_(), '| deadline:', X.fmtDate_(X.readTable_('TASK').rows.filter(t => /Яндекс Диск/.test(t.task)).pop().deadline));
+}
