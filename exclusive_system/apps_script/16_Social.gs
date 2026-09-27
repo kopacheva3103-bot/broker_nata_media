@@ -11,6 +11,12 @@
  */
 
 const IG_API = 'https://graph.instagram.com/v25.0';
+const IG_FB_API = 'https://graph.facebook.com/v23.0'; // ключи «EAA…» (вход через Facebook): аккаунт Instagram по его ID
+
+/** Ключ Instagram через Facebook («EAA…») — другой адрес API и обращение по ID аккаунта, а не /me. */
+function igIsFb_(tok) { return /^EAA/.test(String(tok || '')); }
+function igBase_(tok) { return igIsFb_(tok) ? IG_FB_API : IG_API; }
+function igNode_(tok) { return igIsFb_(tok) ? (socialProps_().getProperty('IG_ACCOUNT_ID') || 'me') : 'me'; }
 const TH_API = 'https://graph.threads.net/v1.0';
 
 function refreshSocialStats() {
@@ -109,6 +115,7 @@ function socialToken_(net) {
   const tok = p.getProperty(net + '_TOKEN');
   if (!tok) return '';
   const ts = Number(p.getProperty(net + '_TOKEN_TS') || 0);
+  if (net === 'IG' && igIsFb_(tok)) return tok; // ключ Facebook продлевается в приложении Meta, не здесь
   if (Date.now() - ts > 7 * 86400000) {
     const url = net === 'IG'
       ? 'https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=' + encodeURIComponent(tok)
@@ -155,13 +162,14 @@ function updateInstagram_(t, items, res) {
   const tok = socialToken_('IG');
   if (!tok) { res.igOff = true; return; }
   let map;
-  try { map = metaMediaMap_(IG_API + '/me/media?fields=id,permalink&limit=100&access_token=' + encodeURIComponent(tok), instagramCode_); }
+  const base = igBase_(tok);
+  try { map = metaMediaMap_(base + '/' + igNode_(tok) + '/media?fields=id,permalink&limit=100&access_token=' + encodeURIComponent(tok), instagramCode_); }
   catch (e) { res.failed += items.length; Logger.log('Instagram: ' + e.message); return; }
   items.forEach(x => {
     const id = map[x.code];
     if (!id) { res.notFound++; return; }
-    let r = metaGet_(IG_API + '/' + id + '/insights?metric=views,reach,saved&access_token=' + encodeURIComponent(tok));
-    if (r.error) r = metaGet_(IG_API + '/' + id + '/insights?metric=reach,saved&access_token=' + encodeURIComponent(tok));
+    let r = metaGet_(base + '/' + id + '/insights?metric=views,reach,saved&access_token=' + encodeURIComponent(tok));
+    if (r.error) r = metaGet_(base + '/' + id + '/insights?metric=reach,saved&access_token=' + encodeURIComponent(tok));
     if (r.error) { res.failed++; return; }
     const v = insightValues_(r);
     const upd = {};
@@ -196,30 +204,43 @@ function connectSocial() {
     '<div style="font:14px Arial,sans-serif">' +
     '<p>Вставьте ключи доступа (токены) из приложения Meta — как их получить, описано в инструкции «06 — Подключение Instagram и Threads». ' +
     'Ключи хранятся в свойствах скрипта, в таблице их не видно. Пустое поле — оставить как есть.</p>' +
-    '<p><b>Instagram</b>: <span id="si">' + htmlEscape_(st.ig) + '</span><br><input id="ig" style="width:100%" placeholder="IGAA…"></p>' +
+    '<p><b>Instagram</b>: <span id="si">' + htmlEscape_(st.ig) + '</span><br><input id="ig" style="width:100%" placeholder="IGAA… или EAA…"></p>' +
+    '<p style="font-size:12px;color:#5f6368">Для ключа «EAA…» (через Facebook) — ID аккаунта Instagram (IG_USER_ID, 1784…); пусто — система попробует найти сама:<br><input id="igid" style="width:100%" value="' + htmlEscape_(socialProps_().getProperty('IG_ACCOUNT_ID') || '') + '"></p>' +
     '<p><b>Threads</b>: <span id="st">' + htmlEscape_(st.th) + '</span><br><input id="th" style="width:100%" placeholder="THAA…"></p>' +
     '<button onclick="save()">Проверить и сохранить</button> <button onclick="off()">Отключить оба</button>' +
     '<div id="r" style="margin-top:10px"></div></div><script>' +
     'function show(x){document.getElementById("si").textContent=x.ig;document.getElementById("st").textContent=x.th;document.getElementById("r").textContent=x.msg||"";}' +
-    'function save(){document.getElementById("r").textContent="Проверяю…";google.script.run.withSuccessHandler(show).withFailureHandler(function(e){document.getElementById("r").textContent="Ошибка: "+e.message;}).saveSocialTokens(document.getElementById("ig").value,document.getElementById("th").value);}' +
+    'function save(){document.getElementById("r").textContent="Проверяю…";google.script.run.withSuccessHandler(show).withFailureHandler(function(e){document.getElementById("r").textContent="Ошибка: "+e.message;}).saveSocialTokens(document.getElementById("ig").value,document.getElementById("th").value,document.getElementById("igid").value);}' +
     'function off(){google.script.run.withSuccessHandler(show).removeSocialTokens();}' +
-    '</script>').setWidth(560).setHeight(380);
+    '</script>').setWidth(560).setHeight(440);
   SpreadsheetApp.getUi().showModalDialog(html, 'Подключить Instagram / Threads');
 }
 
 function socialStatus() {
   const p = socialProps_();
   const f = net => p.getProperty(net + '_TOKEN') ? 'подключён' + (p.getProperty(net + '_USER') ? ' (@' + p.getProperty(net + '_USER') + ')' : '') +
-    ', ключ продлён ' + fmtDate_(new Date(Number(p.getProperty(net + '_TOKEN_TS') || 0))) : 'не подключён';
+    (net === 'IG' && igIsFb_(p.getProperty('IG_TOKEN')) ? ', ключ Facebook сохранён ' + fmtDate_(new Date(Number(p.getProperty('IG_TOKEN_TS') || 0))) + ' (если перестанет работать — вставьте новый)'
+      : ', ключ продлён ' + fmtDate_(new Date(Number(p.getProperty(net + '_TOKEN_TS') || 0)))) : 'не подключён';
   return { ig: f('IG'), th: f('TH') };
 }
 
-function saveSocialTokens(ig, th) {
+function saveSocialTokens(ig, th, igId) {
   const p = socialProps_();
   const msg = [];
   const check = (net, tok, url) => {
     tok = String(tok || '').trim();
     if (!tok) return;
+    if (net === 'IG' && igIsFb_(tok)) {
+      let id = String(igId || '').replace(/\D/g, '');
+      if (!id) { // ищем Instagram-аккаунт, привязанный к странице Facebook
+        const a = metaGet_(IG_FB_API + '/me/accounts?fields=instagram_business_account&access_token=' + encodeURIComponent(tok));
+        const f = (a.data || []).find(x => x.instagram_business_account);
+        id = f ? f.instagram_business_account.id : '';
+      }
+      if (!id) { msg.push('Instagram: не найден ID аккаунта — впишите IG_USER_ID (1784…) в поле ниже ключа'); return; }
+      p.setProperty('IG_ACCOUNT_ID', id);
+      url = IG_FB_API + '/' + id + '?fields=username&access_token=';
+    } else if (net === 'IG') p.deleteProperty('IG_ACCOUNT_ID');
     const r = metaGet_(url + encodeURIComponent(tok));
     if (r.error || !r.username) { msg.push((net === 'IG' ? 'Instagram' : 'Threads') + ': ключ не подошёл — ' + (r.error ? r.error.message : 'нет доступа')); return; }
     p.setProperty(net + '_TOKEN', tok);
@@ -238,6 +259,7 @@ function saveSocialTokens(ig, th) {
 function removeSocialTokens() {
   const p = socialProps_();
   ['IG', 'TH'].forEach(n => ['_TOKEN', '_TOKEN_TS', '_USER'].forEach(k => p.deleteProperty(n + k)));
+  p.deleteProperty('IG_ACCOUNT_ID');
   const st = socialStatus();
   st.msg = 'Отключено.';
   return st;

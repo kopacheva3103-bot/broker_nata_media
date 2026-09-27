@@ -27,6 +27,10 @@ function FETCH(u, o) {
   FETCHED.push(u);
   const J = o => ({ getContentText: () => JSON.stringify(o), getResponseCode: () => 200 });
   if (u.indexOf('t.me/') >= 0) return { getContentText: () => u.indexOf('/77?') > 0 ? '<span class="tgme_widget_message_views">1.2K</span>' : '<span class="tgme_widget_message_views">845</span>' };
+  if (/graph\.facebook\.com\/v23\.0\/me\/accounts/.test(u)) return J({ data: [{ id: 'PAGE1' }, { id: 'PAGE2', instagram_business_account: { id: '17841400000000001' } }] });
+  if (/graph\.facebook\.com\/v23\.0\/17841400000000001\?fields=username/.test(u)) return J({ username: 'sdelka_fb' });
+  if (/graph\.facebook\.com\/v23\.0\/17841400000000001\/media/.test(u)) return J({ data: [{ id: '17900001', permalink: 'https://www.instagram.com/reel/REEL1abc/' }] });
+  if (/graph\.facebook\.com\/v23\.0\/17900001\/insights/.test(u)) return J({ data: [{ name: 'views', values: [{ value: 7777 }] }, { name: 'reach', values: [{ value: 3100 }] }, { name: 'saved', values: [{ value: 42 }] }] });
   if (/graph\.instagram\.com\/v25\.0\/me\?/.test(u)) return u.indexOf('BAD') >= 0 ? J({ error: { message: 'Invalid OAuth access token' } }) : J({ username: 'sdelka77' });
   if (/graph\.threads\.net\/v1\.0\/me\?/.test(u)) return J({ username: 'nata.broker' });
   if (/instagram\.com\/v25\.0\/me\/media/.test(u)) return u.indexOf('after=') >= 0 ? J({ data: [{ id: '17900002', permalink: 'https://www.instagram.com/p/POST2/' }] }) :
@@ -337,3 +341,7 @@ console.log('saved people:', PSTORE.TOPNLAB_PEOPLE);
 { const c = X.fieldIndex_('OBJ', 'customer'); X.sheet_('OBJ').getRange(1, c).setValue('Заказчик (для отчёта)');
   let ok = true; try { X.buildDataSheet_('OBJ'); } catch (e) { ok = e.message; }
   console.log('rename header:', ok, X.sheet_('OBJ').getRange(1, c).getValue()); }
+
+// Instagram через ключ Facebook (EAA…): ID аккаунта находится сам, статистика — через graph.facebook.com
+{ const r = X.saveSocialTokens('EAAtestFB', '', ''); console.log('fb ig:', r.msg, '| id:', PSTORE.IG_ACCOUNT_ID, '| status:', r.ig);
+  const res = X.refreshSocialStats_(); console.log('fb stats:', JSON.stringify(res).slice(0, 200)); }
