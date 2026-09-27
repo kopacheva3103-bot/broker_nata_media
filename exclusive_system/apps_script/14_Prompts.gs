@@ -45,7 +45,7 @@ function getPromptText(objId, libId, audience) {
   text = text.replace(/\{объекты\}/g, readTable_('OBJ').rows.filter(o => o.id && o.name && o.in_work !== 'НЕТ').map(o => o.id + ' — ' + o.name).join('; '));
   text = text.replace(/\{сотрудники\}/g, dictValues_('people').join(', '));
   text = text.replace(/\{чек-листы\}/g, readTable_('LIB').rows.filter(r => r.kind === 'Чек-лист' && r.title).map(r => r.title).join('; '));
-  if (text.indexOf('{промпт серии рилс из документа}') >= 0) { const doc = promptFromDoc_(cfgGet_('REELS_PROMPT_DOC')); text = text.replace('{промпт серии рилс из документа}', () => doc); }
+  if (text.indexOf('{промпт серии рилс из документа}') >= 0) { const doc = promptFromDoc_(cfgGet_('REELS_PROMPT_DOC') || findReelsPromptDoc_()); text = text.replace('{промпт серии рилс из документа}', () => doc); }
   if (text.indexOf('{финальный блок объявления}') >= 0) {
     let footer = String(cfgGet_('AD_FOOTER') || (cfgDefs_().find(d => d.key === 'AD_FOOTER') || {}).value || '').trim();
     if (obj && /аренд/i.test(String(obj.deal))) footer = footer.replace(/по продаже/g, 'по аренде');
@@ -57,6 +57,21 @@ function getPromptText(objId, libId, audience) {
   const out = text + (obj ? '\n\n' + objectContext_(obj) : '');
   logHistory_([{ sheet: 'Claude (подписка)', record_id: p.id, obj_id: obj ? obj.id : '', field: 'Промпт: ' + p.title, old: '', new: 'сформирован для копирования', kind: 'Промпт' }], userEmail_());
   return out;
+}
+
+/** Ищет на Диске документ с промптом серии рилс («ПРОМПТ-СЕРИЯ…» с меткой «НАЧАЛО ПРОМПТА»), запоминает ссылку в 08_НАСТРОЙКИ. */
+function findReelsPromptDoc_() {
+  const q = [
+    'title contains "ПРОМПТ-СЕРИЯ" and mimeType = "application/vnd.google-apps.document" and trashed = false',
+    'fullText contains "НАЧАЛО ПРОМПТА" and fullText contains "Reels" and mimeType = "application/vnd.google-apps.document" and trashed = false',
+  ];
+  for (let i = 0; i < q.length; i++) {
+    const it = DriveApp.searchFiles(q[i]);
+    let best = null;
+    while (it.hasNext()) { const f = it.next(); if (!best || f.getLastUpdated() > best.getLastUpdated()) best = f; }
+    if (best) { const url = best.getUrl(); cfgSet_('REELS_PROMPT_DOC', url); return url; }
+  }
+  return '';
 }
 
 /** Текст промпта из Google Doc (между строками «НАЧАЛО ПРОМПТА» и «КОНЕЦ ПРОМПТА»; без меток — весь документ). */

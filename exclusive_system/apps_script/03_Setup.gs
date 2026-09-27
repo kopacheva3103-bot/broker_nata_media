@@ -51,6 +51,11 @@ function setupSystem() {
   try { const mt = ensureMediaTasks_(); if (mt) log.push('Задачи «фото и видео на Яндекс Диске» новым объектам: ' + mt); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
   try { refreshIdleAudiences_(); } catch (err) { warn += '\n\n⚠ Аудитории без базы: ' + err.message; }
   try { const nb = refreshBaseAudienceLists_(); if (nb) log.push('03_ОБЗВОН_И_КП: списки аудиторий в строках: ' + nb); } catch (err) { warn += '\n\n⚠ Списки аудиторий: ' + err.message; }
+  try {
+    if (ensureDigestTrigger_()) log.push('Утренняя сводка сотрудникам: каждый будний день в 9:00 по Москве');
+    if (!ScriptApp.getProjectTriggers().some(x => x.getHandlerFunction() === 'dailyJobs')) warn += '\n\n⚠ Ежедневное обновление выключено — повторные контакты и списки аудиторий не обновляются. Меню «Сервис» → «Включить ежедневное обновление».';
+  } catch (err) { warn += '\n\n⚠ Утренняя сводка: ' + err.message; }
+  try { if (!cfgGet_('REELS_PROMPT_DOC')) { const u = findReelsPromptDoc_(); log.push(u ? 'Промпт «Серия рилс на объект»: найден документ ' + u : '⚠ Промпт «Серия рилс на объект»: документ не найден — вставьте ссылку в 08_НАСТРОЙКИ'); } } catch (err) { warn += '\n\n⚠ Промпт серии рилс: ' + err.message; }
   try { const at = ensureAnalogTemplate_(); if (at) log.push(at); } catch (err) { warn += '\n\n⚠ Шаблон анализа аналогов: ' + err.message; }
   const tabs = objectTabs_().length;
   if (tabs) {

@@ -108,7 +108,7 @@ function cfgDefs_() {
     { key: 'EXEC_HEADER', label: 'Шапка отчёта (реквизиты, строки через « | »)', value: 'Индивидуальный предприниматель Копачева Наталья Анатольевна | Свидетельство № 312744805300028 | тел.: 8(925)5617004 | sdelka77.ru' },
     { key: 'MANAGER_NAME', label: 'Подпись под отчётом', value: 'Наталья Копачева' },
     { group: 'Команда' },
-    { key: 'DIGEST_ON', label: 'Утренняя сводка сотрудникам на почту в будни около 7:00 (ДА / НЕТ): задачи на сегодня и просроченные, звонки и повторные контакты', value: 'ДА' },
+    { key: 'DIGEST_ON', label: 'Утренняя сводка сотрудникам на почту в будни в 9:00 по Москве (ДА / НЕТ): задачи на сегодня и просроченные, звонки и повторные контакты', value: 'ДА' },
     { group: 'Контент' },
     { key: 'REELS_PROMPT_DOC', label: 'Ссылка на Google Doc с промптом «Серия рилс на объект» (текст между «НАЧАЛО ПРОМПТА» и «КОНЕЦ ПРОМПТА»)', value: '' },
     { group: 'Объявления (ЦИАН, Авито)' },
@@ -835,6 +835,11 @@ function setupSystem() {
   try { const mt = ensureMediaTasks_(); if (mt) log.push('Задачи «фото и видео на Яндекс Диске» новым объектам: ' + mt); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
   try { refreshIdleAudiences_(); } catch (err) { warn += '\n\n⚠ Аудитории без базы: ' + err.message; }
   try { const nb = refreshBaseAudienceLists_(); if (nb) log.push('03_ОБЗВОН_И_КП: списки аудиторий в строках: ' + nb); } catch (err) { warn += '\n\n⚠ Списки аудиторий: ' + err.message; }
+  try {
+    if (ensureDigestTrigger_()) log.push('Утренняя сводка сотрудникам: каждый будний день в 9:00 по Москве');
+    if (!ScriptApp.getProjectTriggers().some(x => x.getHandlerFunction() === 'dailyJobs')) warn += '\n\n⚠ Ежедневное обновление выключено — повторные контакты и списки аудиторий не обновляются. Меню «Сервис» → «Включить ежедневное обновление».';
+  } catch (err) { warn += '\n\n⚠ Утренняя сводка: ' + err.message; }
+  try { if (!cfgGet_('REELS_PROMPT_DOC')) { const u = findReelsPromptDoc_(); log.push(u ? 'Промпт «Серия рилс на объект»: найден документ ' + u : '⚠ Промпт «Серия рилс на объект»: документ не найден — вставьте ссылку в 08_НАСТРОЙКИ'); } } catch (err) { warn += '\n\n⚠ Промпт серии рилс: ' + err.message; }
   try { const at = ensureAnalogTemplate_(); if (at) log.push(at); } catch (err) { warn += '\n\n⚠ Шаблон анализа аналогов: ' + err.message; }
   const tabs = objectTabs_().length;
   if (tabs) {
@@ -4142,7 +4147,7 @@ function getPromptText(objId, libId, audience) {
   text = text.replace(/\{объекты\}/g, readTable_('OBJ').rows.filter(o => o.id && o.name && o.in_work !== 'НЕТ').map(o => o.id + ' — ' + o.name).join('; '));
   text = text.replace(/\{сотрудники\}/g, dictValues_('people').join(', '));
   text = text.replace(/\{чек-листы\}/g, readTable_('LIB').rows.filter(r => r.kind === 'Чек-лист' && r.title).map(r => r.title).join('; '));
-  if (text.indexOf('{промпт серии рилс из документа}') >= 0) { const doc = promptFromDoc_(cfgGet_('REELS_PROMPT_DOC')); text = text.replace('{промпт серии рилс из документа}', () => doc); }
+  if (text.indexOf('{промпт серии рилс из документа}') >= 0) { const doc = promptFromDoc_(cfgGet_('REELS_PROMPT_DOC') || findReelsPromptDoc_()); text = text.replace('{промпт серии рилс из документа}', () => doc); }
   if (text.indexOf('{финальный блок объявления}') >= 0) {
     let footer = String(cfgGet_('AD_FOOTER') || (cfgDefs_().find(d => d.key === 'AD_FOOTER') || {}).value || '').trim();
     if (obj && /аренд/i.test(String(obj.deal))) footer = footer.replace(/по продаже/g, 'по аренде');
@@ -4154,6 +4159,21 @@ function getPromptText(objId, libId, audience) {
   const out = text + (obj ? '\n\n' + objectContext_(obj) : '');
   logHistory_([{ sheet: 'Claude (подписка)', record_id: p.id, obj_id: obj ? obj.id : '', field: 'Промпт: ' + p.title, old: '', new: 'сформирован для копирования', kind: 'Промпт' }], userEmail_());
   return out;
+}
+
+/** Ищет на Диске документ с промптом серии рилс («ПРОМПТ-СЕРИЯ…» с меткой «НАЧАЛО ПРОМПТА»), запоминает ссылку в 08_НАСТРОЙКИ. */
+function findReelsPromptDoc_() {
+  const q = [
+    'title contains "ПРОМПТ-СЕРИЯ" and mimeType = "application/vnd.google-apps.document" and trashed = false',
+    'fullText contains "НАЧАЛО ПРОМПТА" and fullText contains "Reels" and mimeType = "application/vnd.google-apps.document" and trashed = false',
+  ];
+  for (let i = 0; i < q.length; i++) {
+    const it = DriveApp.searchFiles(q[i]);
+    let best = null;
+    while (it.hasNext()) { const f = it.next(); if (!best || f.getLastUpdated() > best.getLastUpdated()) best = f; }
+    if (best) { const url = best.getUrl(); cfgSet_('REELS_PROMPT_DOC', url); return url; }
+  }
+  return '';
 }
 
 /** Текст промпта из Google Doc (между строками «НАЧАЛО ПРОМПТА» и «КОНЕЦ ПРОМПТА»; без меток — весь документ). */
@@ -4416,14 +4436,26 @@ function dailyJobs() {
   try { scheduleFollowUps_(); } catch (e) { Logger.log('Повторные контакты: ' + e.message); }
   try { refreshIdleAudiences_(); } catch (e) { Logger.log('Аудитории без базы: ' + e.message); }
   try { refreshBaseAudienceLists_(); } catch (e) { Logger.log('Списки аудиторий: ' + e.message); }
+}
+
+/** Утренняя сводка сотрудникам — отдельный запуск в 9:00 по Москве (после утреннего обновления в 7:00). */
+function digestJob() {
   try { sendDailyDigest_(); } catch (e) { Logger.log('Утренняя сводка: ' + e.message); }
+}
+
+/** Ставит запуск сводки в 9:00, если его ещё нет. */
+function ensureDigestTrigger_() {
+  if (ScriptApp.getProjectTriggers().some(x => x.getHandlerFunction() === 'digestJob')) return false;
+  ScriptApp.newTrigger('digestJob').timeBased().everyDays(1).atHour(9).inTimezone(SYS.TZ).create();
+  return true;
 }
 
 function enableDailyJobs() {
   disableDailyJobs_();
   ScriptApp.newTrigger('dailyJobs').timeBased().everyDays(1).atHour(7).create();
   ScriptApp.newTrigger('inboxJob').timeBased().everyMinutes(10).create();
-  toast_('Каждое утро (около 7:00) — календарь, статистика соцсетей, документы. Каждые 10 минут — разбор папки 04_ВХОДЯЩИЕ.', 'Автообновление', 8);
+  ScriptApp.newTrigger('digestJob').timeBased().everyDays(1).atHour(9).inTimezone(SYS.TZ).create();
+  toast_('Каждое утро (около 7:00) — календарь, статистика соцсетей, документы, повторные контакты. В 9:00 — сводка сотрудникам на почту. Каждые 10 минут — разбор папки 04_ВХОДЯЩИЕ.', 'Автообновление', 8);
 }
 
 function disableDailyJobs() {
@@ -4432,7 +4464,7 @@ function disableDailyJobs() {
 }
 
 function disableDailyJobs_() {
-  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyJobs' || t.getHandlerFunction() === 'inboxJob') ScriptApp.deleteTrigger(t); });
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyJobs' || t.getHandlerFunction() === 'inboxJob' || t.getHandlerFunction() === 'digestJob') ScriptApp.deleteTrigger(t); });
 }
 
 // ═════════════ 16_Social.gs ═════════════

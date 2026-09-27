@@ -71,14 +71,26 @@ function dailyJobs() {
   try { scheduleFollowUps_(); } catch (e) { Logger.log('Повторные контакты: ' + e.message); }
   try { refreshIdleAudiences_(); } catch (e) { Logger.log('Аудитории без базы: ' + e.message); }
   try { refreshBaseAudienceLists_(); } catch (e) { Logger.log('Списки аудиторий: ' + e.message); }
+}
+
+/** Утренняя сводка сотрудникам — отдельный запуск в 9:00 по Москве (после утреннего обновления в 7:00). */
+function digestJob() {
   try { sendDailyDigest_(); } catch (e) { Logger.log('Утренняя сводка: ' + e.message); }
+}
+
+/** Ставит запуск сводки в 9:00, если его ещё нет. */
+function ensureDigestTrigger_() {
+  if (ScriptApp.getProjectTriggers().some(x => x.getHandlerFunction() === 'digestJob')) return false;
+  ScriptApp.newTrigger('digestJob').timeBased().everyDays(1).atHour(9).inTimezone(SYS.TZ).create();
+  return true;
 }
 
 function enableDailyJobs() {
   disableDailyJobs_();
   ScriptApp.newTrigger('dailyJobs').timeBased().everyDays(1).atHour(7).create();
   ScriptApp.newTrigger('inboxJob').timeBased().everyMinutes(10).create();
-  toast_('Каждое утро (около 7:00) — календарь, статистика соцсетей, документы. Каждые 10 минут — разбор папки 04_ВХОДЯЩИЕ.', 'Автообновление', 8);
+  ScriptApp.newTrigger('digestJob').timeBased().everyDays(1).atHour(9).inTimezone(SYS.TZ).create();
+  toast_('Каждое утро (около 7:00) — календарь, статистика соцсетей, документы, повторные контакты. В 9:00 — сводка сотрудникам на почту. Каждые 10 минут — разбор папки 04_ВХОДЯЩИЕ.', 'Автообновление', 8);
 }
 
 function disableDailyJobs() {
@@ -87,5 +99,5 @@ function disableDailyJobs() {
 }
 
 function disableDailyJobs_() {
-  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyJobs' || t.getHandlerFunction() === 'inboxJob') ScriptApp.deleteTrigger(t); });
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'dailyJobs' || t.getHandlerFunction() === 'inboxJob' || t.getHandlerFunction() === 'digestJob') ScriptApp.deleteTrigger(t); });
 }
