@@ -2,6 +2,7 @@
  * 22_StrategyImport — «Вставить стратегию из Claude»: ответ Claude по промпту «Стратегия объекта — для вставки во вкладку»
  * разносится по разделам вкладки объекта: аналоги, цена, сценарии, аудитории, каналы, выводы.
  * Формат ответа — блоки «## Раздел» и строки через «|» (как в промпте). Уже внесённые строки (то же первое поле) не дублируются.
+ * Раздел «## Задачи на 2 недели» уходит в 02_ЗАДАЧИ (как «Внести задачи с оперативки», источник «Стратегия»).
  */
 
 const STRAT_SECTIONS = [
@@ -34,14 +35,15 @@ function importStrategy() {
 
 /** Текст ответа → {sections: {KEY: [[...]]}, kv: {key: value}}. */
 function parseStrategy_(text) {
-  const out = { tables: {}, kv: {} };
+  const out = { tables: {}, kv: {}, taskLines: [] };
   let cur = null;
   String(text || '').split(/\r?\n/).forEach(raw => {
     const line = raw.trim();
     if (!line) return;
     const h = /^#{1,4}\s*(.+)$/.exec(line) || /^\*\*(.+?)\*\*:?$/.exec(line);
-    if (h) { cur = STRAT_SECTIONS.find(s => s.re.test(h[1])) || null; return; }
+    if (h) { cur = /^задач/i.test(h[1].trim()) ? { tasks: true } : STRAT_SECTIONS.find(s => s.re.test(h[1])) || null; return; }
     if (!cur) return;
+    if (cur.tasks) { out.taskLines.push(line); return; }
     if (cur.kv) {
       const m = /^[-•*\s]*(.+?)\s*[:—|]\s*(.+)$/.exec(line);
       if (!m) return;
@@ -110,7 +112,18 @@ function strategyPlan_(objId, text) {
   const have = readObjectTab_(tab);
   const kv = {};
   Object.keys(parsed.kv).forEach(k => { if (parsed.kv[k] !== '' && (have.kv[k] === '' || have.kv[k] === undefined || have.kv[k] === null)) kv[k] = parsed.kv[k]; });
-  const plan = { obj: obj, tab: tab, rows: {}, kv: kv, skipped: 0 };
+  const plan = { obj: obj, tab: tab, rows: {}, kv: kv, skipped: 0, tasks: [], taskErrors: [] };
+  if (parsed.taskLines.length) {
+    const t = parseMeetingTasks_(parsed.taskLines.join('\n'), obj.id);
+    const norm = x => String(x || '').trim().toLowerCase();
+    const haveTasks = readTable_('TASK').rows.filter(r => String(r.obj_id) === String(obj.id)).map(r => norm(r.task));
+    t.ok.filter(o => o.task).forEach(o => {
+      if (haveTasks.indexOf(norm(o.task)) >= 0) { plan.skipped++; return; }
+      haveTasks.push(norm(o.task));
+      plan.tasks.push(o);
+    });
+    plan.taskErrors = t.errors;
+  }
   STRAT_SECTIONS.filter(s => !s.kv).forEach(s => {
     const exist = (have.tables[s.key] || []).map(r => String(r[s.idx[0]] || '').trim().toLowerCase());
     (parsed.tables[s.key] || []).forEach(cells => {
@@ -132,10 +145,12 @@ function previewStrategy(objId, text) {
     const n = (p.rows[s.key] || []).length;
     return n ? s.name + ': ' + n + ' строк' : '';
   }).filter(Boolean);
+  if (p.tasks.length) parts.push('Задачи в 02_ЗАДАЧИ: ' + p.tasks.length);
   const total = parts.length;
+  const errs = p.taskErrors.length ? '<br><span style="color:#B71C1C">' + p.taskErrors.map(htmlEscape_).join('<br>') + '</span>' : '';
   return {
     total: total,
-    html: total ? 'Будет добавлено во вкладку «' + htmlEscape_(p.obj.name) + '»:<br>• ' + parts.map(htmlEscape_).join('<br>• ') + (p.skipped ? '<br><span style="color:#80868B">Уже есть во вкладке, пропущено: ' + p.skipped + '</span>' : '')
+    html: total ? 'Будет добавлено во вкладку «' + htmlEscape_(p.obj.name) + '»:<br>• ' + parts.map(htmlEscape_).join('<br>• ') + (p.skipped ? '<br><span style="color:#80868B">Уже есть во вкладке, пропущено: ' + p.skipped + '</span>' : '') + errs
       : p.skipped ? '<span style="color:#2E7D32">✓ Всё из этого текста уже есть во вкладке «' + htmlEscape_(p.obj.name) + '» (строк: ' + p.skipped + ') — повторно вставлять не нужно.</span>'
       : '<span style="color:#B71C1C">Не нашла разделов. Нужен ответ по промпту «Стратегия объекта — для вставки во вкладку»: заголовки «## Аналоги», «## Сценарии»… и строки через «|».</span>',
   };
@@ -163,11 +178,13 @@ function runStrategyImport(objId, text) {
         if (i >= 0 && sh.getRange(i + 1, 3).getValue() === '') { sh.getRange(i + 1, 3).setValue(p.kv[k]); n++; }
       });
     }
+    let tasks = 0;
+    if (p.tasks.length) tasks = addMeetingTasks_({ ok: p.tasks, errors: [] }, 'Стратегия').tasks;
     let docNote = '';
-    try { if (n) { appendStrategyDoc_(p.obj, 'стратегия из Claude', strategyThesis_(p)); docNote = ' Документ «' + strategyDocName_(p.obj) + '» в папке объекта пополнен.'; } }
+    try { if (n || tasks) { appendStrategyDoc_(p.obj, 'стратегия из Claude', strategyThesis_(p)); docNote = ' Документ «' + strategyDocName_(p.obj) + '» в папке объекта пополнен.'; } }
     catch (e) { docNote = ' ⚠ Документ стратегии не пополнен: ' + e.message; }
-    logHistory_([{ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: 'Стратегия', old: '', new: 'вставлено из Claude: ' + n, kind: HIST_KIND.CHANGE }], userEmail_());
-    return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '.' + docNote + ' Проверьте вкладку.';
+    logHistory_([{ sheet: sh.getName(), record_id: p.obj.id, obj_id: p.obj.id, field: 'Стратегия', old: '', new: 'вставлено из Claude: ' + n + (tasks ? ', задач: ' + tasks : ''), kind: HIST_KIND.CHANGE }], userEmail_());
+    return 'Готово: добавлено ' + n + ' строк / полей во вкладку «' + p.obj.name + '»' + (tasks ? ', задач в 02_ЗАДАЧИ: ' + tasks : '') + (p.skipped ? ', пропущено как уже внесённые: ' + p.skipped : '') + '.' + docNote + ' Проверьте вкладку.';
   } finally {
     lock.releaseLock();
   }

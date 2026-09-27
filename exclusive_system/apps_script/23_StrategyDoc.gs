@@ -76,6 +76,7 @@ function strategyThesis_(plan) {
   out.push({ title: 'Каналы и партнёры', lines: rows('CHAN').map(r => r[0] + (r[1] ? ' — ' + r[1] : '')) });
   out.push({ title: 'КП и материалы', lines: rows('KP').map(r => r[0] + (r[1] ? ' (' + r[1] + ')' : '') + (r[2] ? ' — для: ' + r[2] : '') + (r[5] ? '. ' + r[5] : '')) });
   out.push({ title: 'Выводы и решения', lines: rows('DEC').map(r => r[1] + (r[3] ? ' → ' + r[3] : '')) });
+  out.push({ title: 'Задачи на 2 недели', lines: (plan.tasks || []).map(o => o.task + (o.owner ? ' — ' + o.owner : '') + (o.plan !== '' && o.plan !== undefined ? ', ' + o.plan + (o.unit ? ' ' + o.unit : '') : '') + (o.deadline ? ', до ' + fmtDate_(o.deadline) : '')) });
   return out;
 }
 

@@ -41,6 +41,12 @@ function getPromptText(objId, libId) {
   text = text.replace(/\{объекты\}/g, readTable_('OBJ').rows.filter(o => o.id && o.name && o.in_work !== 'НЕТ').map(o => o.id + ' — ' + o.name).join('; '));
   text = text.replace(/\{сотрудники\}/g, dictValues_('people').join(', '));
   text = text.replace(/\{чек-листы\}/g, readTable_('LIB').rows.filter(r => r.kind === 'Чек-лист' && r.title).map(r => r.title).join('; '));
+  if (text.indexOf('{финальный блок объявления}') >= 0) {
+    let footer = String(cfgGet_('AD_FOOTER') || (cfgDefs_().find(d => d.key === 'AD_FOOTER') || {}).value || '').trim();
+    if (obj && /аренд/i.test(String(obj.deal))) footer = footer.replace(/по продаже/g, 'по аренде');
+    text = text.replace(/\{финальный блок объявления\}/g, footer);
+  }
+  if (obj) text = text.replace(/\{ID объекта\}/g, obj.id);
   if (obj) text = text.replace(/\{(?!текст\})[^{}]{2,80}\}/g, '(см. «Данные объекта» ниже)');
   const out = text + (obj ? '\n\n' + objectContext_(obj) : '');
   logHistory_([{ sheet: 'Claude (подписка)', record_id: p.id, obj_id: obj ? obj.id : '', field: 'Промпт: ' + p.title, old: '', new: 'сформирован для копирования', kind: 'Промпт' }], userEmail_());
@@ -102,41 +108,47 @@ function addMeetingTasks(text) {
   if (!r.ok.length) return 'Нет задач для внесения.';
   const lock = userLock_();
   try {
-    const cache = {};
-    const openName = dictFirstByClass_('task_status', CLS.OPEN);
-    const user = userEmail_();
-    const today = today_();
-    const rows = r.ok.filter(o => o.task).map(o => {
-      const deadline = o.deadline || addDays_(mondayOf_(today), 4);
-      return {
-        id: nextId_('TASK', cache), week: isoWeekKey_(deadline), obj_id: o.obj_id, block: o.block, task: o.task, owner: o.owner,
-        unit: o.unit, plan: o.plan, deadline: deadline, status: openName, to_report: true, source: 'Оперативка', created_at: new Date(), author: user,
-      };
-    });
-    appendRows_('TASK', rows);
-    let dec = 0;
-    const hist = [];
-    r.ok.filter(o => o.decision).forEach(o => {
-      const obj = objectById_(o.obj_id);
-      const tab = obj ? findObjectTab_(obj) : null;
-      if (!tab) return;
-      appendTabRow_(tab, 'DEC', [today, o.decision, o.owner || '', o.task || '']);
-      hist.push({ sheet: tab.getName(), record_id: 'раздел 7', obj_id: o.obj_id, field: '7. ВЫВОДЫ И РЕШЕНИЯ · с оперативки', old: '', new: o.decision, kind: HIST_KIND.CREATE });
-      dec++;
-    });
-    // решения с оперативки — в документ стратегии каждого объекта
-    const byObj = {};
-    r.ok.filter(o => o.decision).forEach(o => { (byObj[o.obj_id] = byObj[o.obj_id] || []).push(o.decision + (o.task ? ' → ' + o.task : '')); });
-    Object.keys(byObj).forEach(id => { const obj = objectById_(id); if (obj) { try { appendStrategyDoc_(obj, 'решения с оперативки', [{ title: 'Решения', lines: byObj[id] }]); } catch (e) { /* документ пополнится вручную */ } } });
-    logHistory_(hist, user);
-    return 'Внесено задач: ' + rows.length + (dec ? ', решений во вкладки объектов: ' + dec : '') + (r.errors.length ? '. Пропущено строк: ' + r.errors.length : '') + '.';
+    const res = addMeetingTasks_(r);
+    return 'Внесено задач: ' + res.tasks + (res.decisions ? ', решений во вкладки объектов: ' + res.decisions : '') + (r.errors.length ? '. Пропущено строк: ' + r.errors.length : '') + '.';
   } finally {
     lock.releaseLock();
   }
 }
 
+/** Разобранные строки → 02_ЗАДАЧИ (+ решения во вкладки и документ стратегии). Блокировку держит вызывающий. */
+function addMeetingTasks_(r, source) {
+  const cache = {};
+  const openName = dictFirstByClass_('task_status', CLS.OPEN);
+  const user = userEmail_();
+  const today = today_();
+  const rows = r.ok.filter(o => o.task).map(o => {
+    const deadline = o.deadline || addDays_(mondayOf_(today), 4);
+    return {
+      id: nextId_('TASK', cache), week: isoWeekKey_(deadline), obj_id: o.obj_id, block: o.block, task: o.task, owner: o.owner,
+      unit: o.unit, plan: o.plan, deadline: deadline, status: openName, to_report: true, source: source || 'Оперативка', created_at: new Date(), author: user,
+    };
+  });
+  appendRows_('TASK', rows);
+  let dec = 0;
+  const hist = [];
+  r.ok.filter(o => o.decision).forEach(o => {
+    const obj = objectById_(o.obj_id);
+    const tab = obj ? findObjectTab_(obj) : null;
+    if (!tab) return;
+    appendTabRow_(tab, 'DEC', [today, o.decision, o.owner || '', o.task || '']);
+    hist.push({ sheet: tab.getName(), record_id: 'раздел 7', obj_id: o.obj_id, field: '7. ВЫВОДЫ И РЕШЕНИЯ · с оперативки', old: '', new: o.decision, kind: HIST_KIND.CREATE });
+    dec++;
+  });
+  // решения с оперативки — в документ стратегии каждого объекта
+  const byObj = {};
+  r.ok.filter(o => o.decision).forEach(o => { (byObj[o.obj_id] = byObj[o.obj_id] || []).push(o.decision + (o.task ? ' → ' + o.task : '')); });
+  Object.keys(byObj).forEach(id => { const obj = objectById_(id); if (obj) { try { appendStrategyDoc_(obj, 'решения с оперативки', [{ title: 'Решения', lines: byObj[id] }]); } catch (e) { /* документ пополнится вручную */ } } });
+  logHistory_(hist, user);
+  return { tasks: rows.length, decisions: dec };
+}
+
 /** Разбор таблицы: «|»-таблица (markdown) или строки через табуляцию. */
-function parseMeetingTasks_(text) {
+function parseMeetingTasks_(text, forceObjId) {
   const objs = readTable_('OBJ').rows.filter(o => o.id);
   const people = dictValues_('people');
   const blocks = dictValues_('task_blocks');
@@ -149,7 +161,12 @@ function parseMeetingTasks_(text) {
     if (line.indexOf('\t') < 0 && line.trim()[0] === '|') cells = cells.slice(1, line.trim().slice(-1) === '|' ? -1 : undefined);
     cells = cells.map(c => c.trim());
     if (cells.length < 3) return;
-    if (/id объекта|^задача$/i.test(cells[0]) || norm(cells[2]) === 'задача') return; // заголовок
+    if (/id объекта|^задача$/i.test(cells[0]) || norm(cells[2]) === 'задача' || norm(cells[1]) === 'задача') return; // заголовок
+    // задачи из стратегии одного объекта: объект известен; если столбец ID Claude пропустил — добавляем
+    if (forceObjId) {
+      const hasId = cells.length > 7 || objs.some(o => norm(o.id) === norm(cells[0]));
+      cells = [String(forceObjId)].concat(hasId ? cells.slice(1) : cells);
+    }
     const [rawObj, rawBlock, task, rawOwner, rawUnit, rawPlan, rawDate, decision] = cells.concat(['', '', '', '', '', '', '', '']);
     const obj = objs.find(o => norm(o.id) === norm(rawObj)) || objs.find(o => norm(o.name) === norm(rawObj)) ||
       objs.find(o => norm(rawObj) && norm(o.name).indexOf(norm(rawObj)) >= 0);

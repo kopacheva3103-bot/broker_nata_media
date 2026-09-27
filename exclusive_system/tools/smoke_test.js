@@ -384,3 +384,24 @@ console.log('saved people:', PSTORE.TOPNLAB_PEOPLE);
   console.log('same doc appended:', Object.values(DOCS).filter(x => x.file.getName().indexOf('Маркетинговая стратегия — КП') === 0).length, d.lines.slice(-3).join(' / '));
 }
 console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПрезентация «Две страны» | Презентация под аудиторию | предприниматели Дубай — Москва | 13 слайдов').html.replace(/<[^>]+>/g, ' '));
+
+// стратегия с разделом «Задачи на 2 недели» → 02_ЗАДАЧИ; объявление с финальным блоком
+{
+  const ans = ['## Выводы', 'Первая волна — медцентры | Обзвон сетей', '## Задачи на 2 недели',
+    'ID объекта | Блок стратегии | Задача | Исполнитель | Единица | План | Срок',
+    '4801 | База и рассылки | Обзвон сетей медцентров | Ассистент | звонков | 10 | 02.10.2026',
+    'КП и материалы | Одностраничник для медцентров | Ассистент | документов | 1 | 05.10.2026',
+    '(8–12 задач)'].join('\n');
+  const pv = X.previewStrategy('4801', ans);
+  console.log('strategy+tasks preview:', pv.total, pv.html.replace(/<[^>]+>/g, ' '));
+  console.log(X.runStrategyImport('4801', ans));
+  const t = X.readTable_('TASK').rows.filter(r => r.source === 'Стратегия');
+  console.log('strategy tasks:', t.map(r => [r.obj_id, r.task, r.owner, r.plan, r.unit, r.week].join('/')).join(' ; '));
+  console.log('again tasks (no dups):', X.previewStrategy('4801', ans).html.replace(/<[^>]+>/g, ' '));
+  const libAd = X.readTable_('LIB').rows.find(r => r.title === 'Объявление для ЦИАН / Авито');
+  const ad = X.getPromptText('4801', libAd.id);
+  console.log('ad prompt footer:', /Копачева Наталья, брокер по (продаже|аренде)/.exec(ad)[0], '| placeholders left:', (ad.match(/\{[^}]+\}/g) || []).join(','));
+  const libS = X.readTable_('LIB').rows.find(r => r.title === 'Стратегия объекта — для вставки во вкладку');
+  const sp = X.getPromptText('4801', libS.id);
+  console.log('strategy prompt id:', sp.indexOf('4801 | Блок стратегии') >= 0, '| placeholders left:', (sp.match(/\{[^}]+\}/g) || []).join(','));
+}
