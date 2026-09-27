@@ -837,7 +837,12 @@ function setupSystem() {
   try { const nb = refreshBaseAudienceLists_(); if (nb) log.push('03_ОБЗВОН_И_КП: списки аудиторий в строках: ' + nb); } catch (err) { warn += '\n\n⚠ Списки аудиторий: ' + err.message; }
   try { const tr = ensureJobTriggers_(); if (tr.length) log.push('Автозапуски включены: ' + tr.join(', ')); } catch (err) { warn += '\n\n⚠ Автозапуски: ' + err.message + ' — меню «Сервис» → «Включить автообновление».'; }
   try { const mb = backfillMediaTasks_(); if (mb) log.push('Задачи ассистенту «фото и видео на Яндекс Диске» по текущим объектам: ' + mb); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
-  try { const c = syncCalendar_(); log.push('Google Календарь: создано событий ' + c.created + ', обновлено ' + c.updated + (c.noEmail.length ? ' (нет email у: ' + c.noEmail.join(', ') + ')' : '')); } catch (err) { warn += '\n\n⚠ Календарь: ' + err.message; }
+  try { const c = syncCalendar_(); log.push('Google Календарь: создано событий ' + c.created + ', обновлено ' + c.updated +
+    (c.shared.length ? '; напрямую в календарь: ' + c.shared.join(', ') : '') +
+    (c.invited.length ? '; приглашением (не открыт доступ к календарю): ' + c.invited.join(', ') : '') +
+    (c.noEmail.length ? '; нет email у: ' + c.noEmail.join(', ') : ''));
+    const rq = requestCalendarAccess_();
+    if (rq.length) log.push('Письмо с просьбой открыть доступ к календарю отправлено: ' + rq.join(', ')); } catch (err) { warn += '\n\n⚠ Календарь: ' + err.message; }
   try { if (!cfgGet_('REELS_PROMPT_DOC')) { const u = findReelsPromptDoc_(); log.push(u ? 'Промпт «Серия рилс на объект»: найден документ ' + u : '⚠ Промпт «Серия рилс на объект»: документ не найден — вставьте ссылку в 08_НАСТРОЙКИ'); } } catch (err) { warn += '\n\n⚠ Промпт серии рилс: ' + err.message; }
   try { const at = ensureAnalogTemplate_(); if (at) log.push(at); } catch (err) { warn += '\n\n⚠ Шаблон анализа аналогов: ' + err.message; }
   const tabs = objectTabs_().length;
@@ -4054,6 +4059,7 @@ function onOpen() {
     .addItem('➜ Внести задачи с оперативки', 'importMeetingTasks')
     .addItem('➜ Проверить просрочки', 'checkOverdue')
     .addItem('➜ Синхронизировать задачи с календарём', 'syncCalendar')
+    .addItem('Попросить сотрудников открыть доступ к календарю', 'requestCalendarAccess')
     .addSeparator()
     .addItem('➜ Промпт для Claude по объекту', 'promptForObject')
     .addItem('➜ Вставить стратегию из Claude', 'importStrategy')
@@ -4363,49 +4369,83 @@ function appendTabRow_(sh, secKey, values) {
 
 // ═════════════ 15_Calendar.gs ═════════════
 /**
- * 15_Calendar — задачи 02_ЗАДАЧИ в Google Календаре.
+ * 15_Calendar — задачи 02_ЗАДАЧИ в Google Календаре: каждому — только его задачи.
  *
- * Событие на весь день в дату «Срок» создаётся в календаре того, кто запускает синхронизацию
- * (руководителя), исполнитель получает приглашение на свой email из 07_СПРАВОЧНИКИ.
- * Выполнено → в названии «✓»; Отменено / Перенесено → событие удаляется (у копии-переноса — своё событие).
- * Изменили срок или исполнителя → событие обновляется. Обрабатываются задачи со сроком не старше 14 дней.
+ * Событие на весь день в дату «Срок» ставится в календарь исполнителя:
+ *  - свои задачи (исполнитель = тот, кто запускает систему) — в основной календарь;
+ *  - задачи сотрудника — прямо в его календарь, если он открыл доступ «Внесение изменений в мероприятия»
+ *    для владельца системы (Настройки Google Календаря → доступ для отдельных пользователей);
+ *  - если доступа нет — в скрытый календарь «Задачи команды» с приглашением исполнителю (в основном календаре владельца их нет).
+ * Выполнено → в названии «✓»; Отменено / Перенесено → событие удаляется. Изменили срок / исполнителя → событие обновляется или переезжает.
+ * В «Событие календаря» хранится «ID календаря::ID события». Обрабатываются задачи со сроком не старше 14 дней.
  */
+
+const TEAM_CALENDAR_NAME = 'Задачи команды';
 
 function syncCalendar() {
   const r = syncCalendar_();
   toast_('Календарь: создано ' + r.created + ', обновлено ' + r.updated + ', удалено ' + r.deleted +
-    (r.noEmail.length ? '. Нет email у: ' + r.noEmail.join(', ') + ' (07_СПРАВОЧНИКИ)' : ''), 'Google Календарь', 10);
+    (r.shared.length ? '. Напрямую в календарь: ' + r.shared.join(', ') : '') +
+    (r.invited.length ? '. Через приглашение (нет доступа к календарю): ' + r.invited.join(', ') : '') +
+    (r.noEmail.length ? '. Нет email у: ' + r.noEmail.join(', ') + ' (07_СПРАВОЧНИКИ)' : ''), 'Google Календарь', 12);
 }
 
 function syncCalendar_() {
   const t = readTable_('TASK');
-  const cal = CalendarApp.getDefaultCalendar();
+  const mine = CalendarApp.getDefaultCalendar();
   const me = String(Session.getEffectiveUser().getEmail() || '').toLowerCase();
   const emails = {};
-  dictRows_('people').forEach(p => { emails[p[0]] = String(p[2] || '').trim(); });
+  dictRows_('people').forEach(p => { emails[p[0]] = String(p[2] || '').trim().toLowerCase(); });
   const url = ss_().getUrl();
   const from = addDays_(today_(), -14);
-  const res = { created: 0, updated: 0, deleted: 0, noEmail: [] };
+  const res = { created: 0, updated: 0, deleted: 0, noEmail: [], shared: [], invited: [] };
+  const cals = {};
+  let team = null;
+  const teamCal = () => {
+    if (team) return team;
+    team = CalendarApp.getCalendarsByName(TEAM_CALENDAR_NAME)[0];
+    if (!team) { team = CalendarApp.createCalendar(TEAM_CALENDAR_NAME, { summary: 'Задачи сотрудников из системы эксклюзивов — у исполнителей приходят приглашением' }); try { team.setSelected(false); } catch (e) { /* видимость — вручную */ } }
+    return team;
+  };
+  // календарь исполнителя: {cal, guest}
+  const target = owner => {
+    const email = emails[owner] || '';
+    if (!email || email === me) return { cal: mine, guest: '' };
+    if (!(email in cals)) cals[email] = writableCalendar_(email);
+    if (cals[email]) { if (res.shared.indexOf(owner) < 0) res.shared.push(owner); return { cal: cals[email], guest: '' }; }
+    if (res.invited.indexOf(owner) < 0) res.invited.push(owner);
+    return { cal: teamCal(), guest: email };
+  };
+  const find = ref => {
+    if (!ref) return null;
+    const parts = String(ref).split('::');
+    const calId = parts.length > 1 ? parts[0] : '', evId = parts.length > 1 ? parts[1] : parts[0];
+    try {
+      const c = calId ? (calId === mine.getId() ? mine : CalendarApp.getCalendarById(calId)) : mine;
+      const ev = c ? c.getEventById(evId) : null;
+      return ev ? { ev: ev, calId: c.getId() } : null;
+    } catch (e) { return null; }
+  };
   t.rows.forEach(o => {
     if (!o.obj_id || !o.task) return;
     const cls = o.status ? dictClassOf_('task_status', o.status) : CLS.OPEN;
-    let ev = null;
-    if (o.cal_event) { try { ev = cal.getEventById(o.cal_event); } catch (e) { ev = null; } }
+    const cur = find(o.cal_event);
     if (cls === CLS.CANCEL || cls === CLS.MOVED) {
-      if (ev) { ev.deleteEvent(); res.deleted++; }
+      if (cur) { cur.ev.deleteEvent(); res.deleted++; }
       if (o.cal_event) writeFields_(t.sh, 'TASK', o._row, { cal_event: '' });
       return;
     }
     if (!(o.deadline instanceof Date) || o.deadline < from) return;
-    const email = emails[o.owner] || '';
-    if (o.owner && !email && res.noEmail.indexOf(o.owner) < 0) res.noEmail.push(o.owner);
+    if (o.owner && !emails[o.owner] && res.noEmail.indexOf(o.owner) < 0) res.noEmail.push(o.owner);
+    const tg = target(o.owner);
     const title = (cls === CLS.DONE ? '✓ ' : '') + o.obj_name + ': ' + o.task + (o.plan !== '' ? ' (' + o.plan + (o.unit ? ' ' + o.unit : '') + ')' : '');
     const desc = 'Задача ' + o.id + ' · исполнитель: ' + (o.owner || '—') + '\nСтатус: ' + (o.status || '—') + '\nТаблица: ' + url;
-    const guest = email && email.toLowerCase() !== me ? email : '';
+    let ev = cur && cur.calId === tg.cal.getId() ? cur.ev : null;
+    if (cur && !ev) { cur.ev.deleteEvent(); res.deleted++; } // исполнитель сменился / появился доступ к его календарю — событие переезжает
     if (!ev) {
-      if (cls === CLS.DONE) return; // уже выполненные в календарь не добавляем
-      ev = cal.createAllDayEvent(title, o.deadline, { description: desc, guests: guest, sendInvites: !!guest });
-      writeFields_(t.sh, 'TASK', o._row, { cal_event: ev.getId() });
+      if (cls === CLS.DONE) { if (o.cal_event) writeFields_(t.sh, 'TASK', o._row, { cal_event: '' }); return; } // выполненные заново не ставим
+      ev = tg.cal.createAllDayEvent(title, o.deadline, { description: desc, guests: tg.guest, sendInvites: !!tg.guest });
+      writeFields_(t.sh, 'TASK', o._row, { cal_event: tg.cal.getId() + '::' + ev.getId() });
       res.created++;
       return;
     }
@@ -4415,11 +4455,63 @@ function syncCalendar_() {
     const start = ev.getAllDayStartDate();
     if (!start || start.getTime() !== o.deadline.getTime()) { ev.setAllDayDate(o.deadline); changed = true; }
     const guests = ev.getGuestList().map(g => g.getEmail().toLowerCase());
-    guests.forEach(g => { if (g !== (guest || '').toLowerCase()) { ev.removeGuest(g); changed = true; } });
-    if (guest && guests.indexOf(guest.toLowerCase()) < 0) { ev.addGuest(guest); changed = true; }
+    guests.forEach(g => { if (g !== tg.guest) { ev.removeGuest(g); changed = true; } });
+    if (tg.guest && guests.indexOf(tg.guest) < 0) { ev.addGuest(tg.guest); changed = true; }
     if (changed) res.updated++;
   });
   return res;
+}
+
+/** Письмо сотрудникам, чей календарь недоступен: как открыть доступ владельцу системы. Один раз на человека (force — повторить). */
+function requestCalendarAccess_(force) {
+  const props = PropertiesService.getScriptProperties();
+  const me = String(Session.getEffectiveUser().getEmail() || '').toLowerCase();
+  const boss = String(cfgGet_('MANAGER_NAME') || 'руководитель');
+  const sent = [];
+  dictRows_('people').forEach(p => {
+    const name = String(p[0] || '').trim(), email = String(p[2] || '').trim().toLowerCase();
+    if (!name || !/@/.test(email) || email === me) return;
+    if (!force && props.getProperty('CAL_REQ_' + email)) return;
+    if (writableCalendar_(email)) return;
+    const html = '<p>Здравствуйте!</p>' +
+      '<p>Чтобы задачи из системы эксклюзивов приходили <b>прямо в ваш Google Календарь</b> (а не приглашениями), откройте, пожалуйста, доступ к своему календарю — это 1 минута:</p>' +
+      '<ol><li>Откройте <a href="https://calendar.google.com">calendar.google.com</a> на компьютере.</li>' +
+      '<li>Слева в «Мои календари» наведите на календарь со своим именем → ⋮ → <b>«Настройки и общий доступ»</b>.</li>' +
+      '<li>Раздел <b>«Доступ для отдельных пользователей и групп»</b> → «Добавить пользователей и группы».</li>' +
+      '<li>Впишите <b>' + me + '</b>, права — <b>«Внесение изменений в мероприятия»</b> → «Отправить».</li></ol>' +
+      '<p>В течение часа ваши задачи (со сроками) появятся в вашем календаре: выполнено — с «✓», перенос срока — событие переедет само. Пока доступа нет, задачи приходят приглашениями.</p>' +
+      '<p>' + boss + '</p>';
+    MailApp.sendEmail({ to: email, subject: 'Задачи в ваш Google Календарь: откройте доступ (1 минута)', htmlBody: html, name: boss });
+    props.setProperty('CAL_REQ_' + email, fmtDate_(new Date()));
+    sent.push(name);
+  });
+  return sent;
+}
+
+/** Меню: повторно отправить сотрудникам просьбу открыть доступ к календарю. */
+function requestCalendarAccess() {
+  const s = requestCalendarAccess_(true);
+  toast_(s.length ? 'Письмо с инструкцией отправлено: ' + s.join(', ') : 'Всем сотрудникам с email доступ к календарю уже открыт.', 'Google Календарь', 8);
+}
+
+/** Календарь сотрудника, если он открыл владельцу системы доступ на изменение событий; иначе null. Проверка кэшируется на 6 часов. */
+function writableCalendar_(email) {
+  let cache = null;
+  try { cache = CacheService.getScriptCache(); } catch (e) { cache = null; }
+  const key = 'calw_' + email;
+  const known = cache ? cache.get(key) : null;
+  if (known === '0') return null;
+  let c = null;
+  try { c = CalendarApp.getCalendarById(email); } catch (e) { c = null; }
+  if (!c) { // доступ дан, но календарь ещё не добавлен в список — добавляем скрытым (в вашем календаре его события не видны)
+    try { c = CalendarApp.subscribeToCalendar(email, { selected: false }); } catch (e) { c = null; }
+  }
+  let ok = !!c;
+  if (c && known !== '1') {
+    try { const ev = c.createAllDayEvent('проверка доступа', new Date(2000, 0, 1), {}); ev.deleteEvent(); } catch (e) { ok = false; }
+  }
+  if (cache) cache.put(key, ok ? '1' : '0', 21600);
+  return ok ? c : null;
 }
 
 // ───────────────────────── ежедневное обновление ─────────────────────────

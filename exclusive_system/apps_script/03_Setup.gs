@@ -53,7 +53,12 @@ function setupSystem() {
   try { const nb = refreshBaseAudienceLists_(); if (nb) log.push('03_ОБЗВОН_И_КП: списки аудиторий в строках: ' + nb); } catch (err) { warn += '\n\n⚠ Списки аудиторий: ' + err.message; }
   try { const tr = ensureJobTriggers_(); if (tr.length) log.push('Автозапуски включены: ' + tr.join(', ')); } catch (err) { warn += '\n\n⚠ Автозапуски: ' + err.message + ' — меню «Сервис» → «Включить автообновление».'; }
   try { const mb = backfillMediaTasks_(); if (mb) log.push('Задачи ассистенту «фото и видео на Яндекс Диске» по текущим объектам: ' + mb); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
-  try { const c = syncCalendar_(); log.push('Google Календарь: создано событий ' + c.created + ', обновлено ' + c.updated + (c.noEmail.length ? ' (нет email у: ' + c.noEmail.join(', ') + ')' : '')); } catch (err) { warn += '\n\n⚠ Календарь: ' + err.message; }
+  try { const c = syncCalendar_(); log.push('Google Календарь: создано событий ' + c.created + ', обновлено ' + c.updated +
+    (c.shared.length ? '; напрямую в календарь: ' + c.shared.join(', ') : '') +
+    (c.invited.length ? '; приглашением (не открыт доступ к календарю): ' + c.invited.join(', ') : '') +
+    (c.noEmail.length ? '; нет email у: ' + c.noEmail.join(', ') : ''));
+    const rq = requestCalendarAccess_();
+    if (rq.length) log.push('Письмо с просьбой открыть доступ к календарю отправлено: ' + rq.join(', ')); } catch (err) { warn += '\n\n⚠ Календарь: ' + err.message; }
   try { if (!cfgGet_('REELS_PROMPT_DOC')) { const u = findReelsPromptDoc_(); log.push(u ? 'Промпт «Серия рилс на объект»: найден документ ' + u : '⚠ Промпт «Серия рилс на объект»: документ не найден — вставьте ссылку в 08_НАСТРОЙКИ'); } } catch (err) { warn += '\n\n⚠ Промпт серии рилс: ' + err.message; }
   try { const at = ensureAnalogTemplate_(); if (at) log.push(at); } catch (err) { warn += '\n\n⚠ Шаблон анализа аналогов: ' + err.message; }
   const tabs = objectTabs_().length;

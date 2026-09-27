@@ -15,6 +15,7 @@ function onOpen() {
     .addItem('➜ Внести задачи с оперативки', 'importMeetingTasks')
     .addItem('➜ Проверить просрочки', 'checkOverdue')
     .addItem('➜ Синхронизировать задачи с календарём', 'syncCalendar')
+    .addItem('Попросить сотрудников открыть доступ к календарю', 'requestCalendarAccess')
     .addSeparator()
     .addItem('➜ Промпт для Claude по объекту', 'promptForObject')
     .addItem('➜ Вставить стратегию из Claude', 'importStrategy')

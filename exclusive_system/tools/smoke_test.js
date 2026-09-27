@@ -58,7 +58,13 @@ const CAL = {
     getAllDayStartDate: () => e.d, setAllDayDate: x => { e.d = x; }, getGuestList: () => e.guests.map(g => ({ getEmail: () => g })),
     removeGuest: g => { e.guests = e.guests.filter(x => x !== g); }, addGuest: g => { e.guests.push(g); }, deleteEvent: () => { delete EV[id]; } }; EV[id] = e; return e; },
   getEventById: id => EV[id] || null,
+  getId: () => 'me@cal',
 };
+const TEAMCAL = Object.assign({}, CAL, { getId: () => 'team@cal', setSelected: () => {} });
+const SHARED = {}; // email → календарь с доступом
+const CALAPP = { getDefaultCalendar: () => CAL, getCalendarsByName: n => (n === 'Задачи команды' && CALAPP._team ? [TEAMCAL] : []),
+  createCalendar: () => { CALAPP._team = true; return TEAMCAL; }, getCalendarById: id => id === 'me@cal' ? CAL : id === 'team@cal' ? TEAMCAL : SHARED[id] || null,
+  subscribeToCalendar: id => { if (!SHARED[id]) throw new Error('no access'); return SHARED[id]; } };
 const pad = n => String(n).padStart(2, '0');
 const X = loadGs({
   SpreadsheetApp: M.SpreadsheetApp,
@@ -67,7 +73,7 @@ const X = loadGs({
   LockService: { getDocumentLock: () => ({ tryLock: () => true, waitLock: () => {}, releaseLock: () => {} }) },
   UrlFetchApp: { fetch: (u, o) => FETCH(u, o) },
   PropertiesService: { getScriptProperties: () => PROPS, getDocumentProperties: () => PROPS },
-  CalendarApp: { getDefaultCalendar: () => CAL },
+  CalendarApp: CALAPP,
   DriveApp: { getFolderById: id => { if (!FOLDERS[id]) throw new Error('no folder'); return FOLDERS[id]; }, getFileById: id => DOCS[id] ? DOCS[id].file : ({ setTrashed: () => { TRASHED.push(id); } }) },
   DocumentApp: {
     ParagraphHeading: { TITLE: 'T', HEADING2: 'H2', HEADING3: 'H3' }, GlyphType: { BULLET: 'B' },
@@ -172,7 +178,14 @@ tkSh.getRange(tk._row, X.fieldIndex_('TASK', 'status')).setValue('Выполне
 const tk2 = X.readTable_('TASK').rows.filter(r => r.cal_event)[1];
 tkSh.getRange(tk2._row, X.fieldIndex_('TASK', 'status')).setValue('Отменено');
 const c3 = X.syncCalendar_();
-console.log('calendar 3:', JSON.stringify(c3), EV[tk.cal_event].title.slice(0, 2), !EV[tk2.cal_event]);
+console.log('calendar 3:', JSON.stringify(c3), EV[tk.cal_event.split('::').pop()].title.slice(0, 2), !EV[tk2.cal_event.split('::').pop()]);
+// ассистент открыла доступ к своему календарю → её задачи переезжают к ней, без приглашений
+SHARED['assistant@example.com'] = Object.assign({}, CAL, { getId: () => 'assistant@example.com' });
+const c4 = X.syncCalendar_();
+const aTasks = X.readTable_('TASK').rows.filter(r => r.owner === 'Ассистент' && r.cal_event);
+console.log('calendar shared:', JSON.stringify(c4), '| in her calendar:', aTasks.filter(r => r.cal_event.indexOf('assistant@example.com::') === 0).length, '/', aTasks.length,
+  '| guests:', aTasks.map(r => EV[r.cal_event.split('::').pop()].guests.length).reduce((a, b) => a + b, 0));
+delete SHARED['assistant@example.com'];
 
 // Instagram / Threads
 console.log('not connected:', JSON.stringify(X.socialStatus()));
@@ -499,4 +512,8 @@ console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПр
   const before = X.readTable_('TASK').rows.filter(t => /Яндекс Диск/.test(t.task)).length;
   const n = X.backfillMediaTasks_();
   console.log('media backfill:', n, '| before:', before, '| again:', X.backfillMediaTasks_(), '| deadline:', X.fmtDate_(X.readTable_('TASK').rows.filter(t => /Яндекс Диск/.test(t.task)).pop().deadline));
+}
+{
+  MAILS.length = 0;
+  console.log('cal request:', X.requestCalendarAccess_().join(','), '| again:', X.requestCalendarAccess_().length, '| mail:', MAILS.map(m => m.to + ' / ' + m.subject).join(' ; '));
 }
