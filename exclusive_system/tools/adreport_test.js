@@ -48,14 +48,14 @@ ok('вставка ссылок: чужая/битая ссылка — пред
 ok('ссылка записана в свой столбец', X.objectById_('144890621').crm_report_link === LINK);
 ok('папка объекта не тронута', X.objectById_('144890621').folder_link === '' || !/lk\/report/.test(X.objectById_('144890621').folder_link));
 const v = X.addAdStats_({ kv: {} }, X.objectById_('144890621'), '2026-W40');
-ok('раздел 4: площадки без неактивных', /площадках \(3\): ЦИАН, Авито, novosel\.ru/.test(v.kv.AD_STATS), v.kv.AD_STATS.split('\n')[0]);
-ok('раздел 4: просмотры/избранное/ЦИАН, без показов', /Просмотры объявлений: 101/.test(v.kv.AD_STATS) && /избранное: 1/.test(v.kv.AD_STATS) && !/Показы/.test(v.kv.AD_STATS) && /cian\.ru/.test(v.kv.AD_STATS));
-ok('раздел 4: обращения', /Обращения по объекту: 1/.test(v.kv.AD_STATS));
+ok('раздел 4: площадки без неактивных', /на 3 площадках/.test(v.kv.AD_STATS) && /Основные площадки: ЦИАН, Авито\./.test(v.kv.AD_STATS) && /Партнёрские площадки: novosel\.ru/.test(v.kv.AD_STATS));
+ok('раздел 4: просмотры/избранное/ЦИАН, без показов', /посмотрели: 101 раз/.test(v.kv.AD_STATS) && /избранное: 1 человек/.test(v.kv.AD_STATS) && !/Показы/.test(v.kv.AD_STATS) && /cian\.ru/.test(v.kv.AD_STATS));
+ok('раздел 4: обращения', /Обращений по объекту: 1/.test(v.kv.AD_STATS));
 ok('раздел 4: без телефона собственника и расходов', !/секрет|510/.test(v.kv.AD_STATS));
 ok('руководителю — расходы', /510/.test(v.adInner), v.adInner);
 AD.data.stats.views_total = 150;
 const v2 = X.addAdStats_({ kv: {} }, X.objectById_('144890621'), '2026-W41');
-ok('следующая неделя: прирост', /101|150 \(за неделю \+49\)/.test(v2.kv.AD_STATS) && /\+49/.test(v2.kv.AD_STATS), v2.kv.AD_STATS.split('\n')[1]);
+ok('следующая неделя: прирост', /посмотрели: 150 раз, из них за эту неделю — 49/.test(v2.kv.AD_STATS), v2.kv.AD_STATS.split('\n')[1]);
 X.writeFields_(sh, 'OBJ', 3, { crm_report_link: LINK });
 const v3 = X.addAdStats_({ kv: {} }, X.objectById_('137073408'), '2026-W40');
 ok('ссылка от другого объекта — раздела нет, руководителю ⚠', v3.kv.AD_STATS === '' && /другого объекта/.test(v3.adInner));
@@ -65,5 +65,6 @@ sh.getRange(1, X.fieldIndex_('OBJ', 'folder_link')).setValue('Что-то дру
 X.headerGuard_.ok = {};
 let err = ''; try { X.readTable_('OBJ'); } catch (e) { err = e.message; }
 ok('защита: при несовпадении столбцов — просьба запустить установку', /Установить \/ обновить систему/.test(err), err);
+console.log('--- как видит клиент ---\n' + v2.kv.AD_STATS);
 console.log(fails ? 'FAILED: ' + fails : 'ALL OK');
 process.exit(fails ? 1 : 0);

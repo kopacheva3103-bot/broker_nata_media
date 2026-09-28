@@ -6877,6 +6877,16 @@ function ensureAgencyDecisionsDoc_() {
 
 const AD_REPORT_API = 'https://ad-p.topnlab.ru/public/report';
 const AD_SITE_NAMES = { CIAN: 'ЦИАН', AVITO: 'Авито', YANDEX: 'Яндекс Недвижимость', BANK: 'Домклик' };
+const AD_MAIN_SITES = ['ЦИАН', 'Авито', 'Яндекс Недвижимость', 'Домклик'];
+
+/** 1 площадке / 2 площадках / 5 площадках. */
+function plural_(n, one, few, many) {
+  const m = Math.abs(n) % 100, d = m % 10;
+  if (m > 10 && m < 20) return many;
+  if (d === 1) return one;
+  if (d >= 2 && d <= 4) return few;
+  return many;
+}
 
 function adReportHash_(url) {
   const m = /\/report\/([A-Za-z0-9=_%-]+)/.exec(String(url || ''));
@@ -6943,13 +6953,16 @@ function adReportPart_(obj, wk) {
   Object.keys(snaps).sort().slice(0, -26).forEach(k => delete snaps[k]);
   props.setProperty(key, JSON.stringify(snaps));
   const fmt = n => Number(n).toLocaleString('ru-RU');
-  const plus = (cur, k) => prev && k in prev ? ' (за неделю +' + fmt(Math.max(0, cur - (prev[k] || 0))) + ')' : '';
+  const plus = (cur, k) => prev && k in prev ? ', из них за эту неделю — ' + fmt(Math.max(0, cur - (prev[k] || 0))) : '';
+  const main = a.sites.filter(s => AD_MAIN_SITES.indexOf(s) >= 0), partners = a.sites.filter(s => AD_MAIN_SITES.indexOf(s) < 0);
   const client = [
-    a.sites.length ? 'Объявление размещено' + (a.since ? ' с ' + fmtDate_(a.since) : '') + ' на площадках (' + a.sites.length + '): ' + a.sites.join(', ') : '',
-    'Просмотры объявлений: ' + fmt(a.views) + plus(a.views, 'v'),
-    'Добавили в избранное: ' + fmt(a.fav) + plus(a.fav, 'f'),
-    a.appealsOn ? 'Обращения по объекту: ' + fmt(a.appeals) + plus(a.appeals, 'a') : '',
-    a.cian ? 'Объявление на ЦИАН: ' + a.cian : '',
+    a.sites.length ? 'Ваш объект в рекламе' + (a.since ? ' с ' + fmtDate_(a.since) : '') + ', объявление размещено на ' + a.sites.length + ' ' + plural_(a.sites.length, 'площадке', 'площадках', 'площадках') + '.' : '',
+    main.length ? '• Основные площадки: ' + main.join(', ') + '.' : '',
+    partners.length ? '• Партнёрские площадки: ' + partners.join(', ') + '.' : '',
+    '• Объявление посмотрели: ' + fmt(a.views) + ' ' + plural_(a.views, 'раз', 'раза', 'раз') + plus(a.views, 'v') + '.',
+    '• Добавили в избранное: ' + fmt(a.fav) + ' ' + plural_(a.fav, 'человек', 'человека', 'человек') + plus(a.fav, 'f') + '.',
+    a.appealsOn ? '• Обращений по объекту: ' + fmt(a.appeals) + plus(a.appeals, 'a') + '.' : '',
+    a.cian ? 'На всех площадках размещено одинаковое объявление. Посмотреть, как оно выглядит (ЦИАН): ' + a.cian : '',
   ].filter(Boolean);
   return { lines: client, inner: 'Реклама: просмотры ' + fmt(a.views) + ', избранное ' + fmt(a.fav) + ', обращения ' + fmt(a.appeals) + ', показы ' + fmt(a.shows) + (a.spend ? ', расходы на площадки ' + fmt(a.spend) + ' ₽' : '') };
 }
