@@ -47,6 +47,7 @@ function FETCH(u, o) {
   if (/googleapis\.com\/drive\/v3\/files\/TMP_F_OSTROV\/export/.test(u)) return { getResponseCode: () => 200, getContentText: () => 'КП «Остров»\nМосковская обл., Истринский р-н, КП Остров, уч. 12\nДом 450,5 м² на участке 25 соток\nСтоимость: 185 000 000 ₽\nЦена за м²: 410 000 ₽\nПродажа' };
   if (/googleapis\.com\/drive\/v3\/files\/TMP_F_RENT\/export/.test(u)) return { getResponseCode: () => 200, getContentText: () => 'Помещение ПСН 320 м2, аренда 1,2 млн руб. в месяц\nг. Москва, ул. Тверская, 15' };
   if (/topnlab\.ru\/public\/get-entities/.test(u)) return (u.indexOf('79251112233') >= 0 && u.indexOf('type=order') >= 0) ? J({ '123': { id: 123 } }) : { getContentText: () => '', getResponseCode: () => 404 };
+  if (/calendar\/v3\/calendars\/.*\/acl/.test(u)) { ACL.push(u + ' ' + o.payload); return J({ id: 'user:x' }); }
   if (/topnlab\.ru\/public\/set-note/.test(u)) { NOTES.push(o && o.payload || u); return J({ status: 'success' }); }
   if (/555\/insights/.test(u)) return J({ data: [{ name: 'views', values: [{ value: 777 }] }] });
   if (/refresh_access_token/.test(u)) return J({ access_token: 'REFRESHED', expires_in: 5184000 });
@@ -62,8 +63,9 @@ const CAL = {
 };
 const TEAMCAL = Object.assign({}, CAL, { getId: () => 'team@cal', setSelected: () => {} });
 const SHARED = {}; // email → календарь с доступом
-const CALAPP = { getDefaultCalendar: () => CAL, getCalendarsByName: n => (n === 'Задачи команды' && CALAPP._team ? [TEAMCAL] : []),
-  createCalendar: () => { CALAPP._team = true; return TEAMCAL; }, getCalendarById: id => id === 'me@cal' ? CAL : id === 'team@cal' ? TEAMCAL : SHARED[id] || null,
+const ACL = [];
+const CALAPP = { getDefaultCalendar: () => CAL, getOwnedCalendarsByName: n => (CALAPP._team === n ? [TEAMCAL] : []),
+  createCalendar: n => { CALAPP._team = n; return TEAMCAL; }, getCalendarById: id => id === 'me@cal' ? CAL : id === 'team@cal' ? TEAMCAL : SHARED[id] || null,
   subscribeToCalendar: id => { if (!SHARED[id]) throw new Error('no access'); return SHARED[id]; } };
 const pad = n => String(n).padStart(2, '0');
 const X = loadGs({
@@ -517,3 +519,4 @@ console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПр
   MAILS.length = 0;
   console.log('cal request:', X.requestCalendarAccess_().join(','), '| again:', X.requestCalendarAccess_().length, '| mail:', MAILS.map(m => m.to + ' / ' + m.subject).join(' ; '));
 }
+console.log('acl shares:', ACL.length, ACL[0] && ACL[0].replace(/^.*calendars\//, '').slice(0, 90));

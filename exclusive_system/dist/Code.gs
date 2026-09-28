@@ -839,7 +839,8 @@ function setupSystem() {
   try { const mb = backfillMediaTasks_(); if (mb) log.push('Задачи ассистенту «фото и видео на Яндекс Диске» по текущим объектам: ' + mb); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
   try { const c = syncCalendar_(); log.push('Google Календарь: создано событий ' + c.created + ', обновлено ' + c.updated +
     (c.shared.length ? '; напрямую в календарь: ' + c.shared.join(', ') : '') +
-    (c.invited.length ? '; приглашением (не открыт доступ к календарю): ' + c.invited.join(', ') : '') +
+    (c.personal.length ? '; в личный календарь «Задачи: …» (Google пришлёт сотруднику письмо «Добавить календарь»): ' + c.personal.join(', ') : '') +
+    (c.shareErrors.length ? '; ⚠ ' + c.shareErrors.join('; ') : '') +
     (c.noEmail.length ? '; нет email у: ' + c.noEmail.join(', ') : ''));
     const rq = requestCalendarAccess_();
     if (rq.length) log.push('Письмо с просьбой открыть доступ к календарю отправлено: ' + rq.join(', ')); } catch (err) { warn += '\n\n⚠ Календарь: ' + err.message; }
@@ -4377,18 +4378,20 @@ function appendTabRow_(sh, secKey, values) {
  *  - свои задачи (исполнитель = тот, кто запускает систему) — в основной календарь;
  *  - задачи сотрудника — прямо в его календарь, если он открыл доступ «Внесение изменений в мероприятия»
  *    для владельца системы (Настройки Google Календаря → доступ для отдельных пользователей);
- *  - если доступа нет — в скрытый календарь «Задачи команды» с приглашением исполнителю (в основном календаре владельца их нет).
+ *  - если доступа нет — в личный календарь «Задачи: Имя», который владелец системы создаёт и открывает сотруднику на просмотр
+ *    (сотрудник один раз нажимает «Добавить календарь» в письме Google; у владельца этот календарь скрыт).
  * Выполнено → в названии «✓»; Отменено / Перенесено → событие удаляется. Изменили срок / исполнителя → событие обновляется или переезжает.
  * В «Событие календаря» хранится «ID календаря::ID события». Обрабатываются задачи со сроком не старше 14 дней.
  */
 
-const TEAM_CALENDAR_NAME = 'Задачи команды';
+const PERSON_CALENDAR_PREFIX = 'Задачи: ';
 
 function syncCalendar() {
   const r = syncCalendar_();
   toast_('Календарь: создано ' + r.created + ', обновлено ' + r.updated + ', удалено ' + r.deleted +
     (r.shared.length ? '. Напрямую в календарь: ' + r.shared.join(', ') : '') +
-    (r.invited.length ? '. Через приглашение (нет доступа к календарю): ' + r.invited.join(', ') : '') +
+    (r.personal.length ? '. В личный календарь «Задачи: …»: ' + r.personal.join(', ') : '') +
+    (r.shareErrors.length ? '. ⚠ Не удалось открыть календарь: ' + r.shareErrors.join('; ') : '') +
     (r.noEmail.length ? '. Нет email у: ' + r.noEmail.join(', ') + ' (07_СПРАВОЧНИКИ)' : ''), 'Google Календарь', 12);
 }
 
@@ -4400,23 +4403,17 @@ function syncCalendar_() {
   dictRows_('people').forEach(p => { emails[p[0]] = String(p[2] || '').trim().toLowerCase(); });
   const url = ss_().getUrl();
   const from = addDays_(today_(), -14);
-  const res = { created: 0, updated: 0, deleted: 0, noEmail: [], shared: [], invited: [] };
-  const cals = {};
-  let team = null;
-  const teamCal = () => {
-    if (team) return team;
-    team = CalendarApp.getCalendarsByName(TEAM_CALENDAR_NAME)[0];
-    if (!team) { team = CalendarApp.createCalendar(TEAM_CALENDAR_NAME, { summary: 'Задачи сотрудников из системы эксклюзивов — у исполнителей приходят приглашением' }); try { team.setSelected(false); } catch (e) { /* видимость — вручную */ } }
-    return team;
-  };
+  const res = { created: 0, updated: 0, deleted: 0, noEmail: [], shared: [], personal: [], shareErrors: [] };
+  const cals = {}, personal = {};
   // календарь исполнителя: {cal, guest}
   const target = owner => {
     const email = emails[owner] || '';
     if (!email || email === me) return { cal: mine, guest: '' };
     if (!(email in cals)) cals[email] = writableCalendar_(email);
     if (cals[email]) { if (res.shared.indexOf(owner) < 0) res.shared.push(owner); return { cal: cals[email], guest: '' }; }
-    if (res.invited.indexOf(owner) < 0) res.invited.push(owner);
-    return { cal: teamCal(), guest: email };
+    if (!personal[email]) personal[email] = personalCalendar_(owner, email, res);
+    if (res.personal.indexOf(owner) < 0) res.personal.push(owner);
+    return { cal: personal[email], guest: '' };
   };
   const find = ref => {
     if (!ref) return null;
@@ -4464,6 +4461,27 @@ function syncCalendar_() {
   return res;
 }
 
+/** Личный календарь «Задачи: Имя» у владельца системы: скрыт у владельца, открыт сотруднику на просмотр (один раз). */
+function personalCalendar_(name, email, res) {
+  const title = PERSON_CALENDAR_PREFIX + name;
+  let c = CalendarApp.getOwnedCalendarsByName(title)[0];
+  if (!c) {
+    c = CalendarApp.createCalendar(title, { summary: 'Задачи из системы эксклюзивов для: ' + name + '. Обновляется автоматически каждый час.' });
+    try { c.setSelected(false); } catch (e) { /* видимость — вручную */ }
+  }
+  const props = PropertiesService.getScriptProperties();
+  const key = 'CAL_SHARE_' + c.getId() + '_' + email;
+  if (!props.getProperty(key)) {
+    const r = UrlFetchApp.fetch('https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(c.getId()) + '/acl?sendNotifications=true', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+      payload: JSON.stringify({ role: 'reader', scope: { type: 'user', value: email } }),
+    });
+    if (r.getResponseCode() < 300) props.setProperty(key, fmtDate_(new Date()));
+    else if (res) res.shareErrors.push(name + ': ' + r.getContentText().slice(0, 120) + ' — откройте календарь «' + title + '» для ' + email + ' вручную (Настройки календаря → Доступ)');
+  }
+  return c;
+}
+
 /** Письмо сотрудникам, чей календарь недоступен: как открыть доступ владельцу системы. Один раз на человека (force — повторить). */
 function requestCalendarAccess_(force) {
   const props = PropertiesService.getScriptProperties();
@@ -4481,7 +4499,7 @@ function requestCalendarAccess_(force) {
       '<li>Слева в «Мои календари» наведите на календарь со своим именем → ⋮ → <b>«Настройки и общий доступ»</b>.</li>' +
       '<li>Раздел <b>«Доступ для отдельных пользователей и групп»</b> → «Добавить пользователей и группы».</li>' +
       '<li>Впишите <b>' + me + '</b>, права — <b>«Внесение изменений в мероприятия»</b> → «Отправить».</li></ol>' +
-      '<p>В течение часа ваши задачи (со сроками) появятся в вашем календаре: выполнено — с «✓», перенос срока — событие переедет само. Пока доступа нет, задачи приходят приглашениями.</p>' +
+      '<p>В течение часа ваши задачи (со сроками) появятся в вашем календаре: выполнено — с «✓», перенос срока — событие переедет само. Пока доступа нет, ваши задачи — в календаре «Задачи: ваше имя»: откройте письмо Google о доступе к нему и нажмите «Добавить календарь».</p>' +
       '<p>' + boss + '</p>';
     MailApp.sendEmail({ to: email, subject: 'Задачи в ваш Google Календарь: откройте доступ (1 минута)', htmlBody: html, name: boss });
     props.setProperty('CAL_REQ_' + email, fmtDate_(new Date()));

@@ -55,7 +55,8 @@ function setupSystem() {
   try { const mb = backfillMediaTasks_(); if (mb) log.push('Задачи ассистенту «фото и видео на Яндекс Диске» по текущим объектам: ' + mb); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
   try { const c = syncCalendar_(); log.push('Google Календарь: создано событий ' + c.created + ', обновлено ' + c.updated +
     (c.shared.length ? '; напрямую в календарь: ' + c.shared.join(', ') : '') +
-    (c.invited.length ? '; приглашением (не открыт доступ к календарю): ' + c.invited.join(', ') : '') +
+    (c.personal.length ? '; в личный календарь «Задачи: …» (Google пришлёт сотруднику письмо «Добавить календарь»): ' + c.personal.join(', ') : '') +
+    (c.shareErrors.length ? '; ⚠ ' + c.shareErrors.join('; ') : '') +
     (c.noEmail.length ? '; нет email у: ' + c.noEmail.join(', ') : ''));
     const rq = requestCalendarAccess_();
     if (rq.length) log.push('Письмо с просьбой открыть доступ к календарю отправлено: ' + rq.join(', ')); } catch (err) { warn += '\n\n⚠ Календарь: ' + err.message; }
