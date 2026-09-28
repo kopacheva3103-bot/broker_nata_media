@@ -49,7 +49,7 @@ ok('ссылка записана в свой столбец', X.objectById_('14
 ok('папка объекта не тронута', X.objectById_('144890621').folder_link === '' || !/lk\/report/.test(X.objectById_('144890621').folder_link));
 const v = X.addAdStats_({ kv: {} }, X.objectById_('144890621'), '2026-W40');
 ok('раздел 4: площадки без неактивных', /площадках \(3\): ЦИАН, Авито, novosel\.ru/.test(v.kv.AD_STATS), v.kv.AD_STATS.split('\n')[0]);
-ok('раздел 4: просмотры/избранное/показы/ЦИАН', /Просмотры объявлений: 101/.test(v.kv.AD_STATS) && /избранное: 1/.test(v.kv.AD_STATS) && /Показы объекта: 0/.test(v.kv.AD_STATS) && /cian\.ru/.test(v.kv.AD_STATS));
+ok('раздел 4: просмотры/избранное/ЦИАН, без показов', /Просмотры объявлений: 101/.test(v.kv.AD_STATS) && /избранное: 1/.test(v.kv.AD_STATS) && !/Показы/.test(v.kv.AD_STATS) && /cian\.ru/.test(v.kv.AD_STATS));
 ok('раздел 4: обращения', /Обращения по объекту: 1/.test(v.kv.AD_STATS));
 ok('раздел 4: без телефона собственника и расходов', !/секрет|510/.test(v.kv.AD_STATS));
 ok('руководителю — расходы', /510/.test(v.adInner), v.adInner);
