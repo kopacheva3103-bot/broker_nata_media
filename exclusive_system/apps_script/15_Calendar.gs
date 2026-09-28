@@ -167,6 +167,7 @@ function writableCalendar_(email) {
 function dailyJobs() {
   try { syncCalendar_(); } catch (e) { Logger.log('Календарь: ' + e.message); }
   try { refreshSocialStats_(); } catch (e) { Logger.log('Статистика: ' + e.message); }
+  try { registerOldReports_(); } catch (e) { Logger.log('Старые отчёты: ' + e.message); }
   try { refreshObjectFiles_(); } catch (e) { Logger.log('Документы: ' + e.message); }
   try { backupObjectTabs_(); } catch (e) { Logger.log('Копии вкладок: ' + e.message); }
   try { tabsWork_(); protectAll_(); } catch (e) { Logger.log('Вкладки / защита: ' + e.message); }

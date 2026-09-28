@@ -76,7 +76,7 @@ const COLORS = {
 const CLS = { OPEN: 'OPEN', DONE: 'DONE', MOVED: 'MOVED', FAIL: 'FAIL', CANCEL: 'CANCEL' };
 
 const HIST_KIND = { INITIAL: 'Первичное значение', CHANGE: 'Изменение', MOVE: 'Перенос', CREATE: 'Создание' };
-const REPORT_STATUS = { ACTUAL: 'Актуальный', REPLACED: 'Заменён' };
+const REPORT_STATUS = { ACTUAL: 'Актуальный', REPLACED: 'Заменён', OLD: 'Старая форма' };
 
 /**
  * Единицы плана задач и откуда берётся факт автоматически:

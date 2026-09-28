@@ -670,8 +670,10 @@ function fillObjectFiles_(sh, obj) {
 
 /** Меню: обновить списки документов во всех вкладках объектов. */
 function refreshObjectFiles() {
+  let old = 0;
+  try { old = registerOldReports_(); } catch (e) { Logger.log('Старые отчёты: ' + e.message); }
   const n = refreshObjectFiles_();
-  toast_('Обновлено вкладок: ' + n, 'Документы объектов', 6);
+  toast_('Обновлено вкладок: ' + n + (old ? '. В архив отчётов добавлено отчётов по старой форме: ' + old : ''), 'Документы объектов', 6);
 }
 
 function refreshObjectFiles_() {

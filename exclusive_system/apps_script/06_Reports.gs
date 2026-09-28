@@ -309,3 +309,60 @@ function styleReportTable_(t, widths) {
     }
   }
 }
+
+/**
+ * Отчёты, отправленные клиенту до системы (по старой форме): PDF или документ кладут в папку объекта «Отчёты».
+ * Файлы, которых нет в 10_АРХИВ_ОТЧЁТОВ, записываются туда со статусом «Старая форма» — отметка, что отчёт был.
+ * На нумерацию и вид новых отчётов это не влияет. № и период берутся из имени файла («Отчет №06 … 21.09-25.09»).
+ */
+function registerOldReports_() {
+  const arch = readTable_('ARCH');
+  const known = {};
+  arch.rows.forEach(r => [r.doc_link, r.pdf_link].forEach(l => { const id = idFromUrl_(l); if (id) known[id] = true; }));
+  const rows = [];
+  readTable_('OBJ').rows.forEach(o => {
+    if (!o.id || !o.name || isServiceObject_(o) || !o.folder_link) return;
+    let folder;
+    try { folder = ensureObjectFolder_(o.id, 'REPORTS'); } catch (e) { return; }
+    const it = folder.getFiles();
+    while (it.hasNext()) {
+      const f = it.next();
+      const mime = f.getMimeType();
+      if (known[f.getId()] || (mime !== MimeType.PDF && mime !== MimeType.GOOGLE_DOCS)) continue;
+      if (mime === MimeType.GOOGLE_DOCS && folder.getFilesByName(f.getName() + '.pdf').hasNext()) continue; // док системного отчёта рядом с PDF
+      const info = oldReportInfo_(f.getName(), f.getDateCreated());
+      rows.push({
+        ts: f.getDateCreated(), obj_id: String(o.id), obj_name: o.name, report_no: info.no, week: info.week, period: info.period,
+        doc_link: mime === MimeType.GOOGLE_DOCS ? f.getUrl() : '', pdf_link: mime === MimeType.PDF ? f.getUrl() : '',
+        author: 'старая форма', status: REPORT_STATUS.OLD,
+      });
+    }
+  });
+  if (!rows.length) return 0;
+  rows.sort((a, b) => a.ts - b.ts);
+  appendRows_('ARCH', rows);
+  logHistory_(rows.map(r => ({ sheet: SHEET_NAMES.ARCH, record_id: r.report_no ? '№' + r.report_no : '', obj_id: r.obj_id, field: 'Отчёт',
+    old: '', new: r.period || r.pdf_link || r.doc_link, kind: HIST_KIND.CREATE, note: 'Отчёт по старой форме добавлен в архив' })), 'система');
+  return rows.length;
+}
+
+/** «Отчет №06 за период 21.09-25.09.pdf» → {no: 6, period: '21.09.2026 – 25.09.2026', week: '2026-W39'}. */
+function oldReportInfo_(name, created) {
+  const s = String(name || '');
+  const n = /№\s*0*(\d{1,3})(?![\d.])/.exec(s) || /отч[её]т\D{0,12}?0*(\d{1,3})(?![\d.])/i.exec(s) || /(?:^|[^\d.])0*(\d{1,3})(?![\d.])/.exec(s);
+  const p = /(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?\s*[-–—_]\s*(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?/.exec(s);
+  const out = { no: n ? Number(n[1]) : '', period: '', week: '' };
+  if (p) {
+    const cy = (created instanceof Date ? created : new Date()).getFullYear();
+    const yr = y => !y ? cy : (y.length === 2 ? 2000 + Number(y) : Number(y));
+    const to = new Date(yr(p[6] || p[3]), Number(p[5]) - 1, Number(p[4]));
+    const from = new Date(yr(p[3] || p[6]), Number(p[2]) - 1, Number(p[1]));
+    if (!p[3] && !p[6] && to - (created instanceof Date ? created : new Date()) > 30 * 864e5) { // год не указан, а дата сильно в будущем — прошлый год
+      to.setFullYear(to.getFullYear() - 1);
+      from.setFullYear(from.getFullYear() - 1);
+    }
+    out.period = fmtDate_(from) + ' – ' + fmtDate_(to);
+    out.week = isoWeekKey_(to);
+  }
+  return out;
+}
