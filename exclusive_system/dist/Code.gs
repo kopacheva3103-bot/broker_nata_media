@@ -6962,7 +6962,7 @@ function adReportPart_(obj, wk) {
     '• Объявление посмотрели: ' + fmt(a.views) + ' ' + plural_(a.views, 'раз', 'раза', 'раз') + plus(a.views, 'v') + '.',
     '• Добавили в избранное: ' + fmt(a.fav) + ' ' + plural_(a.fav, 'человек', 'человека', 'человек') + plus(a.fav, 'f') + '.',
     a.appealsOn ? '• Обращений по объекту: ' + fmt(a.appeals) + plus(a.appeals, 'a') + '.' : '',
-    a.cian ? 'На всех площадках размещено одинаковое объявление. Посмотреть, как оно выглядит (ЦИАН): ' + a.cian : '',
+    a.cian ? 'На всех площадках размещено объявление в одинаковом формате. Посмотреть, как оно выглядит (ЦИАН): ' + a.cian : '',
   ].filter(Boolean);
   return { lines: client, inner: 'Реклама: просмотры ' + fmt(a.views) + ', избранное ' + fmt(a.fav) + ', обращения ' + fmt(a.appeals) + ', показы ' + fmt(a.shows) + (a.spend ? ', расходы на площадки ' + fmt(a.spend) + ' ₽' : '') };
 }
