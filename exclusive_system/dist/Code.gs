@@ -227,6 +227,7 @@ function sheetSpecs_() {
       F('contract_date', 'Дата договора', 'date'),
       F('date_sign', 'Начало работы', 'date', { d: 'Дата начала эксклюзива / работы по объекту.' }),
       F('crm_link', 'Ссылка на CRM', 'link', { w: 110 }),
+      F('crm_report_link', 'Онлайн-отчёт CRM для клиента', 'link', { w: 110, d: 'Ссылка на отчёт клиенту в TopenLab (всегда актуальный). Попадает в еженедельный отчёт и в комментарий CRM. Пусто — строки в отчёте не будет.' }),
       F('folder_link', 'Папка объекта', 'link', { w: 110, d: 'Можно вставить ссылку на уже существующую папку объекта на Google Диске. Если пусто — папка «Название (ID)» создастся в 01_ОБЪЕКТЫ при первом отчёте.' }),
       F('strategy_pct', 'Стратегия заполнена', 'sys', { fmt: 'pct', d: 'Считается по вкладке объекта: аналоги, цена, сценарии, аудитории, КП, каналы.' }),
       F('last_report_link', 'Последний отчёт', 'sys', { w: 110 }),
@@ -686,6 +687,7 @@ function reportRows_() {
     { ph: 'OBJECT', label: 'Объект', f: look('address') },
     { ph: 'CUSTOMER', label: 'Заказчик', f: '=IFERROR(IF(VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.customer]]},2,FALSE)="","Заказчик",VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.customer]]},2,FALSE)),"Заказчик")' }, // пусто → «Заказчик»
     { ph: 'EXECUTOR', label: 'Исполнитель', f: '=CFG_EXEC_NAME' },
+    { ph: 'CRM_LINK', label: 'Онлайн-отчёт в CRM', f: look('crm_report_link') },
     {
       ph: 'SUMMARY', label: 'Итоги недели в цифрах', lines: true,
       f: '=ARRAYFORMULA(IF(' + P.id + '="","",LET(n_call,COUNTIF(' + bKey('call_week') + ',' + cw + '),n_kp,COUNTIF(' + bKey('kp_week') + ',' + cw + '),' +
@@ -2527,6 +2529,7 @@ function fillReportDoc_(doc, values) {
   Object.keys(values.kv).forEach(k => {
     const v = String(values.kv[k] || '').trim();
     if (!v && (k === 'COMMENT' || k === 'SUMMARY')) { removeBlock_(body, k); return; }
+    if (k === 'CRM_LINK') { fillLinkLine_(body, k, v); return; }
     if (lines[k]) replaceWithLines_(body, k, v.split(/\r?\n/).map(x => x.trim()).filter(Boolean));
   });
   [body, doc.getHeader(), doc.getFooter()].forEach(sec => {
@@ -2536,6 +2539,18 @@ function fillReportDoc_(doc, values) {
     });
     sec.replaceText('\\{\\{[A-Z_]+\\}\\}', '—');
   });
+}
+
+/** Абзац со ссылкой: пусто — абзац убирается, иначе метка → кликабельная ссылка. */
+function fillLinkLine_(body, key, url) {
+  const found = body.findText(phPattern_(key));
+  if (!found) return;
+  const text = found.getElement().asText();
+  if (!url) { const p = text.getParent(); if (p.getType() === DocumentApp.ElementType.PARAGRAPH) p.removeFromParent(); else text.replaceText(phPattern_(key), '—'); return; }
+  const start = found.getStartOffset();
+  text.deleteText(start, found.getEndOffsetInclusive());
+  text.insertText(start, url);
+  text.setLinkUrl(start, start + url.length - 1, url);
 }
 
 function phPattern_(key) { return '\\{\\{' + key + '\\}\\}'; }
@@ -2631,7 +2646,7 @@ function ensureObjectFolder_(id, kind) {
  * Шаблон отчёта в формате руководителя. Создаётся один раз в 02_ШАБЛОНЫ; дальше вёрстку (шрифты, логотип,
  * отступы) можно менять прямо в Google Docs — метки {{…}} не удаляйте.
  */
-const REPORT_TEMPLATE_VERSION = '2'; // 2: без строки «Приложение №1 к Договору № … от …»
+const REPORT_TEMPLATE_VERSION = '3'; // 2: без строки «Приложение №1 к Договору № … от …»; 3: ссылка на онлайн-отчёт CRM
 
 function ensureReportTemplate_() {
   const id = String(cfgGet_('TEMPLATE_REPORT_ID') || '');
@@ -2679,6 +2694,7 @@ function buildReportTemplate_(doc) {
     ['Объект', '{{OBJECT}}'], ['Заказчик', '{{CUSTOMER}}'], ['Исполнитель', '{{EXECUTOR}}'],
   ]);
   styleReportTable_(info, [170, 320]);
+  b.appendParagraph('Онлайн-отчёт по объекту (обновляется постоянно): {{CRM_LINK}}');
   b.appendParagraph('Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА').setHeading(H.HEADING3);
   styleReportTable_(b.appendTable([['№', 'Действие по плану на эту неделю', 'Статус (выполнено / нет)'], ['{{PLAN_ROWS}}', '', '']]), [40, 330, 120]);
   b.appendParagraph('Итоги недели в цифрах').setHeading(H.HEADING4);
@@ -5160,6 +5176,7 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
     '\nПолученные заявки:\n' + rows('LEADS_ROWS', 'новых заявок нет'),
     '\nПлан работы на следующую неделю:\n' + rows('NEXT_ROWS', 'план не внесён'),
     kv.COMMENT ? '\nКомментарий для клиента:\n' + kv.COMMENT : '',
+    kv.CRM_LINK ? '\nОнлайн-отчёт по объекту: ' + kv.CRM_LINK : '',
     pdfUrl ? '\nPDF отчёта: ' + pdfUrl : '',
   ].filter(Boolean).join('\n');
   const tasks = readTable_('TASK').rows.filter(x => String(x.obj_id) === String(obj.id) && x.task);

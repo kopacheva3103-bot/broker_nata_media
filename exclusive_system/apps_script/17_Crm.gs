@@ -112,6 +112,7 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
     '\nПолученные заявки:\n' + rows('LEADS_ROWS', 'новых заявок нет'),
     '\nПлан работы на следующую неделю:\n' + rows('NEXT_ROWS', 'план не внесён'),
     kv.COMMENT ? '\nКомментарий для клиента:\n' + kv.COMMENT : '',
+    kv.CRM_LINK ? '\nОнлайн-отчёт по объекту: ' + kv.CRM_LINK : '',
     pdfUrl ? '\nPDF отчёта: ' + pdfUrl : '',
   ].filter(Boolean).join('\n');
   const tasks = readTable_('TASK').rows.filter(x => String(x.obj_id) === String(obj.id) && x.task);
