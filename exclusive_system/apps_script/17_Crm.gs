@@ -112,7 +112,7 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
     '\nПолученные заявки:\n' + rows('LEADS_ROWS', 'новых заявок нет'),
     '\nПлан работы на следующую неделю:\n' + rows('NEXT_ROWS', 'план не внесён'),
     kv.COMMENT ? '\nКомментарий для клиента:\n' + kv.COMMENT : '',
-    kv.CRM_LINK ? '\nОнлайн-отчёт по объекту: ' + kv.CRM_LINK : '',
+    kv.AD_STATS ? '\nРеклама на площадках:\n' + kv.AD_STATS : '',
     pdfUrl ? '\nPDF отчёта: ' + pdfUrl : '',
   ].filter(Boolean).join('\n');
   const tasks = readTable_('TASK').rows.filter(x => String(x.obj_id) === String(obj.id) && x.task);
@@ -136,6 +136,7 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
     notDone.length ? '\nНе выполнено:\n' + notDone.slice(0, 15).map(line).join('\n') : '',
     '\nПросрочено задач: ' + overdue.length + (overdue.length ? '\n' + overdue.slice(0, 10).map(line).join('\n') : ''),
     content,
+    values.adInner ? '\n' + values.adInner : '',
     own ? '\nКомментарий руководителя:\n' + own : '',
   ].filter(Boolean).join('\n');
   return { client: client, inner: inner };
@@ -167,7 +168,7 @@ function crmSendReport() {
   const arch = readTable_('ARCH');
   const rows = arch.rows.filter(r => String(r.obj_id) === id && r.week === wk && r.status === REPORT_STATUS.ACTUAL);
   const last = rows[rows.length - 1];
-  const st = sendReportToCrm_(obj, readReportValues_(), last ? last.pdf_link : '', rep.getRange('B6').getValue(), wk);
+  const st = sendReportToCrm_(obj, addAdStats_(readReportValues_(), obj, wk), last ? last.pdf_link : '', rep.getRange('B6').getValue(), wk);
   if (last) writeFields_(arch.sh, 'ARCH', last._row, { crm: st });
   ui.alert('Отчёт → CRM', st || 'CRM не подключена', ui.ButtonSet.OK);
 }

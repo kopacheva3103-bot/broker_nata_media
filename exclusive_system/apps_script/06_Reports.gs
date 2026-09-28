@@ -2,7 +2,7 @@
  * 06_Reports — еженедельный отчёт клиенту: Google Doc + PDF + архив.
  *
  * Формат — как в отчётах руководителя (шапка ИП, таблица реквизитов,
- * Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА, Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ, Раздел 3. ПЛАН РАБОТЫ).
+ * Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА, Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ, Раздел 3. ПЛАН РАБОТЫ, Раздел 4. РЕКЛАМА НА ПЛОЩАДКАХ).
  * Источник — лист 05_ОТЧЁТ_КЛИЕНТУ (предпросмотр): скрипт берёт оттуда только поля с метками {{…}},
  * поэтому внутренние данные (контакты, звонки, комментарии) в документ попасть не могут.
  * Клиент доступа к таблице не получает — только PDF.
@@ -38,6 +38,7 @@ function generateReport_(id, wk, opts) {
     const aud = audienceReportLines_(id, wk);
     if (aud.length) values.kv.SUMMARY = [String(values.kv.SUMMARY || '').trim(), aud.join('\n')].filter(Boolean).join('\n');
   } catch (e) { /* без цифр по аудиториям */ }
+  addAdStats_(values, obj, wk);
   const arch = readTable_('ARCH');
   const existing = arch.rows.filter(r => r.obj_id === id && r.week === wk && r.status === REPORT_STATUS.ACTUAL);
   if (existing.length && opts.interactive) {
@@ -117,6 +118,7 @@ function readReportValues_() {
 function lineKeys_() {
   const keys = {};
   reportRows_().forEach(r => { if (r.lines) keys[r.ph] = true; });
+  keys.AD_STATS = true; // раздел «Реклама на площадках» — строки из отчёта по рекламе CRM
   return keys;
 }
 
@@ -127,8 +129,7 @@ function fillReportDoc_(doc, values) {
   const lines = lineKeys_();
   Object.keys(values.kv).forEach(k => {
     const v = String(values.kv[k] || '').trim();
-    if (!v && (k === 'COMMENT' || k === 'SUMMARY')) { removeBlock_(body, k); return; }
-    if (k === 'CRM_LINK') { fillLinkLine_(body, k, v); return; }
+    if (!v && (k === 'COMMENT' || k === 'SUMMARY' || k === 'AD_STATS')) { removeBlock_(body, k); return; }
     if (lines[k]) replaceWithLines_(body, k, v.split(/\r?\n/).map(x => x.trim()).filter(Boolean));
   });
   [body, doc.getHeader(), doc.getFooter()].forEach(sec => {
@@ -138,18 +139,17 @@ function fillReportDoc_(doc, values) {
     });
     sec.replaceText('\\{\\{[A-Z_]+\\}\\}', '—');
   });
+  try { linkifyBody_(body); } catch (e) { /* без кликабельных ссылок */ }
 }
 
-/** Абзац со ссылкой: пусто — абзац убирается, иначе метка → кликабельная ссылка. */
-function fillLinkLine_(body, key, url) {
-  const found = body.findText(phPattern_(key));
-  if (!found) return;
-  const text = found.getElement().asText();
-  if (!url) { const p = text.getParent(); if (p.getType() === DocumentApp.ElementType.PARAGRAPH) p.removeFromParent(); else text.replaceText(phPattern_(key), '—'); return; }
-  const start = found.getStartOffset();
-  text.deleteText(start, found.getEndOffsetInclusive());
-  text.insertText(start, url);
-  text.setLinkUrl(start, start + url.length - 1, url);
+/** Адреса в тексте отчёта (ссылка на ЦИАН, публикации) — кликабельные. */
+function linkifyBody_(body) {
+  let f = body.findText('https?://[^\\s]+');
+  while (f) {
+    const t = f.getElement().asText(), a = f.getStartOffset(), b = f.getEndOffsetInclusive();
+    t.setLinkUrl(a, b, t.getText().slice(a, b + 1));
+    f = body.findText('https?://[^\\s]+', f);
+  }
 }
 
 function phPattern_(key) { return '\\{\\{' + key + '\\}\\}'; }
@@ -245,7 +245,7 @@ function ensureObjectFolder_(id, kind) {
  * Шаблон отчёта в формате руководителя. Создаётся один раз в 02_ШАБЛОНЫ; дальше вёрстку (шрифты, логотип,
  * отступы) можно менять прямо в Google Docs — метки {{…}} не удаляйте.
  */
-const REPORT_TEMPLATE_VERSION = '3'; // 2: без строки «Приложение №1 к Договору № … от …»; 3: ссылка на онлайн-отчёт CRM
+const REPORT_TEMPLATE_VERSION = '4'; // 2: без строки «Приложение №1 к Договору № … от …»; 4: раздел 4 «Реклама на площадках»
 
 function ensureReportTemplate_() {
   const id = String(cfgGet_('TEMPLATE_REPORT_ID') || '');
@@ -293,7 +293,6 @@ function buildReportTemplate_(doc) {
     ['Объект', '{{OBJECT}}'], ['Заказчик', '{{CUSTOMER}}'], ['Исполнитель', '{{EXECUTOR}}'],
   ]);
   styleReportTable_(info, [170, 320]);
-  b.appendParagraph('Онлайн-отчёт по объекту (обновляется постоянно): {{CRM_LINK}}');
   b.appendParagraph('Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА').setHeading(H.HEADING3);
   styleReportTable_(b.appendTable([['№', 'Действие по плану на эту неделю', 'Статус (выполнено / нет)'], ['{{PLAN_ROWS}}', '', '']]), [40, 330, 120]);
   b.appendParagraph('Итоги недели в цифрах').setHeading(H.HEADING4);
@@ -302,6 +301,8 @@ function buildReportTemplate_(doc) {
   styleReportTable_(b.appendTable([['№', 'Заявка', 'Следующий шаг'], ['{{LEADS_ROWS}}', '', '']]), [40, 280, 170]);
   b.appendParagraph('Раздел 3. ПЛАН РАБОТЫ').setHeading(H.HEADING3);
   styleReportTable_(b.appendTable([['№', 'Действие', 'Дата выполнения'], ['{{NEXT_ROWS}}', '', '']]), [40, 300, 150]);
+  b.appendParagraph('Раздел 4. РЕКЛАМА НА ПЛОЩАДКАХ').setHeading(H.HEADING3);
+  b.appendParagraph('{{AD_STATS}}');
   b.appendParagraph('Комментарий').setHeading(H.HEADING4);
   b.appendParagraph('{{COMMENT}}');
   b.appendParagraph('');

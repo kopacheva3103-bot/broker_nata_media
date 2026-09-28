@@ -268,7 +268,6 @@ function reportRows_() {
     { ph: 'OBJECT', label: 'Объект', f: look('address') },
     { ph: 'CUSTOMER', label: 'Заказчик', f: '=IFERROR(IF(VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.customer]]},2,FALSE)="","Заказчик",VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.customer]]},2,FALSE)),"Заказчик")' }, // пусто → «Заказчик»
     { ph: 'EXECUTOR', label: 'Исполнитель', f: '=CFG_EXEC_NAME' },
-    { ph: 'CRM_LINK', label: 'Онлайн-отчёт в CRM', f: look('crm_report_link') },
     {
       ph: 'SUMMARY', label: 'Итоги недели в цифрах', lines: true,
       f: '=ARRAYFORMULA(IF(' + P.id + '="","",LET(n_call,COUNTIF(' + bKey('call_week') + ',' + cw + '),n_kp,COUNTIF(' + bKey('kp_week') + ',' + cw + '),' +

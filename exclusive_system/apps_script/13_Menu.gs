@@ -24,6 +24,7 @@ function onOpen() {
     .addItem('➜ Обновить статистику соцсетей', 'refreshSocialStats')
     .addItem('➜ Отправить отмеченные в CRM', 'crmSendPending')
     .addItem('➜ Отправить отчёт клиенту в CRM', 'crmSendReport')
+    .addItem('➜ Проверить отчёты по рекламе CRM', 'checkAdReports')
     .addSeparator()
     .addItem('➜ Создать отчёт клиенту', 'createReport')
     .addItem('➜ Обновить PDF отчёта', 'createPdf')

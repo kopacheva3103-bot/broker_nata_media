@@ -227,7 +227,7 @@ function sheetSpecs_() {
       F('contract_date', 'Дата договора', 'date'),
       F('date_sign', 'Начало работы', 'date', { d: 'Дата начала эксклюзива / работы по объекту.' }),
       F('crm_link', 'Ссылка на CRM', 'link', { w: 110 }),
-      F('crm_report_link', 'Онлайн-отчёт CRM для клиента', 'link', { w: 110, d: 'Ссылка на отчёт клиенту в TopenLab (всегда актуальный). Попадает в еженедельный отчёт и в комментарий CRM. Пусто — строки в отчёте не будет.' }),
+      F('crm_report_link', 'Отчёт по рекламе CRM (ссылка)', 'link', { was: ['Онлайн-отчёт CRM для клиента'], w: 110, d: 'Ссылка на отчёт по рекламе из TopenLab (crm.topnlab.ru/lk/report/…). Из неё система берёт площадки, просмотры, избранное, показы и ссылку на ЦИАН для раздела 4 отчёта клиенту. Саму ссылку клиенту не отправляем.' }),
       F('folder_link', 'Папка объекта', 'link', { w: 110, d: 'Можно вставить ссылку на уже существующую папку объекта на Google Диске. Если пусто — папка «Название (ID)» создастся в 01_ОБЪЕКТЫ при первом отчёте.' }),
       F('strategy_pct', 'Стратегия заполнена', 'sys', { fmt: 'pct', d: 'Считается по вкладке объекта: аналоги, цена, сценарии, аудитории, КП, каналы.' }),
       F('last_report_link', 'Последний отчёт', 'sys', { w: 110 }),
@@ -687,7 +687,6 @@ function reportRows_() {
     { ph: 'OBJECT', label: 'Объект', f: look('address') },
     { ph: 'CUSTOMER', label: 'Заказчик', f: '=IFERROR(IF(VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.customer]]},2,FALSE)="","Заказчик",VLOOKUP(' + P.id + ',{[[OBJ.id]],[[OBJ.customer]]},2,FALSE)),"Заказчик")' }, // пусто → «Заказчик»
     { ph: 'EXECUTOR', label: 'Исполнитель', f: '=CFG_EXEC_NAME' },
-    { ph: 'CRM_LINK', label: 'Онлайн-отчёт в CRM', f: look('crm_report_link') },
     {
       ph: 'SUMMARY', label: 'Итоги недели в цифрах', lines: true,
       f: '=ARRAYFORMULA(IF(' + P.id + '="","",LET(n_call,COUNTIF(' + bKey('call_week') + ',' + cw + '),n_kp,COUNTIF(' + bKey('kp_week') + ',' + cw + '),' +
@@ -2403,7 +2402,7 @@ function appendRows_(code, objs) {
  * 06_Reports — еженедельный отчёт клиенту: Google Doc + PDF + архив.
  *
  * Формат — как в отчётах руководителя (шапка ИП, таблица реквизитов,
- * Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА, Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ, Раздел 3. ПЛАН РАБОТЫ).
+ * Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА, Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ, Раздел 3. ПЛАН РАБОТЫ, Раздел 4. РЕКЛАМА НА ПЛОЩАДКАХ).
  * Источник — лист 05_ОТЧЁТ_КЛИЕНТУ (предпросмотр): скрипт берёт оттуда только поля с метками {{…}},
  * поэтому внутренние данные (контакты, звонки, комментарии) в документ попасть не могут.
  * Клиент доступа к таблице не получает — только PDF.
@@ -2439,6 +2438,7 @@ function generateReport_(id, wk, opts) {
     const aud = audienceReportLines_(id, wk);
     if (aud.length) values.kv.SUMMARY = [String(values.kv.SUMMARY || '').trim(), aud.join('\n')].filter(Boolean).join('\n');
   } catch (e) { /* без цифр по аудиториям */ }
+  addAdStats_(values, obj, wk);
   const arch = readTable_('ARCH');
   const existing = arch.rows.filter(r => r.obj_id === id && r.week === wk && r.status === REPORT_STATUS.ACTUAL);
   if (existing.length && opts.interactive) {
@@ -2518,6 +2518,7 @@ function readReportValues_() {
 function lineKeys_() {
   const keys = {};
   reportRows_().forEach(r => { if (r.lines) keys[r.ph] = true; });
+  keys.AD_STATS = true; // раздел «Реклама на площадках» — строки из отчёта по рекламе CRM
   return keys;
 }
 
@@ -2528,8 +2529,7 @@ function fillReportDoc_(doc, values) {
   const lines = lineKeys_();
   Object.keys(values.kv).forEach(k => {
     const v = String(values.kv[k] || '').trim();
-    if (!v && (k === 'COMMENT' || k === 'SUMMARY')) { removeBlock_(body, k); return; }
-    if (k === 'CRM_LINK') { fillLinkLine_(body, k, v); return; }
+    if (!v && (k === 'COMMENT' || k === 'SUMMARY' || k === 'AD_STATS')) { removeBlock_(body, k); return; }
     if (lines[k]) replaceWithLines_(body, k, v.split(/\r?\n/).map(x => x.trim()).filter(Boolean));
   });
   [body, doc.getHeader(), doc.getFooter()].forEach(sec => {
@@ -2539,18 +2539,17 @@ function fillReportDoc_(doc, values) {
     });
     sec.replaceText('\\{\\{[A-Z_]+\\}\\}', '—');
   });
+  try { linkifyBody_(body); } catch (e) { /* без кликабельных ссылок */ }
 }
 
-/** Абзац со ссылкой: пусто — абзац убирается, иначе метка → кликабельная ссылка. */
-function fillLinkLine_(body, key, url) {
-  const found = body.findText(phPattern_(key));
-  if (!found) return;
-  const text = found.getElement().asText();
-  if (!url) { const p = text.getParent(); if (p.getType() === DocumentApp.ElementType.PARAGRAPH) p.removeFromParent(); else text.replaceText(phPattern_(key), '—'); return; }
-  const start = found.getStartOffset();
-  text.deleteText(start, found.getEndOffsetInclusive());
-  text.insertText(start, url);
-  text.setLinkUrl(start, start + url.length - 1, url);
+/** Адреса в тексте отчёта (ссылка на ЦИАН, публикации) — кликабельные. */
+function linkifyBody_(body) {
+  let f = body.findText('https?://[^\\s]+');
+  while (f) {
+    const t = f.getElement().asText(), a = f.getStartOffset(), b = f.getEndOffsetInclusive();
+    t.setLinkUrl(a, b, t.getText().slice(a, b + 1));
+    f = body.findText('https?://[^\\s]+', f);
+  }
 }
 
 function phPattern_(key) { return '\\{\\{' + key + '\\}\\}'; }
@@ -2646,7 +2645,7 @@ function ensureObjectFolder_(id, kind) {
  * Шаблон отчёта в формате руководителя. Создаётся один раз в 02_ШАБЛОНЫ; дальше вёрстку (шрифты, логотип,
  * отступы) можно менять прямо в Google Docs — метки {{…}} не удаляйте.
  */
-const REPORT_TEMPLATE_VERSION = '3'; // 2: без строки «Приложение №1 к Договору № … от …»; 3: ссылка на онлайн-отчёт CRM
+const REPORT_TEMPLATE_VERSION = '4'; // 2: без строки «Приложение №1 к Договору № … от …»; 4: раздел 4 «Реклама на площадках»
 
 function ensureReportTemplate_() {
   const id = String(cfgGet_('TEMPLATE_REPORT_ID') || '');
@@ -2694,7 +2693,6 @@ function buildReportTemplate_(doc) {
     ['Объект', '{{OBJECT}}'], ['Заказчик', '{{CUSTOMER}}'], ['Исполнитель', '{{EXECUTOR}}'],
   ]);
   styleReportTable_(info, [170, 320]);
-  b.appendParagraph('Онлайн-отчёт по объекту (обновляется постоянно): {{CRM_LINK}}');
   b.appendParagraph('Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА').setHeading(H.HEADING3);
   styleReportTable_(b.appendTable([['№', 'Действие по плану на эту неделю', 'Статус (выполнено / нет)'], ['{{PLAN_ROWS}}', '', '']]), [40, 330, 120]);
   b.appendParagraph('Итоги недели в цифрах').setHeading(H.HEADING4);
@@ -2703,6 +2701,8 @@ function buildReportTemplate_(doc) {
   styleReportTable_(b.appendTable([['№', 'Заявка', 'Следующий шаг'], ['{{LEADS_ROWS}}', '', '']]), [40, 280, 170]);
   b.appendParagraph('Раздел 3. ПЛАН РАБОТЫ').setHeading(H.HEADING3);
   styleReportTable_(b.appendTable([['№', 'Действие', 'Дата выполнения'], ['{{NEXT_ROWS}}', '', '']]), [40, 300, 150]);
+  b.appendParagraph('Раздел 4. РЕКЛАМА НА ПЛОЩАДКАХ').setHeading(H.HEADING3);
+  b.appendParagraph('{{AD_STATS}}');
   b.appendParagraph('Комментарий').setHeading(H.HEADING4);
   b.appendParagraph('{{COMMENT}}');
   b.appendParagraph('');
@@ -4165,6 +4165,7 @@ function onOpen() {
     .addItem('➜ Обновить статистику соцсетей', 'refreshSocialStats')
     .addItem('➜ Отправить отмеченные в CRM', 'crmSendPending')
     .addItem('➜ Отправить отчёт клиенту в CRM', 'crmSendReport')
+    .addItem('➜ Проверить отчёты по рекламе CRM', 'checkAdReports')
     .addSeparator()
     .addItem('➜ Создать отчёт клиенту', 'createReport')
     .addItem('➜ Обновить PDF отчёта', 'createPdf')
@@ -5176,7 +5177,7 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
     '\nПолученные заявки:\n' + rows('LEADS_ROWS', 'новых заявок нет'),
     '\nПлан работы на следующую неделю:\n' + rows('NEXT_ROWS', 'план не внесён'),
     kv.COMMENT ? '\nКомментарий для клиента:\n' + kv.COMMENT : '',
-    kv.CRM_LINK ? '\nОнлайн-отчёт по объекту: ' + kv.CRM_LINK : '',
+    kv.AD_STATS ? '\nРеклама на площадках:\n' + kv.AD_STATS : '',
     pdfUrl ? '\nPDF отчёта: ' + pdfUrl : '',
   ].filter(Boolean).join('\n');
   const tasks = readTable_('TASK').rows.filter(x => String(x.obj_id) === String(obj.id) && x.task);
@@ -5200,6 +5201,7 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
     notDone.length ? '\nНе выполнено:\n' + notDone.slice(0, 15).map(line).join('\n') : '',
     '\nПросрочено задач: ' + overdue.length + (overdue.length ? '\n' + overdue.slice(0, 10).map(line).join('\n') : ''),
     content,
+    values.adInner ? '\n' + values.adInner : '',
     own ? '\nКомментарий руководителя:\n' + own : '',
   ].filter(Boolean).join('\n');
   return { client: client, inner: inner };
@@ -5231,7 +5233,7 @@ function crmSendReport() {
   const arch = readTable_('ARCH');
   const rows = arch.rows.filter(r => String(r.obj_id) === id && r.week === wk && r.status === REPORT_STATUS.ACTUAL);
   const last = rows[rows.length - 1];
-  const st = sendReportToCrm_(obj, readReportValues_(), last ? last.pdf_link : '', rep.getRange('B6').getValue(), wk);
+  const st = sendReportToCrm_(obj, addAdStats_(readReportValues_(), obj, wk), last ? last.pdf_link : '', rep.getRange('B6').getValue(), wk);
   if (last) writeFields_(arch.sh, 'ARCH', last._row, { crm: st });
   ui.alert('Отчёт → CRM', st || 'CRM не подключена', ui.ButtonSet.OK);
 }
@@ -6777,4 +6779,116 @@ function ensureAgencyDecisionsDoc_() {
   const file = DriveApp.getFileById(doc.getId());
   file.moveTo(root);
   return file;
+}
+
+// ═════════════ 28_AdReport.gs ═════════════
+/**
+ * 28_AdReport — раздел отчёта клиенту «Реклама на площадках» из отчёта по рекламе TopenLab.
+ * Ссылка на отчёт (crm.topnlab.ru/lk/report/…) вставляется в 01_ОБЪЕКТЫ → «Отчёт по рекламе CRM (ссылка)».
+ * Система сама берёт оттуда площадки, просмотры, избранное, показы и ссылку на ЦИАН. Саму ссылку клиенту не отправляем.
+ * Цифры в CRM — накопительные с начала рекламы; «за неделю» считается по снимку прошлой недели.
+ */
+
+const AD_REPORT_API = 'https://ad-p.topnlab.ru/public/report';
+const AD_SITE_NAMES = { CIAN: 'ЦИАН', AVITO: 'Авито', YANDEX: 'Яндекс Недвижимость', BANK: 'Домклик' };
+
+function adReportHash_(url) {
+  const m = /\/report\/([A-Za-z0-9=_%-]+)/.exec(String(url || ''));
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+/** Данные отчёта по рекламе. Из ответа берём только цифры и площадки (там есть и лишние данные — не сохраняем). */
+function fetchAdReport_(url) {
+  const hash = adReportHash_(url);
+  if (!hash) return null;
+  const r = UrlFetchApp.fetch(AD_REPORT_API, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    payload: JSON.stringify({ active_only: true, paid_sites: true, partner_sites: true, hash: hash, period: -1 }),
+  });
+  if (r.getResponseCode() !== 200) throw new Error('отчёт по рекламе CRM: код ' + r.getResponseCode());
+  const j = JSON.parse(r.getContentText());
+  if (j.status !== 'success' || !j.data || !j.data.stats) throw new Error('отчёт по рекламе CRM: нет данных');
+  return adStatsFrom_(j.data);
+}
+
+function adStatsFrom_(d) {
+  const st = d.stats || {}, cfg = d.config || {};
+  const num = x => Number(x) || 0;
+  const sum = o => Object.keys(o || {}).reduce((s, k) => s + num(o[k]), 0);
+  const order = ['CIAN', 'AVITO', 'YANDEX', 'BANK'];
+  const sites = (d.sites || []).filter(s => s.is_active && num(s.ads_count) > 0)
+    .sort((a, b) => {
+      const ia = order.indexOf(a.uid), ib = order.indexOf(b.uid);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || String(a.name).localeCompare(String(b.name));
+    })
+    .map(s => AD_SITE_NAMES[s.uid] || (String(s.name).indexOf('.') > 0 ? s.name : String(s.url_base || s.name).replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')))
+    .filter((x, i, a) => x && a.indexOf(x) === i);
+  const cianSite = (d.sites || []).find(s => s.uid === 'CIAN' && s.url);
+  const since = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(st.in_ad_from || ''));
+  return {
+    entity: String(st.entity_id || ''),
+    since: since ? new Date(Number(since[1]), Number(since[2]) - 1, Number(since[3])) : null,
+    views: 'manual_total_views' in cfg ? num(cfg.manual_total_views) : num(st.views_total),
+    fav: 'manual_total_favorites' in cfg ? num(cfg.manual_total_favorites) : sum(st.favorites),
+    shows: 'manual_successful_showing_count' in cfg ? num(cfg.manual_successful_showing_count) : num(st.successful_showing_count),
+    sites: sites,
+    cian: st.cian_url || (cianSite ? cianSite.url : ''),
+    spend: num(st.price_total),
+  };
+}
+
+/** Строки раздела для клиента + строка для руководителя. Снимок цифр недели сохраняется для расчёта «за неделю». */
+function adReportPart_(obj, wk) {
+  if (!obj || !obj.crm_report_link) return null;
+  const a = fetchAdReport_(obj.crm_report_link);
+  if (!a) return null;
+  if (a.entity && isCrmId_(obj.id) && a.entity !== String(obj.id)) {
+    throw new Error('ссылка на отчёт по рекламе от другого объекта CRM (' + a.entity + '), а у объекта ID ' + obj.id);
+  }
+  const props = PropertiesService.getDocumentProperties();
+  const key = 'AD_SNAP_' + obj.id;
+  let snaps = {};
+  try { snaps = JSON.parse(props.getProperty(key) || '{}'); } catch (e) { snaps = {}; }
+  const prevWk = Object.keys(snaps).filter(k => k < wk).sort().pop();
+  const prev = prevWk ? snaps[prevWk] : null;
+  snaps[wk] = { v: a.views, f: a.fav, s: a.shows };
+  Object.keys(snaps).sort().slice(0, -26).forEach(k => delete snaps[k]);
+  props.setProperty(key, JSON.stringify(snaps));
+  const fmt = n => Number(n).toLocaleString('ru-RU');
+  const plus = (cur, k) => prev ? ' (за неделю +' + fmt(Math.max(0, cur - (prev[k] || 0))) + ')' : '';
+  const client = [
+    a.sites.length ? 'Объявление размещено' + (a.since ? ' с ' + fmtDate_(a.since) : '') + ' на площадках (' + a.sites.length + '): ' + a.sites.join(', ') : '',
+    'Просмотры объявлений: ' + fmt(a.views) + plus(a.views, 'v'),
+    'Добавили в избранное: ' + fmt(a.fav) + plus(a.fav, 'f'),
+    'Показы объекта: ' + fmt(a.shows) + plus(a.shows, 's'),
+    a.cian ? 'Объявление на ЦИАН: ' + a.cian : '',
+  ].filter(Boolean);
+  return { lines: client, inner: 'Реклама: просмотры ' + fmt(a.views) + ', избранное ' + fmt(a.fav) + ', показы ' + fmt(a.shows) + (a.spend ? ', расходы на площадки ' + fmt(a.spend) + ' ₽' : '') };
+}
+
+/** Раздел «Реклама на площадках» в значения отчёта (ошибка — раздел просто не выводится). */
+function addAdStats_(values, obj, wk) {
+  values.kv.AD_STATS = '';
+  try {
+    const p = adReportPart_(obj, wk);
+    if (p) { values.kv.AD_STATS = p.lines.join('\n'); values.adInner = p.inner; }
+  } catch (e) {
+    values.adInner = '⚠ ' + e.message;
+    Logger.log('Реклама ' + (obj && obj.id) + ': ' + e.message);
+  }
+  return values;
+}
+
+/** Меню: проверить ссылки на отчёты по рекламе у всех объектов. */
+function checkAdReports() {
+  const out = [];
+  readTable_('OBJ').rows.filter(o => o.id && o.name && !isServiceObject_(o)).forEach(o => {
+    if (!o.crm_report_link) { out.push('— ' + o.name + ': ссылки нет'); return; }
+    try {
+      const a = fetchAdReport_(o.crm_report_link);
+      if (a.entity && isCrmId_(o.id) && a.entity !== String(o.id)) out.push('⚠ ' + o.name + ': ссылка от другого объекта CRM (' + a.entity + ')');
+      else out.push('✓ ' + o.name + ': площадок ' + a.sites.length + ', просмотры ' + a.views + ', избранное ' + a.fav + ', показы ' + a.shows + (a.cian ? ', ЦИАН есть' : ', ЦИАН нет'));
+    } catch (e) { out.push('⚠ ' + o.name + ': ' + e.message); }
+  });
+  SpreadsheetApp.getUi().alert('Отчёты по рекламе CRM', out.join('\n'), SpreadsheetApp.getUi().ButtonSet.OK);
 }
