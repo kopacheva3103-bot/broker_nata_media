@@ -7,6 +7,7 @@
 const SELFTEST_SHEET = '99_САМОПРОВЕРКА';
 
 function runSelfTest() {
+  if (!requireAdmin_('Запустить самопроверку')) return;
   const ui = SpreadsheetApp.getUi();
   const withDoc = ui.alert('Самопроверка', 'Проверить также создание отчёта (Google Doc + PDF) по примеру? Будет создан тестовый отчёт в папке примера.', ui.ButtonSet.YES_NO) === ui.Button.YES;
   const res = selfTest_({ withDoc: withDoc });

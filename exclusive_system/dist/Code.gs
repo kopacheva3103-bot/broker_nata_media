@@ -793,6 +793,7 @@ function reportLayout_() {
  */
 
 function setupSystem() {
+  if (!requireAdmin_('Установить / обновить систему')) return;
   const start = Date.now();
   let ui = null;
   try { ui = SpreadsheetApp.getUi(); } catch (e) { /* запуск из редактора Apps Script — без диалогов */ }
@@ -829,7 +830,7 @@ function setupSystem() {
   }
   try {
     const nt = protectAll_();
-    if (isOwner_()) log.push('Защита: ID и названия объектов, служебная часть вкладок (' + nt + ') — удалять объекты может только руководитель');
+    if (isOwner_()) log.push('Защита: ID и названия объектов, служебная часть вкладок (' + nt + '), лист 08_НАСТРОЙКИ — удалять объекты, менять настройки, переустанавливать и обновлять систему может только руководитель');
     backupObjectTabs_();
   } catch (err) { warn += '\n\n⚠ Защита: ' + err.message; }
   try { const nd = ensureAllStrategyDocs_(start); if (nd) log.push('Документы «Маркетинговая стратегия» в папках объектов: ' + nd); } catch (err) { warn += '\n\n⚠ Документы стратегии: ' + err.message; }
@@ -1957,6 +1958,7 @@ function createObjectTabs() {
 
 /** Сервис: пересобрать все вкладки (после обновления системы). Данные команды сохраняются. */
 function rebuildObjectTabs() {
+  if (!requireAdmin_('Обновить все вкладки объектов')) return;
   startTabRebuild_();
   const r = tabsWork_();
   applyTabVisibility_();
@@ -3029,6 +3031,7 @@ const EXAMPLE_FILES = {
 };
 
 function loadExampleData() {
+  if (!requireAdmin_('Загрузить пример')) return;
   const ui = SpreadsheetApp.getUi();
   const exists = !!objectById_(EXAMPLE_ID);
   const b = ui.alert('Пример «ЖК Время»', exists
@@ -3511,6 +3514,7 @@ function loadExample_() {
 const SELFTEST_SHEET = '99_САМОПРОВЕРКА';
 
 function runSelfTest() {
+  if (!requireAdmin_('Запустить самопроверку')) return;
   const ui = SpreadsheetApp.getUi();
   const withDoc = ui.alert('Самопроверка', 'Проверить также создание отчёта (Google Doc + PDF) по примеру? Будет создан тестовый отчёт в папке примера.', ui.ButtonSet.YES_NO) === ui.Button.YES;
   const res = selfTest_({ withDoc: withDoc });
@@ -4718,6 +4722,7 @@ function requestCalendarAccess_(force) {
 
 /** Меню: повторно отправить сотрудникам просьбу открыть доступ к календарю. */
 function requestCalendarAccess() {
+  if (!requireAdmin_('Попросить сотрудников открыть доступ к календарю')) return;
   const s = requestCalendarAccess_(true);
   toast_(s.length ? 'Письмо с инструкцией отправлено: ' + s.join(', ') : 'Всем сотрудникам с email доступ к календарю уже открыт.', 'Google Календарь', 8);
 }
@@ -4781,6 +4786,7 @@ function digestJob() {
 }
 
 function enableDailyJobs() {
+  if (!requireAdmin_('Включить автообновление')) return;
   disableDailyJobs_();
   ScriptApp.newTrigger('calendarJob').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('dailyJobs').timeBased().everyDays(1).atHour(7).create();
@@ -4790,6 +4796,7 @@ function enableDailyJobs() {
 }
 
 function disableDailyJobs() {
+  if (!requireAdmin_('Выключить автообновление')) return;
   disableDailyJobs_();
   toast_('Ежедневное обновление выключено.', 'Ежедневное обновление', 5);
 }
@@ -5000,6 +5007,7 @@ function updateThreads_(t, items, res) {
 // ───────────────────────── подключение аккаунтов ─────────────────────────
 
 function connectSocial() {
+  if (!requireAdmin_('Подключить Instagram / Threads')) return;
   const st = socialStatus();
   const html = HtmlService.createHtmlOutput(
     '<div style="font:14px Arial,sans-serif">' +
@@ -5326,6 +5334,7 @@ function crmSendReport() {
 
 /** Меню: тестовый комментарий в карточку объекта — проверить ключ, автора и где комментарий виден в TopenLab. */
 function crmTestNote() {
+  if (!requireAdmin_('Тест: комментарий в карточку CRM')) return;
   const ui = SpreadsheetApp.getUi();
   const cfg = crmConfig_();
   if (!cfg.key || !cfg.user) { ui.alert('Сначала: Сервис → Подключить CRM TopenLab (ключ API и ID пользователя-автора).'); return; }
@@ -5379,6 +5388,7 @@ function crmSendPending() {
 }
 
 function connectCrm() {
+  if (!requireAdmin_('Подключить CRM TopenLab')) return;
   const c = crmConfig_();
   const html = HtmlService.createHtmlOutput(
     '<div style="font:14px Arial,sans-serif">' +
@@ -5845,6 +5855,7 @@ function guessObjectInfo_(text) {
 const AUTO_REP = { DAY: 'FRIDAY', HOUR: 20, BUDGET_MS: 4.5 * 60000 };
 
 function enableAutoReports() {
+  if (!requireAdmin_('Включить автоотчёты')) return;
   disableAutoReports_();
   ScriptApp.newTrigger('autoReportsJob').timeBased().onWeekDay(ScriptApp.WeekDay[AUTO_REP.DAY])
     .atHour(AUTO_REP.HOUR).nearMinute(0).inTimezone(SYS.TZ).create();
@@ -5858,6 +5869,7 @@ function enableAutoReports() {
 }
 
 function disableAutoReports() {
+  if (!requireAdmin_('Выключить автоотчёты')) return;
   disableAutoReports_();
   toast_('Автоотчёты по пятницам выключены.', 'Автоотчёты', 5);
 }
@@ -5982,7 +5994,7 @@ function autoReportsMail_(state) {
  * Защиту ставит только владелец таблицы (установка, «Обновить», автоматические задания владельца).
  */
 
-const PROTECT = { OBJ: 'SYS: Объекты — ID и название (удалять и переименовывать может только руководитель)', TAB: 'SYS: Служебная часть вкладки объекта' };
+const PROTECT = { OBJ: 'SYS: Объекты — ID и название (удалять и переименовывать может только руководитель)', TAB: 'SYS: Служебная часть вкладки объекта', CFG: 'SYS: Настройки системы — только руководитель' };
 const BACKUP_SHEET = '98_КОПИИ_ВКЛАДОК';
 
 function isOwner_() {
@@ -5990,6 +6002,36 @@ function isOwner_() {
     const owner = ss_().getOwner();
     return !!owner && owner.getEmail() === Session.getEffectiveUser().getEmail();
   } catch (e) { return false; }
+}
+
+/** Кто управляет системой: владелец таблицы; если владельца нет (общий диск) — руководитель из 07_СПРАВОЧНИКИ. */
+function adminEmail_() {
+  try { const o = ss_().getOwner(); if (o && o.getEmail()) return o.getEmail(); } catch (e) { /* общий диск */ }
+  try { const r = dictRows_('people').find(x => /руковод/i.test(String(x[1])) && x[2]); if (r) return String(r[2]); } catch (e) { /* нет справочника */ }
+  return '';
+}
+
+/**
+ * Установка, обновление, подключения и автоматизации — только руководитель.
+ * Остальным — сообщение и выход (return false). Вызывать первой строкой в функциях меню «Сервис».
+ */
+function requireAdmin_(what) {
+  const admin = adminEmail_();
+  let me = '';
+  try { me = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail(); } catch (e) { /* нет данных */ }
+  if (!admin || (me && me.toLowerCase() === admin.toLowerCase())) return true;
+  const msg = '«' + what + '» может запускать только руководитель (' + admin + '). Если нужно — напишите руководителю.';
+  try { SpreadsheetApp.getUi().alert('Нет доступа', msg, SpreadsheetApp.getUi().ButtonSet.OK); } catch (e) { Logger.log(msg); }
+  return false;
+}
+
+/** Лист 08_НАСТРОЙКИ — менять может только руководитель (остальные видят, но не правят). */
+function protectSettings_() {
+  if (!isOwner_()) return false;
+  const sh = sheet_('CFG');
+  sh.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => { if (p.getDescription() === PROTECT.CFG) p.remove(); });
+  ownerOnly_(sh.protect().setDescription(PROTECT.CFG));
+  return true;
 }
 
 function ownerOnly_(p) {
@@ -6023,6 +6065,7 @@ function protectObjectTab_(sh) {
 function protectAll_() {
   if (!isOwner_()) return 0;
   protectObjectRows_();
+  try { protectSettings_(); } catch (e) { Logger.log('Защита настроек: ' + e.message); }
   const tabs = objectTabs_();
   tabs.forEach(protectObjectTab_);
   return tabs.length;
@@ -6532,6 +6575,7 @@ function uploadAsSheet_(blob, name, folderId, description) {
 
 /** Меню: обновить шаблон анализа аналогов принудительно. */
 function updateAnalogTemplate() {
+  if (!requireAdmin_('Обновить шаблон анализа аналогов')) return;
   const msg = ensureAnalogTemplate_(true);
   SpreadsheetApp.getUi().alert(msg || 'Папка 02_ШАБЛОНЫ не найдена — запустите «Установить / обновить систему».');
 }
@@ -6824,6 +6868,7 @@ function sendAssistantManual_(force) {
 
 /** Меню: отправить инструкцию ассистенту ещё раз. */
 function sendAssistantManual() {
+  if (!requireAdmin_('Отправить ассистенту инструкцию')) return;
   const s = sendAssistantManual_(true);
   toast_(s.length ? 'Инструкция отправлена: ' + s.join(', ') : 'Не найден документ «' + ASSISTANT_MANUAL_TITLE + '…» или у ассистента нет email в 07_СПРАВОЧНИКИ.', 'Инструкция', 8);
 }

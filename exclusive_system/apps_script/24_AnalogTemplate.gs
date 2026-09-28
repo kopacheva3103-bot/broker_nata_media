@@ -46,6 +46,7 @@ function uploadAsSheet_(blob, name, folderId, description) {
 
 /** Меню: обновить шаблон анализа аналогов принудительно. */
 function updateAnalogTemplate() {
+  if (!requireAdmin_('Обновить шаблон анализа аналогов')) return;
   const msg = ensureAnalogTemplate_(true);
   SpreadsheetApp.getUi().alert(msg || 'Папка 02_ШАБЛОНЫ не найдена — запустите «Установить / обновить систему».');
 }

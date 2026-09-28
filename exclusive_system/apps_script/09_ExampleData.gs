@@ -15,6 +15,7 @@ const EXAMPLE_FILES = {
 };
 
 function loadExampleData() {
+  if (!requireAdmin_('Загрузить пример')) return;
   const ui = SpreadsheetApp.getUi();
   const exists = !!objectById_(EXAMPLE_ID);
   const b = ui.alert('Пример «ЖК Время»', exists

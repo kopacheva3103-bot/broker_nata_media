@@ -11,6 +11,7 @@
 const AUTO_REP = { DAY: 'FRIDAY', HOUR: 20, BUDGET_MS: 4.5 * 60000 };
 
 function enableAutoReports() {
+  if (!requireAdmin_('Включить автоотчёты')) return;
   disableAutoReports_();
   ScriptApp.newTrigger('autoReportsJob').timeBased().onWeekDay(ScriptApp.WeekDay[AUTO_REP.DAY])
     .atHour(AUTO_REP.HOUR).nearMinute(0).inTimezone(SYS.TZ).create();
@@ -24,6 +25,7 @@ function enableAutoReports() {
 }
 
 function disableAutoReports() {
+  if (!requireAdmin_('Выключить автоотчёты')) return;
   disableAutoReports_();
   toast_('Автоотчёты по пятницам выключены.', 'Автоотчёты', 5);
 }

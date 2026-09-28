@@ -137,6 +137,7 @@ function requestCalendarAccess_(force) {
 
 /** Меню: повторно отправить сотрудникам просьбу открыть доступ к календарю. */
 function requestCalendarAccess() {
+  if (!requireAdmin_('Попросить сотрудников открыть доступ к календарю')) return;
   const s = requestCalendarAccess_(true);
   toast_(s.length ? 'Письмо с инструкцией отправлено: ' + s.join(', ') : 'Всем сотрудникам с email доступ к календарю уже открыт.', 'Google Календарь', 8);
 }
@@ -200,6 +201,7 @@ function digestJob() {
 }
 
 function enableDailyJobs() {
+  if (!requireAdmin_('Включить автообновление')) return;
   disableDailyJobs_();
   ScriptApp.newTrigger('calendarJob').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('dailyJobs').timeBased().everyDays(1).atHour(7).create();
@@ -209,6 +211,7 @@ function enableDailyJobs() {
 }
 
 function disableDailyJobs() {
+  if (!requireAdmin_('Выключить автообновление')) return;
   disableDailyJobs_();
   toast_('Ежедневное обновление выключено.', 'Ежедневное обновление', 5);
 }

@@ -175,6 +175,7 @@ function crmSendReport() {
 
 /** Меню: тестовый комментарий в карточку объекта — проверить ключ, автора и где комментарий виден в TopenLab. */
 function crmTestNote() {
+  if (!requireAdmin_('Тест: комментарий в карточку CRM')) return;
   const ui = SpreadsheetApp.getUi();
   const cfg = crmConfig_();
   if (!cfg.key || !cfg.user) { ui.alert('Сначала: Сервис → Подключить CRM TopenLab (ключ API и ID пользователя-автора).'); return; }
@@ -228,6 +229,7 @@ function crmSendPending() {
 }
 
 function connectCrm() {
+  if (!requireAdmin_('Подключить CRM TopenLab')) return;
   const c = crmConfig_();
   const html = HtmlService.createHtmlOutput(
     '<div style="font:14px Arial,sans-serif">' +

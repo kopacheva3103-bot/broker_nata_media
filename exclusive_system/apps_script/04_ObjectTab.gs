@@ -542,6 +542,7 @@ function createObjectTabs() {
 
 /** Сервис: пересобрать все вкладки (после обновления системы). Данные команды сохраняются. */
 function rebuildObjectTabs() {
+  if (!requireAdmin_('Обновить все вкладки объектов')) return;
   startTabRebuild_();
   const r = tabsWork_();
   applyTabVisibility_();

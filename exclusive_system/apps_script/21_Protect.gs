@@ -10,7 +10,7 @@
  * Защиту ставит только владелец таблицы (установка, «Обновить», автоматические задания владельца).
  */
 
-const PROTECT = { OBJ: 'SYS: Объекты — ID и название (удалять и переименовывать может только руководитель)', TAB: 'SYS: Служебная часть вкладки объекта' };
+const PROTECT = { OBJ: 'SYS: Объекты — ID и название (удалять и переименовывать может только руководитель)', TAB: 'SYS: Служебная часть вкладки объекта', CFG: 'SYS: Настройки системы — только руководитель' };
 const BACKUP_SHEET = '98_КОПИИ_ВКЛАДОК';
 
 function isOwner_() {
@@ -18,6 +18,36 @@ function isOwner_() {
     const owner = ss_().getOwner();
     return !!owner && owner.getEmail() === Session.getEffectiveUser().getEmail();
   } catch (e) { return false; }
+}
+
+/** Кто управляет системой: владелец таблицы; если владельца нет (общий диск) — руководитель из 07_СПРАВОЧНИКИ. */
+function adminEmail_() {
+  try { const o = ss_().getOwner(); if (o && o.getEmail()) return o.getEmail(); } catch (e) { /* общий диск */ }
+  try { const r = dictRows_('people').find(x => /руковод/i.test(String(x[1])) && x[2]); if (r) return String(r[2]); } catch (e) { /* нет справочника */ }
+  return '';
+}
+
+/**
+ * Установка, обновление, подключения и автоматизации — только руководитель.
+ * Остальным — сообщение и выход (return false). Вызывать первой строкой в функциях меню «Сервис».
+ */
+function requireAdmin_(what) {
+  const admin = adminEmail_();
+  let me = '';
+  try { me = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail(); } catch (e) { /* нет данных */ }
+  if (!admin || (me && me.toLowerCase() === admin.toLowerCase())) return true;
+  const msg = '«' + what + '» может запускать только руководитель (' + admin + '). Если нужно — напишите руководителю.';
+  try { SpreadsheetApp.getUi().alert('Нет доступа', msg, SpreadsheetApp.getUi().ButtonSet.OK); } catch (e) { Logger.log(msg); }
+  return false;
+}
+
+/** Лист 08_НАСТРОЙКИ — менять может только руководитель (остальные видят, но не правят). */
+function protectSettings_() {
+  if (!isOwner_()) return false;
+  const sh = sheet_('CFG');
+  sh.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => { if (p.getDescription() === PROTECT.CFG) p.remove(); });
+  ownerOnly_(sh.protect().setDescription(PROTECT.CFG));
+  return true;
 }
 
 function ownerOnly_(p) {
@@ -51,6 +81,7 @@ function protectObjectTab_(sh) {
 function protectAll_() {
   if (!isOwner_()) return 0;
   protectObjectRows_();
+  try { protectSettings_(); } catch (e) { Logger.log('Защита настроек: ' + e.message); }
   const tabs = objectTabs_();
   tabs.forEach(protectObjectTab_);
   return tabs.length;

@@ -8,6 +8,7 @@
  */
 
 function setupSystem() {
+  if (!requireAdmin_('Установить / обновить систему')) return;
   const start = Date.now();
   let ui = null;
   try { ui = SpreadsheetApp.getUi(); } catch (e) { /* запуск из редактора Apps Script — без диалогов */ }
@@ -44,7 +45,7 @@ function setupSystem() {
   }
   try {
     const nt = protectAll_();
-    if (isOwner_()) log.push('Защита: ID и названия объектов, служебная часть вкладок (' + nt + ') — удалять объекты может только руководитель');
+    if (isOwner_()) log.push('Защита: ID и названия объектов, служебная часть вкладок (' + nt + '), лист 08_НАСТРОЙКИ — удалять объекты, менять настройки, переустанавливать и обновлять систему может только руководитель');
     backupObjectTabs_();
   } catch (err) { warn += '\n\n⚠ Защита: ' + err.message; }
   try { const nd = ensureAllStrategyDocs_(start); if (nd) log.push('Документы «Маркетинговая стратегия» в папках объектов: ' + nd); } catch (err) { warn += '\n\n⚠ Документы стратегии: ' + err.message; }

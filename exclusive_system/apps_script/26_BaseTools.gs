@@ -214,6 +214,7 @@ function sendAssistantManual_(force) {
 
 /** Меню: отправить инструкцию ассистенту ещё раз. */
 function sendAssistantManual() {
+  if (!requireAdmin_('Отправить ассистенту инструкцию')) return;
   const s = sendAssistantManual_(true);
   toast_(s.length ? 'Инструкция отправлена: ' + s.join(', ') : 'Не найден документ «' + ASSISTANT_MANUAL_TITLE + '…» или у ассистента нет email в 07_СПРАВОЧНИКИ.', 'Инструкция', 8);
 }

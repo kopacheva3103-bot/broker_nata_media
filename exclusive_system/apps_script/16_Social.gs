@@ -199,6 +199,7 @@ function updateThreads_(t, items, res) {
 // ───────────────────────── подключение аккаунтов ─────────────────────────
 
 function connectSocial() {
+  if (!requireAdmin_('Подключить Instagram / Threads')) return;
   const st = socialStatus();
   const html = HtmlService.createHtmlOutput(
     '<div style="font:14px Arial,sans-serif">' +
