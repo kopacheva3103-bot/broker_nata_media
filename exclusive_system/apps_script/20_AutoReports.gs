@@ -78,7 +78,7 @@ function autoReportsRun_() {
             rep.getRange('B3').setValue(id + ' · ' + o.name);
             rep.getRange('B4').setValue(label);
             SpreadsheetApp.flush();
-            const st = sendReportToCrm_(o, readReportValues_(), manual.pdf_link, '', state.wk);
+            const st = sendReportToCrm_(o, addAdStats_(readReportValues_(), o, state.wk), manual.pdf_link, '', state.wk);
             const a = readTable_('ARCH');
             const row = a.rows.find(r => r._row === manual._row);
             if (row && st) writeFields_(a.sh, 'ARCH', row._row, { crm: st });

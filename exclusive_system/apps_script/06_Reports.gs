@@ -8,24 +8,52 @@
  * Клиент доступа к таблице не получает — только PDF.
  */
 
+/** Меню «Создать отчёт клиенту»: окно выбора объекта и недели (по умолчанию — объект текущей вкладки / строки). */
 function createReport() {
-  const ui = SpreadsheetApp.getUi();
-  SpreadsheetApp.flush();
   const rep = sheet_('REP');
-  const id = String(rep.getRange('E3').getValue() || '');
-  const wk = String(rep.getRange('E4').getValue() || '');
-  if (!id || !wk) {
-    rep.activate();
-    ui.alert('Выберите объект и неделю в листе ' + SHEET_NAMES.REP + ' (ячейки B3 и B4), затем повторите.');
-    return;
+  const objs = readTable_('OBJ').rows.filter(o => o.id && o.name && !isServiceObject_(o));
+  const cur = String(selectedObjectId_() || rep.getRange('E3').getValue() || '');
+  const weeks = dictRows_('weeks').map(r => String(r[3] || '')).filter(Boolean);
+  const nowWk = isoWeekKey_(today_());
+  const curWk = weeks.find(w => w.indexOf(nowWk) === 0) || String(rep.getRange('B4').getValue() || '');
+  const opt = (v, t, sel) => '<option value="' + htmlEscape_(v) + '"' + (sel ? ' selected' : '') + '>' + htmlEscape_(t) + '</option>';
+  const html = HtmlService.createHtmlOutput(
+    '<div style="font:14px Arial,sans-serif">' +
+    '<div style="margin:6px 0">Объект:<br><select id="o" style="width:100%">' + objs.map(o => opt(o.id, o.name + ' (' + o.id + ')', String(o.id) === cur)).join('') + '</select></div>' +
+    '<div style="margin:6px 0">Неделя:<br><select id="w" style="width:100%">' + weeks.map(w => opt(w, w, w === curWk)).join('') + '</select></div>' +
+    '<div style="margin:6px 0">Комментарий для клиента (необязательно):<br><textarea id="c" style="width:100%;height:60px"></textarea></div>' +
+    '<div style="margin:6px 0">Комментарий для себя — только в CRM (необязательно):<br><textarea id="i" style="width:100%;height:45px"></textarea></div>' +
+    '<button id="b" onclick="go(false)">Создать отчёт</button> <span id="s" style="color:#80868B"></span>' +
+    '<div id="r" style="margin-top:10px"></div></div>' +
+    '<script>' +
+    'function go(force){var b=document.getElementById("b");b.disabled=true;document.getElementById("s").textContent="Собираю отчёт… (до минуты)";document.getElementById("r").innerHTML="";' +
+    'google.script.run.withSuccessHandler(function(x){b.disabled=false;document.getElementById("s").textContent="";' +
+    'if(x.exists){if(confirm("Отчёт по этому объекту за эту неделю уже есть. Создать новую версию? Прежняя останется в архиве со статусом «Заменён».")){go(true);}return;}' +
+    'document.getElementById("r").innerHTML="<b>Готово: "+x.name+"</b><br><a target=_blank href=\'"+x.docUrl+"\'>Google Doc</a> · <a target=_blank href=\'"+x.pdfUrl+"\'>PDF для клиента</a> · <a target=_blank href=\'"+x.folderUrl+"\'>Папка отчётов</a>"+(x.crm?"<br>"+x.crm:"");})' +
+    '.withFailureHandler(function(e){b.disabled=false;document.getElementById("s").textContent="";document.getElementById("r").textContent="Ошибка: "+e.message;})' +
+    '.createReportFor(document.getElementById("o").value,document.getElementById("w").value,document.getElementById("c").value,document.getElementById("i").value,force);}' +
+    '</script>').setWidth(520).setHeight(470);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Отчёт клиенту');
+}
+
+/** Вызывается из окна «Отчёт клиенту»: выставляет объект и неделю в 05_ОТЧЁТ_КЛИЕНТУ и собирает отчёт. */
+function createReportFor(id, weekLabel, comment, internal, force) {
+  const obj = objectById_(id);
+  if (!obj) throw new Error('Объект ' + id + ' не найден');
+  const wk = String(weekLabel || '').split(' ')[0];
+  if (!wk) throw new Error('Не выбрана неделя');
+  if (!force && readTable_('ARCH').rows.some(r => String(r.obj_id) === String(id) && r.week === wk && r.status === REPORT_STATUS.ACTUAL)) return { exists: true };
+  const rep = sheet_('REP');
+  rep.getRange('B3').setValue(obj.id + ' · ' + obj.name);
+  rep.getRange('B4').setValue(weekLabel);
+  rep.getRange('B5').setValue(comment || '');
+  rep.getRange('B6').setValue(internal || '');
+  SpreadsheetApp.flush();
+  if (String(rep.getRange('E3').getValue()) !== String(obj.id) || String(rep.getRange('E4').getValue()) !== wk) {
+    throw new Error('Лист ' + SHEET_NAMES.REP + ' не переключился на объект / неделю — попробуйте ещё раз');
   }
-  const res = generateReport_(id, wk, { interactive: true });
-  if (!res) return;
-  showLinks_('Отчёт готов', [
-    { label: 'Google Doc: ' + res.name, url: res.docUrl },
-    { label: 'PDF для клиента', url: res.pdfUrl },
-    { label: 'Папка отчётов объекта', url: res.folderUrl },
-  ], (res.crm ? res.crm + '. ' : '') + 'Проверьте документ. Если поправите текст в Google Doc — нажмите «Обновить PDF отчёта».');
+  const res = generateReport_(String(obj.id), wk, { interactive: false });
+  return { name: res.name, docUrl: res.docUrl, pdfUrl: res.pdfUrl, folderUrl: res.folderUrl, crm: res.crm || '' };
 }
 
 /** Собирает отчёт. Лист 05_ОТЧЁТ_КЛИЕНТУ должен быть выставлен на этот объект и неделю. */
