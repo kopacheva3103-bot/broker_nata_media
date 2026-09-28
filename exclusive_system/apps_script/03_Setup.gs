@@ -53,6 +53,7 @@ function setupSystem() {
   try { const nb = refreshBaseAudienceLists_(); if (nb) log.push('03_ОБЗВОН_И_КП: списки аудиторий в строках: ' + nb); } catch (err) { warn += '\n\n⚠ Списки аудиторий: ' + err.message; }
   try { if (ensureAgencyObject_()) log.push('Служебный объект «' + AGENCY_NAME + '» (ID ' + AGENCY_ID + ') — для общих задач с оперативок'); } catch (err) { warn += '\n\n⚠ Общие задачи агентства: ' + err.message; }
   try { const tr = ensureJobTriggers_(); if (tr.length) log.push('Автозапуски включены: ' + tr.join(', ')); } catch (err) { warn += '\n\n⚠ Автозапуски: ' + err.message + ' — меню «Сервис» → «Включить автообновление».'; }
+  try { const al = ensureAdLinkTasks_(); if (al) log.push('Задачи ассистенту «ссылка на отчёт по рекламе CRM»: ' + al); } catch (err) { warn += '\n\n⚠ Задачи ссылок на отчёт по рекламе: ' + err.message; }
   try { const mb = backfillMediaTasks_(); if (mb) log.push('Задачи ассистенту «фото и видео на Яндекс Диске» по текущим объектам: ' + mb); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
   try { const c = syncCalendar_(); log.push('Google Календарь: создано событий ' + c.created + ', обновлено ' + c.updated +
     (c.shared.length ? '; напрямую в календарь: ' + c.shared.join(', ') : '') +

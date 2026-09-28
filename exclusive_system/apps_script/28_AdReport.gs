@@ -108,3 +108,50 @@ function checkAdReports() {
   });
   SpreadsheetApp.getUi().alert('Отчёты по рекламе CRM', out.join('\n'), SpreadsheetApp.getUi().ButtonSet.OK);
 }
+
+/** Меню: вставить сразу несколько ссылок на отчёты по рекламе — объект система определит сама (по ID из CRM внутри отчёта). */
+function pasteAdReportLinks() {
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt('Ссылки на отчёты по рекламе CRM',
+    'Вставьте одну или несколько ссылок вида crm.topnlab.ru/lk/report/… (через пробел или с новой строки).\nК какому объекту относится каждая ссылка, система определит сама.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const res = saveAdReportLinks_(r.getResponseText());
+  ui.alert('Ссылки на отчёты по рекламе', res.length ? res.join('\n') : 'Ссылок вида crm.topnlab.ru/lk/report/… не найдено.', ui.ButtonSet.OK);
+}
+
+function saveAdReportLinks_(text) {
+  const links = (String(text || '').match(/https?:\/\/crm\.topnlab\.ru\/lk\/report\/[A-Za-z0-9=_%-]+/g) || []).filter((x, i, a) => a.indexOf(x) === i);
+  const t = readTable_('OBJ');
+  const out = [];
+  links.forEach(url => {
+    try {
+      const a = fetchAdReport_(url);
+      const o = a && t.rows.find(x => String(x.id) === a.entity);
+      if (!o) { out.push('⚠ …' + url.slice(-10) + ': объект CRM ' + (a ? a.entity : '?') + ' не найден в ' + SHEET_NAMES.OBJ); return; }
+      writeFields_(t.sh, 'OBJ', o._row, { crm_report_link: url });
+      out.push('✓ ' + o.name + ': площадок ' + a.sites.length + ', просмотры ' + a.views);
+    } catch (e) { out.push('⚠ …' + url.slice(-10) + ': ' + e.message); }
+  });
+  return out;
+}
+
+const AD_LINK_TASK_MARK = 'отчёт по рекламе CRM';
+const AD_LINK_TASK_TEXT = 'Вставить ссылку на отчёт по рекламе CRM: TopenLab → карточка объекта → «Отчёт по рекламе» → «Скопировать ссылку» → в таблице меню «➜ Вставить ссылки на отчёты по рекламе CRM»';
+
+/** Ассистенту — задача по объектам в работе без ссылки на отчёт по рекламе (одна задача на объект). */
+function ensureAdLinkTasks_() {
+  const tasks = readTable_('TASK').rows;
+  const has = id => tasks.some(x => String(x.obj_id) === String(id) && String(x.task).indexOf(AD_LINK_TASK_MARK) >= 0);
+  const objs = readTable_('OBJ').rows.filter(o => o.id && o.name && !isServiceObject_(o) && o.in_work !== 'НЕТ' && isCrmId_(o.id) && !o.crm_report_link && !has(o.id));
+  if (!objs.length) return 0;
+  const owner = teamDefaults_().assistant || '';
+  const source = dictValues_('task_sources').indexOf('Система') >= 0 ? 'Система' : 'Вручную';
+  const deadline = workdayAfter_(today_(), 1);
+  const cache = {};
+  appendRows_('TASK', objs.map(o => ({
+    id: nextId_('TASK', cache), week: isoWeekKey_(deadline), obj_id: String(o.id), block: 'Отчётность', task: AD_LINK_TASK_TEXT,
+    owner: owner, unit: '', plan: '', deadline: deadline, status: dictFirstByClass_('task_status', CLS.OPEN),
+    to_report: false, source: source, created_at: new Date(), author: 'система',
+  })));
+  return objs.length;
+}

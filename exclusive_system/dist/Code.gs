@@ -838,6 +838,7 @@ function setupSystem() {
   try { const nb = refreshBaseAudienceLists_(); if (nb) log.push('03_ОБЗВОН_И_КП: списки аудиторий в строках: ' + nb); } catch (err) { warn += '\n\n⚠ Списки аудиторий: ' + err.message; }
   try { if (ensureAgencyObject_()) log.push('Служебный объект «' + AGENCY_NAME + '» (ID ' + AGENCY_ID + ') — для общих задач с оперативок'); } catch (err) { warn += '\n\n⚠ Общие задачи агентства: ' + err.message; }
   try { const tr = ensureJobTriggers_(); if (tr.length) log.push('Автозапуски включены: ' + tr.join(', ')); } catch (err) { warn += '\n\n⚠ Автозапуски: ' + err.message + ' — меню «Сервис» → «Включить автообновление».'; }
+  try { const al = ensureAdLinkTasks_(); if (al) log.push('Задачи ассистенту «ссылка на отчёт по рекламе CRM»: ' + al); } catch (err) { warn += '\n\n⚠ Задачи ссылок на отчёт по рекламе: ' + err.message; }
   try { const mb = backfillMediaTasks_(); if (mb) log.push('Задачи ассистенту «фото и видео на Яндекс Диске» по текущим объектам: ' + mb); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
   try { const c = syncCalendar_(); log.push('Google Календарь: создано событий ' + c.created + ', обновлено ' + c.updated +
     (c.shared.length ? '; напрямую в календарь: ' + c.shared.join(', ') : '') +
@@ -4165,6 +4166,7 @@ function onOpen() {
     .addItem('➜ Обновить статистику соцсетей', 'refreshSocialStats')
     .addItem('➜ Отправить отмеченные в CRM', 'crmSendPending')
     .addItem('➜ Отправить отчёт клиенту в CRM', 'crmSendReport')
+    .addItem('➜ Вставить ссылки на отчёты по рекламе CRM', 'pasteAdReportLinks')
     .addItem('➜ Проверить отчёты по рекламе CRM', 'checkAdReports')
     .addSeparator()
     .addItem('➜ Создать отчёт клиенту', 'createReport')
@@ -4668,6 +4670,7 @@ function dailyJobs() {
   try { backupObjectTabs_(); } catch (e) { Logger.log('Копии вкладок: ' + e.message); }
   try { tabsWork_(); protectAll_(); } catch (e) { Logger.log('Вкладки / защита: ' + e.message); }
   try { ensureMediaTasks_(); } catch (e) { Logger.log('Задачи фото и видео: ' + e.message); }
+  try { ensureAdLinkTasks_(); } catch (e) { Logger.log('Задачи ссылок на отчёт по рекламе: ' + e.message); }
   try { scheduleFollowUps_(); } catch (e) { Logger.log('Повторные контакты: ' + e.message); }
   try { refreshIdleAudiences_(); } catch (e) { Logger.log('Аудитории без базы: ' + e.message); }
   try { refreshBaseAudienceLists_(); } catch (e) { Logger.log('Списки аудиторий: ' + e.message); }
@@ -6891,4 +6894,51 @@ function checkAdReports() {
     } catch (e) { out.push('⚠ ' + o.name + ': ' + e.message); }
   });
   SpreadsheetApp.getUi().alert('Отчёты по рекламе CRM', out.join('\n'), SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/** Меню: вставить сразу несколько ссылок на отчёты по рекламе — объект система определит сама (по ID из CRM внутри отчёта). */
+function pasteAdReportLinks() {
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt('Ссылки на отчёты по рекламе CRM',
+    'Вставьте одну или несколько ссылок вида crm.topnlab.ru/lk/report/… (через пробел или с новой строки).\nК какому объекту относится каждая ссылка, система определит сама.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const res = saveAdReportLinks_(r.getResponseText());
+  ui.alert('Ссылки на отчёты по рекламе', res.length ? res.join('\n') : 'Ссылок вида crm.topnlab.ru/lk/report/… не найдено.', ui.ButtonSet.OK);
+}
+
+function saveAdReportLinks_(text) {
+  const links = (String(text || '').match(/https?:\/\/crm\.topnlab\.ru\/lk\/report\/[A-Za-z0-9=_%-]+/g) || []).filter((x, i, a) => a.indexOf(x) === i);
+  const t = readTable_('OBJ');
+  const out = [];
+  links.forEach(url => {
+    try {
+      const a = fetchAdReport_(url);
+      const o = a && t.rows.find(x => String(x.id) === a.entity);
+      if (!o) { out.push('⚠ …' + url.slice(-10) + ': объект CRM ' + (a ? a.entity : '?') + ' не найден в ' + SHEET_NAMES.OBJ); return; }
+      writeFields_(t.sh, 'OBJ', o._row, { crm_report_link: url });
+      out.push('✓ ' + o.name + ': площадок ' + a.sites.length + ', просмотры ' + a.views);
+    } catch (e) { out.push('⚠ …' + url.slice(-10) + ': ' + e.message); }
+  });
+  return out;
+}
+
+const AD_LINK_TASK_MARK = 'отчёт по рекламе CRM';
+const AD_LINK_TASK_TEXT = 'Вставить ссылку на отчёт по рекламе CRM: TopenLab → карточка объекта → «Отчёт по рекламе» → «Скопировать ссылку» → в таблице меню «➜ Вставить ссылки на отчёты по рекламе CRM»';
+
+/** Ассистенту — задача по объектам в работе без ссылки на отчёт по рекламе (одна задача на объект). */
+function ensureAdLinkTasks_() {
+  const tasks = readTable_('TASK').rows;
+  const has = id => tasks.some(x => String(x.obj_id) === String(id) && String(x.task).indexOf(AD_LINK_TASK_MARK) >= 0);
+  const objs = readTable_('OBJ').rows.filter(o => o.id && o.name && !isServiceObject_(o) && o.in_work !== 'НЕТ' && isCrmId_(o.id) && !o.crm_report_link && !has(o.id));
+  if (!objs.length) return 0;
+  const owner = teamDefaults_().assistant || '';
+  const source = dictValues_('task_sources').indexOf('Система') >= 0 ? 'Система' : 'Вручную';
+  const deadline = workdayAfter_(today_(), 1);
+  const cache = {};
+  appendRows_('TASK', objs.map(o => ({
+    id: nextId_('TASK', cache), week: isoWeekKey_(deadline), obj_id: String(o.id), block: 'Отчётность', task: AD_LINK_TASK_TEXT,
+    owner: owner, unit: '', plan: '', deadline: deadline, status: dictFirstByClass_('task_status', CLS.OPEN),
+    to_report: false, source: source, created_at: new Date(), author: 'система',
+  })));
+  return objs.length;
 }
