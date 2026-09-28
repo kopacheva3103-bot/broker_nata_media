@@ -2458,7 +2458,7 @@ function createReport() {
     'function go(force){var b=document.getElementById("b");b.disabled=true;document.getElementById("s").textContent="Собираю отчёт… (до минуты)";document.getElementById("r").innerHTML="";' +
     'google.script.run.withSuccessHandler(function(x){b.disabled=false;document.getElementById("s").textContent="";' +
     'if(x.exists){if(confirm("Отчёт по этому объекту за эту неделю уже есть. Создать новую версию? Прежняя останется в архиве со статусом «Заменён».")){go(true);}return;}' +
-    'document.getElementById("r").innerHTML="<b>Готово: "+x.name+"</b><br><a target=_blank href=\'"+x.docUrl+"\'>Google Doc</a> · <a target=_blank href=\'"+x.pdfUrl+"\'>PDF для клиента</a> · <a target=_blank href=\'"+x.folderUrl+"\'>Папка отчётов</a>"+(x.crm?"<br>"+x.crm:"");})' +
+    'document.getElementById("r").innerHTML="<b>Готово: "+x.name+"</b><br><a target=_blank href=\'"+x.docUrl+"\'>Google Doc</a> · <a target=_blank href=\'"+x.pdfUrl+"\'>PDF для клиента</a> · "+(x.docxUrl?"<a target=_blank href=\'"+x.docxUrl+"\'>Word (.docx)</a> · ":"")+" <a target=_blank href=\'"+x.folderUrl+"\'>Папка отчётов</a>"+(x.crm?"<br>"+x.crm:"");})' +
     '.withFailureHandler(function(e){b.disabled=false;document.getElementById("s").textContent="";document.getElementById("r").textContent="Ошибка: "+e.message;})' +
     '.createReportFor(document.getElementById("o").value,document.getElementById("w").value,document.getElementById("c").value,document.getElementById("i").value,force);}' +
     '</script>').setWidth(520).setHeight(470);
@@ -2482,7 +2482,7 @@ function createReportFor(id, weekLabel, comment, internal, force) {
     throw new Error('Лист ' + SHEET_NAMES.REP + ' не переключился на объект / неделю — попробуйте ещё раз');
   }
   const res = generateReport_(String(obj.id), wk, { interactive: false });
-  return { name: res.name, docUrl: res.docUrl, pdfUrl: res.pdfUrl, folderUrl: res.folderUrl, crm: res.crm || '' };
+  return { name: res.name, docUrl: res.docUrl, pdfUrl: res.pdfUrl, docxUrl: res.docxUrl || '', folderUrl: res.folderUrl, crm: res.crm || '' };
 }
 
 /** Собирает отчёт. Лист 05_ОТЧЁТ_КЛИЕНТУ должен быть выставлен на этот объект и неделю. */
@@ -2515,6 +2515,8 @@ function generateReport_(id, wk, opts) {
   fillReportDoc_(doc, values);
   doc.saveAndClose();
   const pdf = folder.createFile(copy.getAs(MimeType.PDF)).setName(name + '.pdf');
+  let docx = null;
+  try { docx = exportDocx_(copy.getId(), folder, name); } catch (e) { Logger.log('Word: ' + e.message); }
 
   appendRow_('ARCH', {
     ts: new Date(), obj_id: id, obj_name: obj.name, report_no: values.kv.REPORT_NO, week: wk, period: values.kv.PERIOD,
@@ -2524,7 +2526,7 @@ function generateReport_(id, wk, opts) {
   let crm = '';
   try { crm = sendReportToCrm_(obj, values, pdf.getUrl(), sheet_('REP').getRange('B6').getValue(), wk); } catch (e) { crm = '⚠ CRM: ' + e.message; }
   if (crm) { const a = readTable_('ARCH'); const last = a.rows[a.rows.length - 1]; if (last) writeFields_(a.sh, 'ARCH', last._row, { crm: crm }); }
-  return { crm: crm, name: name, docId: copy.getId(), docUrl: copy.getUrl(), pdfId: pdf.getId(), pdfUrl: pdf.getUrl(), folderUrl: folder.getUrl() };
+  return { crm: crm, name: name, docId: copy.getId(), docUrl: copy.getUrl(), pdfId: pdf.getId(), pdfUrl: pdf.getUrl(), docxUrl: docx ? docx.getUrl() : '', folderUrl: folder.getUrl() };
 }
 
 /** Пересоздаёт PDF из (возможно отредактированного) Google Doc последнего отчёта. */
@@ -2837,6 +2839,15 @@ function oldReportInfo_(name, created) {
     out.week = isoWeekKey_(to);
   }
   return out;
+}
+
+/** Копия отчёта в формате Word (.docx) — рядом с PDF в папке «Отчёты»: скачать, дописать вручную, отправить. */
+function exportDocx_(docId, folder, name) {
+  const r = UrlFetchApp.fetch('https://docs.google.com/document/d/' + docId + '/export?format=docx', {
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true,
+  });
+  if (r.getResponseCode() !== 200) throw new Error('экспорт в Word: код ' + r.getResponseCode());
+  return folder.createFile(r.getBlob().setName(name + '.docx'));
 }
 
 // ═════════════ 07_Planning.gs ═════════════
@@ -6906,6 +6917,8 @@ function adStatsFrom_(d) {
     views: 'manual_total_views' in cfg ? num(cfg.manual_total_views) : num(st.views_total),
     fav: 'manual_total_favorites' in cfg ? num(cfg.manual_total_favorites) : sum(st.favorites),
     shows: 'manual_successful_showing_count' in cfg ? num(cfg.manual_successful_showing_count) : num(st.successful_showing_count),
+    appeals: 'manual_appeals' in cfg ? num(cfg.manual_appeals) : num((d.realty || {}).appeal),
+    appealsOn: cfg.isAppealsVisible !== false,
     sites: sites,
     cian: st.cian_url || (cianSite ? cianSite.url : ''),
     spend: num(st.price_total),
@@ -6926,19 +6939,20 @@ function adReportPart_(obj, wk) {
   try { snaps = JSON.parse(props.getProperty(key) || '{}'); } catch (e) { snaps = {}; }
   const prevWk = Object.keys(snaps).filter(k => k < wk).sort().pop();
   const prev = prevWk ? snaps[prevWk] : null;
-  snaps[wk] = { v: a.views, f: a.fav, s: a.shows };
+  snaps[wk] = { v: a.views, f: a.fav, s: a.shows, a: a.appeals };
   Object.keys(snaps).sort().slice(0, -26).forEach(k => delete snaps[k]);
   props.setProperty(key, JSON.stringify(snaps));
   const fmt = n => Number(n).toLocaleString('ru-RU');
-  const plus = (cur, k) => prev ? ' (за неделю +' + fmt(Math.max(0, cur - (prev[k] || 0))) + ')' : '';
+  const plus = (cur, k) => prev && k in prev ? ' (за неделю +' + fmt(Math.max(0, cur - (prev[k] || 0))) + ')' : '';
   const client = [
     a.sites.length ? 'Объявление размещено' + (a.since ? ' с ' + fmtDate_(a.since) : '') + ' на площадках (' + a.sites.length + '): ' + a.sites.join(', ') : '',
     'Просмотры объявлений: ' + fmt(a.views) + plus(a.views, 'v'),
     'Добавили в избранное: ' + fmt(a.fav) + plus(a.fav, 'f'),
+    a.appealsOn ? 'Обращения по объекту: ' + fmt(a.appeals) + plus(a.appeals, 'a') : '',
     'Показы объекта: ' + fmt(a.shows) + plus(a.shows, 's'),
     a.cian ? 'Объявление на ЦИАН: ' + a.cian : '',
   ].filter(Boolean);
-  return { lines: client, inner: 'Реклама: просмотры ' + fmt(a.views) + ', избранное ' + fmt(a.fav) + ', показы ' + fmt(a.shows) + (a.spend ? ', расходы на площадки ' + fmt(a.spend) + ' ₽' : '') };
+  return { lines: client, inner: 'Реклама: просмотры ' + fmt(a.views) + ', избранное ' + fmt(a.fav) + ', обращения ' + fmt(a.appeals) + ', показы ' + fmt(a.shows) + (a.spend ? ', расходы на площадки ' + fmt(a.spend) + ' ₽' : '') };
 }
 
 /** Раздел «Реклама на площадках» в значения отчёта (ошибка — раздел просто не выводится). */
@@ -6962,7 +6976,7 @@ function checkAdReports() {
     try {
       const a = fetchAdReport_(o.crm_report_link);
       if (a.entity && isCrmId_(o.id) && a.entity !== String(o.id)) out.push('⚠ ' + o.name + ': ссылка от другого объекта CRM (' + a.entity + ')');
-      else out.push('✓ ' + o.name + ': площадок ' + a.sites.length + ', просмотры ' + a.views + ', избранное ' + a.fav + ', показы ' + a.shows + (a.cian ? ', ЦИАН есть' : ', ЦИАН нет'));
+      else out.push('✓ ' + o.name + ': площадок ' + a.sites.length + ', просмотры ' + a.views + ', избранное ' + a.fav + ', обращения ' + a.appeals + ', показы ' + a.shows + (a.cian ? ', ЦИАН есть' : ', ЦИАН нет'));
     } catch (e) { out.push('⚠ ' + o.name + ': ' + e.message); }
   });
   SpreadsheetApp.getUi().alert('Отчёты по рекламе CRM', out.join('\n'), SpreadsheetApp.getUi().ButtonSet.OK);

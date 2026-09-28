@@ -47,6 +47,8 @@ function adStatsFrom_(d) {
     views: 'manual_total_views' in cfg ? num(cfg.manual_total_views) : num(st.views_total),
     fav: 'manual_total_favorites' in cfg ? num(cfg.manual_total_favorites) : sum(st.favorites),
     shows: 'manual_successful_showing_count' in cfg ? num(cfg.manual_successful_showing_count) : num(st.successful_showing_count),
+    appeals: 'manual_appeals' in cfg ? num(cfg.manual_appeals) : num((d.realty || {}).appeal),
+    appealsOn: cfg.isAppealsVisible !== false,
     sites: sites,
     cian: st.cian_url || (cianSite ? cianSite.url : ''),
     spend: num(st.price_total),
@@ -67,19 +69,20 @@ function adReportPart_(obj, wk) {
   try { snaps = JSON.parse(props.getProperty(key) || '{}'); } catch (e) { snaps = {}; }
   const prevWk = Object.keys(snaps).filter(k => k < wk).sort().pop();
   const prev = prevWk ? snaps[prevWk] : null;
-  snaps[wk] = { v: a.views, f: a.fav, s: a.shows };
+  snaps[wk] = { v: a.views, f: a.fav, s: a.shows, a: a.appeals };
   Object.keys(snaps).sort().slice(0, -26).forEach(k => delete snaps[k]);
   props.setProperty(key, JSON.stringify(snaps));
   const fmt = n => Number(n).toLocaleString('ru-RU');
-  const plus = (cur, k) => prev ? ' (за неделю +' + fmt(Math.max(0, cur - (prev[k] || 0))) + ')' : '';
+  const plus = (cur, k) => prev && k in prev ? ' (за неделю +' + fmt(Math.max(0, cur - (prev[k] || 0))) + ')' : '';
   const client = [
     a.sites.length ? 'Объявление размещено' + (a.since ? ' с ' + fmtDate_(a.since) : '') + ' на площадках (' + a.sites.length + '): ' + a.sites.join(', ') : '',
     'Просмотры объявлений: ' + fmt(a.views) + plus(a.views, 'v'),
     'Добавили в избранное: ' + fmt(a.fav) + plus(a.fav, 'f'),
+    a.appealsOn ? 'Обращения по объекту: ' + fmt(a.appeals) + plus(a.appeals, 'a') : '',
     'Показы объекта: ' + fmt(a.shows) + plus(a.shows, 's'),
     a.cian ? 'Объявление на ЦИАН: ' + a.cian : '',
   ].filter(Boolean);
-  return { lines: client, inner: 'Реклама: просмотры ' + fmt(a.views) + ', избранное ' + fmt(a.fav) + ', показы ' + fmt(a.shows) + (a.spend ? ', расходы на площадки ' + fmt(a.spend) + ' ₽' : '') };
+  return { lines: client, inner: 'Реклама: просмотры ' + fmt(a.views) + ', избранное ' + fmt(a.fav) + ', обращения ' + fmt(a.appeals) + ', показы ' + fmt(a.shows) + (a.spend ? ', расходы на площадки ' + fmt(a.spend) + ' ₽' : '') };
 }
 
 /** Раздел «Реклама на площадках» в значения отчёта (ошибка — раздел просто не выводится). */
@@ -103,7 +106,7 @@ function checkAdReports() {
     try {
       const a = fetchAdReport_(o.crm_report_link);
       if (a.entity && isCrmId_(o.id) && a.entity !== String(o.id)) out.push('⚠ ' + o.name + ': ссылка от другого объекта CRM (' + a.entity + ')');
-      else out.push('✓ ' + o.name + ': площадок ' + a.sites.length + ', просмотры ' + a.views + ', избранное ' + a.fav + ', показы ' + a.shows + (a.cian ? ', ЦИАН есть' : ', ЦИАН нет'));
+      else out.push('✓ ' + o.name + ': площадок ' + a.sites.length + ', просмотры ' + a.views + ', избранное ' + a.fav + ', обращения ' + a.appeals + ', показы ' + a.shows + (a.cian ? ', ЦИАН есть' : ', ЦИАН нет'));
     } catch (e) { out.push('⚠ ' + o.name + ': ' + e.message); }
   });
   SpreadsheetApp.getUi().alert('Отчёты по рекламе CRM', out.join('\n'), SpreadsheetApp.getUi().ButtonSet.OK);

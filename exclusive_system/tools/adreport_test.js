@@ -8,7 +8,7 @@ const AD = { status: 'success', data: {
   stats: { entity_id: 144890621, in_ad_from: '2026-09-24 22:42:45', views_total: 101, favorites: { AVITO: 1, CIAN: 0 }, successful_showing_count: 0, price_total: 510, cian_url: 'https://cian.ru/sale/flat/334249801' },
   sites: [{ uid: 'CIAN', name: 'cian.ru', is_active: true, ads_count: 1, url: 'https://cian.ru/sale/flat/334249801' }, { uid: 'AVITO', name: 'avito.ru', is_active: true, ads_count: 1 },
     { uid: 'ZIPAL', name: 'Zipal', is_active: false, ads_count: 1 }, { uid: 'NOVOSEL', name: 'novosel.ru', is_active: true, ads_count: 1 }],
-  config: {}, realty: { owner_phone: [{ phone: 'секрет' }] } } };
+  config: {}, realty: { appeal: 1, owner_phone: [{ phone: 'секрет' }] } } };
 const LINK = 'https://crm.topnlab.ru/lk/report/RVk5aUYvTEST0';
 const X = loadGs({
   SpreadsheetApp: M.SpreadsheetApp,
@@ -50,6 +50,7 @@ ok('папка объекта не тронута', X.objectById_('144890621').f
 const v = X.addAdStats_({ kv: {} }, X.objectById_('144890621'), '2026-W40');
 ok('раздел 4: площадки без неактивных', /площадках \(3\): ЦИАН, Авито, novosel\.ru/.test(v.kv.AD_STATS), v.kv.AD_STATS.split('\n')[0]);
 ok('раздел 4: просмотры/избранное/показы/ЦИАН', /Просмотры объявлений: 101/.test(v.kv.AD_STATS) && /избранное: 1/.test(v.kv.AD_STATS) && /Показы объекта: 0/.test(v.kv.AD_STATS) && /cian\.ru/.test(v.kv.AD_STATS));
+ok('раздел 4: обращения', /Обращения по объекту: 1/.test(v.kv.AD_STATS));
 ok('раздел 4: без телефона собственника и расходов', !/секрет|510/.test(v.kv.AD_STATS));
 ok('руководителю — расходы', /510/.test(v.adInner), v.adInner);
 AD.data.stats.views_total = 150;
