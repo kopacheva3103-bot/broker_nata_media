@@ -111,6 +111,7 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
     '\nВыполнение плана:\n' + rows('PLAN_ROWS', 'задачи на неделю не внесены'),
     '\nПолученные заявки:\n' + rows('LEADS_ROWS', 'новых заявок нет'),
     '\nПлан работы на следующую неделю:\n' + rows('NEXT_ROWS', 'план не внесён'),
+    '\nОжидаем вашего подтверждения:\n' + rows('WAIT_ROWS', 'вопросов нет'),
     kv.COMMENT ? '\nКомментарий для клиента:\n' + kv.COMMENT : '',
     pdfUrl ? '\nPDF отчёта: ' + pdfUrl : '',
   ].filter(Boolean).join('\n');

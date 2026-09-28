@@ -145,7 +145,7 @@ function dictDefs_() {
     {
       key: 'task_blocks', cols: ['Блок стратегии'], values: [
         ['Аналитика и цена'], ['Сценарии использования'], ['Целевые аудитории'], ['КП и материалы'], ['База и рассылки'],
-        ['Каналы и партнёры'], ['Контент'], ['Фото и видео'], ['Объявления'], ['Отчётность'], ['Другое'],
+        ['Каналы и партнёры'], ['Контент'], ['Фото и видео'], ['Объявления'], ['Отчётность'], ['Другое'], ['Ждём от собственника'],
       ],
     },
     { key: 'units', cols: ['Единица', 'Факт из журнала'], values: unitDefs_() },
@@ -236,6 +236,8 @@ function sheetSpecs_() {
       F('tab_name', 'Имя вкладки', 'sys', { helper: true }),
       F('tab_url', 'Адрес вкладки', 'sys', { helper: true, d: '#gid=… — внутренняя ссылка на вкладку объекта.' }),
       F('created_at', 'Создан', 'sys', { helper: true, fmt: 'date' }),
+      F('reports_old', 'Отчётов по старой форме', 'num', { w: 110, d: 'Сколько еженедельных отчётов клиенту отправили до системы (старая форма). Нумерация отчётов из системы продолжится: следующий № = это число + 1.' }),
+      F('reports_old_week', 'Неделя последнего старого отчёта', 'dd', { list: 'D.weeks', d: 'Неделя последнего отчёта по старой форме (например, 2026-W39). Отчёты системы за эту и прошлые недели в нумерацию не входят.' }),
       F('idle_aud', 'Аудитории ★★★ без базы', 'sys', { w: 200, d: 'Аудитории первой волны из вкладки объекта, по которым в 03_ОБЗВОН_И_КП нет ни одной компании. Обновляется каждое утро и после вставки из Claude.' }),
     ],
   };
@@ -667,9 +669,10 @@ function dashLayout_() {
 
 // ───────────────────────── 05_ОТЧЁТ_КЛИЕНТУ ─────────────────────────
 // Формат — как в отчётах руководителя: шапка ИП, «Приложение №1 к Договору», таблица реквизитов,
-// Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА, Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ, Раздел 3. ПЛАН РАБОТЫ.
+// Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА, Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ, Раздел 3. ПЛАН РАБОТЫ, Раздел 4. ОЖИДАЕМ ВАШЕГО ПОДТВЕРЖДЕНИЯ.
 // Период отчёта — рабочая неделя пн–пт.
 
+const WAIT_BLOCK = 'Ждём от собственника'; // задачи этого блока — в разделе 4 отчёта «Ожидаем вашего подтверждения»
 const REP_P = { id: '$E$3', wk: '$E$4', start: '$E$5', end: '$E$6', next: '$E$7', no: '$E$8' };
 const REP_FIRST_ROW = 11;
 
@@ -706,7 +709,7 @@ function reportRows_() {
 /** Таблицы отчёта: строки собираются формулой, в Google Doc вставляются строками таблицы. */
 function reportTables_() {
   const P = REP_P;
-  const tCond = '[[TASK.obj_id]]=' + P.id + ',[[TASK.status_class]]<>"CANCEL",[[TASK.to_report]]=TRUE';
+  const tCond = '[[TASK.obj_id]]=' + P.id + ',[[TASK.status_class]]<>"CANCEL",[[TASK.to_report]]=TRUE,[[TASK.block]]<>"' + WAIT_BLOCK + '"';
   const factOf = 'IF([[TASK.fact]]="",[[TASK.fact_auto]],[[TASK.fact]])';
   const numbered = (n, filter, empty) => '=IFERROR(ARRAY_CONSTRAIN(ARRAYFORMULA(LET(t_rows,' + filter + ',{SEQUENCE(ROWS(t_rows)),t_rows})),' + n + ',3),' + (empty ? '{"—","' + empty + '",""}' : '""') + ')';
   return [
@@ -729,6 +732,12 @@ function reportTables_() {
         'IF(([[TASK.deadline]]="")+([[TASK.deadline]]=' + P.start + '+11),TEXT(' + P.start + '+7,"dd.mm.yyyy")&" – "&TEXT(' + P.start + '+11,"dd.mm.yyyy"),"до "&TEXT([[TASK.deadline]],"dd.mm.yyyy"))},' +
         '[[TASK.week]]=' + P.next + ',' + tCond + ')', 'План на следующую неделю формируется'),
     },
+    {
+      ph: 'WAIT_ROWS', title: 'Раздел 4. ОЖИДАЕМ ВАШЕГО ПОДТВЕРЖДЕНИЯ', rows: 10,
+      cols: ['№', 'Действие', 'Дата выполнения'],
+      f: numbered(10, 'FILTER({[[TASK.task]],IF([[TASK.deadline]]="",TEXT(' + P.start + '+7,"dd.mm.yyyy")&" – "&TEXT(' + P.start + '+11,"dd.mm.yyyy"),"до "&TEXT([[TASK.deadline]],"dd.mm.yyyy"))},' +
+        '[[TASK.obj_id]]=' + P.id + ',[[TASK.block]]="' + WAIT_BLOCK + '",[[TASK.status_class]]="OPEN",[[TASK.to_report]]=TRUE,[[TASK.week]]<=' + P.next + ')', 'Вопросов, требующих вашего решения, нет'),
+    },
   ];
 }
 
@@ -750,7 +759,7 @@ function reportLayout_() {
     ['D5', 'Понедельник', 'E5', '=IFERROR(VLOOKUP(E4,[[D.weeks:tbl]],2,FALSE),"")'],
     ['D6', 'Пятница', 'E6', '=IF(E5="","",E5+4)'],
     ['D7', 'Следующая неделя', 'E7', '=IF(E5="","",YEAR(E5+10)&"-W"&TEXT(ISOWEEKNUM(E5+7),"00"))'],
-    ['D8', '№ отчёта', 'E8', '=IF(E3="","",COUNTIFS([[ARCH.obj_id]],E3,[[ARCH.status]],"' + REPORT_STATUS.ACTUAL + '",[[ARCH.week]],"<>"&E4)+1)'],
+    ['D8', '№ отчёта', 'E8', '=IF(E3="","",IFERROR(VLOOKUP(E3,{[[OBJ.id]],[[OBJ.reports_old]]},2,FALSE)+0,0)+SUMPRODUCT(([[ARCH.obj_id]]=E3)*([[ARCH.status]]="' + REPORT_STATUS.ACTUAL + '")*([[ARCH.week]]<>E4)*([[ARCH.week]]>IFERROR(VLOOKUP(E3,{[[OBJ.id]],[[OBJ.reports_old_week]]},2,FALSE)&"","")))+1)'],
   ].forEach(p => {
     cells.push({ a1: p[0], v: p[1], style: 'muted' });
     cells.push({ a1: p[2], f: p[3], style: 'muted', fmt: (p[2] === 'E5' || p[2] === 'E6') ? 'date' : null });
@@ -2399,7 +2408,7 @@ function appendRows_(code, objs) {
  * 06_Reports — еженедельный отчёт клиенту: Google Doc + PDF + архив.
  *
  * Формат — как в отчётах руководителя (шапка ИП, таблица реквизитов,
- * Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА, Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ, Раздел 3. ПЛАН РАБОТЫ).
+ * Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА, Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ, Раздел 3. ПЛАН РАБОТЫ, Раздел 4. ОЖИДАЕМ ВАШЕГО ПОДТВЕРЖДЕНИЯ).
  * Источник — лист 05_ОТЧЁТ_КЛИЕНТУ (предпросмотр): скрипт берёт оттуда только поля с метками {{…}},
  * поэтому внутренние данные (контакты, звонки, комментарии) в документ попасть не могут.
  * Клиент доступа к таблице не получает — только PDF.
@@ -2629,7 +2638,7 @@ function ensureObjectFolder_(id, kind) {
  * Шаблон отчёта в формате руководителя. Создаётся один раз в 02_ШАБЛОНЫ; дальше вёрстку (шрифты, логотип,
  * отступы) можно менять прямо в Google Docs — метки {{…}} не удаляйте.
  */
-const REPORT_TEMPLATE_VERSION = '2'; // 2: без строки «Приложение №1 к Договору № … от …»
+const REPORT_TEMPLATE_VERSION = '3'; // 2: без строки «Приложение №1 к Договору № … от …»; 3: раздел 4 «Ожидаем вашего подтверждения»
 
 function ensureReportTemplate_() {
   const id = String(cfgGet_('TEMPLATE_REPORT_ID') || '');
@@ -2685,6 +2694,8 @@ function buildReportTemplate_(doc) {
   styleReportTable_(b.appendTable([['№', 'Заявка', 'Следующий шаг'], ['{{LEADS_ROWS}}', '', '']]), [40, 280, 170]);
   b.appendParagraph('Раздел 3. ПЛАН РАБОТЫ').setHeading(H.HEADING3);
   styleReportTable_(b.appendTable([['№', 'Действие', 'Дата выполнения'], ['{{NEXT_ROWS}}', '', '']]), [40, 300, 150]);
+  b.appendParagraph('Раздел 4. ОЖИДАЕМ ВАШЕГО ПОДТВЕРЖДЕНИЯ').setHeading(H.HEADING3);
+  styleReportTable_(b.appendTable([['№', 'Действие', 'Дата выполнения'], ['{{WAIT_ROWS}}', '', '']]), [40, 300, 150]);
   b.appendParagraph('Комментарий').setHeading(H.HEADING4);
   b.appendParagraph('{{COMMENT}}');
   b.appendParagraph('');
@@ -5099,6 +5110,7 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
     '\nВыполнение плана:\n' + rows('PLAN_ROWS', 'задачи на неделю не внесены'),
     '\nПолученные заявки:\n' + rows('LEADS_ROWS', 'новых заявок нет'),
     '\nПлан работы на следующую неделю:\n' + rows('NEXT_ROWS', 'план не внесён'),
+    '\nОжидаем вашего подтверждения:\n' + rows('WAIT_ROWS', 'вопросов нет'),
     kv.COMMENT ? '\nКомментарий для клиента:\n' + kv.COMMENT : '',
     pdfUrl ? '\nPDF отчёта: ' + pdfUrl : '',
   ].filter(Boolean).join('\n');
