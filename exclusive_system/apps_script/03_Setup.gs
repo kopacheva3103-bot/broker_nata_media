@@ -88,6 +88,8 @@ function runSetup_(log) {
   buildSettings_(); log.push(SHEET_NAMES.CFG);
   buildDict_(); log.push(SHEET_NAMES.DICT);
   ['OBJ', 'TASK', 'BASE', 'CONT', 'LIB', 'HIST', 'ARCH'].forEach(code => { buildDataSheet_(code); log.push(SHEET_NAMES[code]); });
+  headerGuard_.ok = {};
+  try { const fx = repairObjShift_(); if (fx) log.push('Исправлено строк 01_ОБЪЕКТЫ после сдвига столбцов: ' + fx); } catch (e) { log.push('⚠ Проверка сдвига 01_ОБЪЕКТЫ: ' + e.message); }
   SpreadsheetApp.flush();
   seedLibrary_();
   buildReportSheet_(); log.push(SHEET_NAMES.REP);
@@ -597,4 +599,30 @@ function installTriggers_() {
     if (t.getHandlerFunction() === 'onEditHandler') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('onEditHandler').forSpreadsheet(ss).onEdit().create();
+}
+
+/**
+ * Разовая починка: версия кода со столбцом рекламы в середине 01_ОБЪЕКТЫ (до «Установить / обновить систему»)
+ * записала «Последний отчёт» → «Дата отчёта», «Дата отчёта» → «Проверка ID», папку → «Стратегия заполнена».
+ */
+function repairObjShift_() {
+  const t = readTable_('OBJ');
+  const cLink = fieldIndex_('OBJ', 'last_report_link'), cDate = fieldIndex_('OBJ', 'last_report_date');
+  const cId = fieldIndex_('OBJ', 'id_check'), cPct = fieldIndex_('OBJ', 'strategy_pct');
+  let n = 0;
+  t.rows.forEach(o => {
+    const r = o._row;
+    const idCell = t.sh.getRange(r, cId);
+    const stray = idCell.getFormula() ? '' : idCell.getValue();
+    const shifted = typeof o.last_report_date === 'string' && /^https?:\/\//.test(o.last_report_date);
+    if (!shifted && !(stray instanceof Date) && !(typeof o.strategy_pct === 'string' && /^https?:/.test(o.strategy_pct))) return;
+    if (shifted) {
+      if (!o.last_report_link) t.sh.getRange(r, cLink).setValue(o.last_report_date);
+      t.sh.getRange(r, cDate).setValue(stray instanceof Date ? stray : '');
+    }
+    if (stray instanceof Date) idCell.clearContent(); // иначе формула «Проверка ID» выдаёт #REF!
+    if (typeof o.strategy_pct === 'string' && /^https?:/.test(o.strategy_pct)) t.sh.getRange(r, cPct).setValue('');
+    n++;
+  });
+  return n;
 }

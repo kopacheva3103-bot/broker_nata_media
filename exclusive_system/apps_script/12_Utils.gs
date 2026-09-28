@@ -133,9 +133,24 @@ function lastDataRow_(sh, spec) {
 }
 
 /** Читает журнал в массив объектов {_row, key: value}. */
+/**
+ * Столбцы листа должны идти в порядке схемы. Если код обновили, а «Установить / обновить систему» не запускали,
+ * порядок может не совпасть — тогда не читаем и не пишем (иначе данные попадут в чужие столбцы).
+ */
+function headerGuard_(code, sh) {
+  headerGuard_.ok = headerGuard_.ok || {};
+  if (headerGuard_.ok[code]) return;
+  const spec = sheetSpecs_()[code];
+  const cur = sh.getRange(1, 1, 1, Math.min(spec.fields.length, sh.getMaxColumns())).getDisplayValues()[0];
+  const bad = spec.fields.find((f, i) => f.kind !== 'f' && cur[i] && cur[i] !== f.title && (f.was || []).indexOf(cur[i]) < 0);
+  if (bad) throw new Error('Лист ' + spec.name + ' не совпадает с обновлённым кодом (столбец «' + bad.title + '»). Запустите МАРКЕТИНГ ОБЪЕКТОВ → Сервис → ⚙ Установить / обновить систему.');
+  headerGuard_.ok[code] = true;
+}
+
 function readTable_(code) {
   const spec = sheetSpecs_()[code];
   const sh = sheet_(code);
+  headerGuard_(code, sh);
   const last = lastDataRow_(sh, spec);
   const rows = [];
   if (last < 2) return { sh: sh, spec: spec, rows: rows };
@@ -151,6 +166,7 @@ function readTable_(code) {
 /** Пишет значения полей строки. Формульные столбцы не трогает (иначе сломается ARRAYFORMULA). */
 function writeFields_(sh, code, row, obj) {
   const spec = sheetSpecs_()[code];
+  headerGuard_(code, sh);
   const cols = Object.keys(obj).map(k => {
     const f = fieldOf_(code, k);
     if (f.kind === 'f') throw new Error('Нельзя писать в формульный столбец ' + f.title);

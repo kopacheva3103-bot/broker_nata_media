@@ -227,7 +227,6 @@ function sheetSpecs_() {
       F('contract_date', 'Дата договора', 'date'),
       F('date_sign', 'Начало работы', 'date', { d: 'Дата начала эксклюзива / работы по объекту.' }),
       F('crm_link', 'Ссылка на CRM', 'link', { w: 110 }),
-      F('crm_report_link', 'Отчёт по рекламе CRM (ссылка)', 'link', { was: ['Онлайн-отчёт CRM для клиента'], w: 110, d: 'Ссылка на отчёт по рекламе из TopenLab (crm.topnlab.ru/lk/report/…). Из неё система берёт площадки, просмотры, избранное, показы и ссылку на ЦИАН для раздела 4 отчёта клиенту. Саму ссылку клиенту не отправляем.' }),
       F('folder_link', 'Папка объекта', 'link', { w: 110, d: 'Можно вставить ссылку на уже существующую папку объекта на Google Диске. Если пусто — папка «Название (ID)» создастся в 01_ОБЪЕКТЫ при первом отчёте.' }),
       F('strategy_pct', 'Стратегия заполнена', 'sys', { fmt: 'pct', d: 'Считается по вкладке объекта: аналоги, цена, сценарии, аудитории, КП, каналы.' }),
       F('last_report_link', 'Последний отчёт', 'sys', { w: 110 }),
@@ -238,6 +237,7 @@ function sheetSpecs_() {
       F('tab_url', 'Адрес вкладки', 'sys', { helper: true, d: '#gid=… — внутренняя ссылка на вкладку объекта.' }),
       F('created_at', 'Создан', 'sys', { helper: true, fmt: 'date' }),
       F('idle_aud', 'Аудитории ★★★ без базы', 'sys', { w: 200, d: 'Аудитории первой волны из вкладки объекта, по которым в 03_ОБЗВОН_И_КП нет ни одной компании. Обновляется каждое утро и после вставки из Claude.' }),
+      F('crm_report_link', 'Отчёт по рекламе CRM (ссылка)', 'link', { was: ['Онлайн-отчёт CRM для клиента'], w: 110, d: 'Ссылка на отчёт по рекламе из TopenLab (crm.topnlab.ru/lk/report/…). Из неё система берёт площадки, просмотры, избранное, показы и ссылку на ЦИАН для раздела 4 отчёта клиенту. Саму ссылку клиенту не отправляем.' }),
     ],
   };
 
@@ -873,6 +873,8 @@ function runSetup_(log) {
   buildSettings_(); log.push(SHEET_NAMES.CFG);
   buildDict_(); log.push(SHEET_NAMES.DICT);
   ['OBJ', 'TASK', 'BASE', 'CONT', 'LIB', 'HIST', 'ARCH'].forEach(code => { buildDataSheet_(code); log.push(SHEET_NAMES[code]); });
+  headerGuard_.ok = {};
+  try { const fx = repairObjShift_(); if (fx) log.push('Исправлено строк 01_ОБЪЕКТЫ после сдвига столбцов: ' + fx); } catch (e) { log.push('⚠ Проверка сдвига 01_ОБЪЕКТЫ: ' + e.message); }
   SpreadsheetApp.flush();
   seedLibrary_();
   buildReportSheet_(); log.push(SHEET_NAMES.REP);
@@ -1382,6 +1384,32 @@ function installTriggers_() {
     if (t.getHandlerFunction() === 'onEditHandler') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('onEditHandler').forSpreadsheet(ss).onEdit().create();
+}
+
+/**
+ * Разовая починка: версия кода со столбцом рекламы в середине 01_ОБЪЕКТЫ (до «Установить / обновить систему»)
+ * записала «Последний отчёт» → «Дата отчёта», «Дата отчёта» → «Проверка ID», папку → «Стратегия заполнена».
+ */
+function repairObjShift_() {
+  const t = readTable_('OBJ');
+  const cLink = fieldIndex_('OBJ', 'last_report_link'), cDate = fieldIndex_('OBJ', 'last_report_date');
+  const cId = fieldIndex_('OBJ', 'id_check'), cPct = fieldIndex_('OBJ', 'strategy_pct');
+  let n = 0;
+  t.rows.forEach(o => {
+    const r = o._row;
+    const idCell = t.sh.getRange(r, cId);
+    const stray = idCell.getFormula() ? '' : idCell.getValue();
+    const shifted = typeof o.last_report_date === 'string' && /^https?:\/\//.test(o.last_report_date);
+    if (!shifted && !(stray instanceof Date) && !(typeof o.strategy_pct === 'string' && /^https?:/.test(o.strategy_pct))) return;
+    if (shifted) {
+      if (!o.last_report_link) t.sh.getRange(r, cLink).setValue(o.last_report_date);
+      t.sh.getRange(r, cDate).setValue(stray instanceof Date ? stray : '');
+    }
+    if (stray instanceof Date) idCell.clearContent(); // иначе формула «Проверка ID» выдаёт #REF!
+    if (typeof o.strategy_pct === 'string' && /^https?:/.test(o.strategy_pct)) t.sh.getRange(r, cPct).setValue('');
+    n++;
+  });
+  return n;
 }
 
 // ═════════════ 04_ObjectTab.gs ═════════════
@@ -3910,9 +3938,24 @@ function lastDataRow_(sh, spec) {
 }
 
 /** Читает журнал в массив объектов {_row, key: value}. */
+/**
+ * Столбцы листа должны идти в порядке схемы. Если код обновили, а «Установить / обновить систему» не запускали,
+ * порядок может не совпасть — тогда не читаем и не пишем (иначе данные попадут в чужие столбцы).
+ */
+function headerGuard_(code, sh) {
+  headerGuard_.ok = headerGuard_.ok || {};
+  if (headerGuard_.ok[code]) return;
+  const spec = sheetSpecs_()[code];
+  const cur = sh.getRange(1, 1, 1, Math.min(spec.fields.length, sh.getMaxColumns())).getDisplayValues()[0];
+  const bad = spec.fields.find((f, i) => f.kind !== 'f' && cur[i] && cur[i] !== f.title && (f.was || []).indexOf(cur[i]) < 0);
+  if (bad) throw new Error('Лист ' + spec.name + ' не совпадает с обновлённым кодом (столбец «' + bad.title + '»). Запустите МАРКЕТИНГ ОБЪЕКТОВ → Сервис → ⚙ Установить / обновить систему.');
+  headerGuard_.ok[code] = true;
+}
+
 function readTable_(code) {
   const spec = sheetSpecs_()[code];
   const sh = sheet_(code);
+  headerGuard_(code, sh);
   const last = lastDataRow_(sh, spec);
   const rows = [];
   if (last < 2) return { sh: sh, spec: spec, rows: rows };
@@ -3928,6 +3971,7 @@ function readTable_(code) {
 /** Пишет значения полей строки. Формульные столбцы не трогает (иначе сломается ARRAYFORMULA). */
 function writeFields_(sh, code, row, obj) {
   const spec = sheetSpecs_()[code];
+  headerGuard_(code, sh);
   const cols = Object.keys(obj).map(k => {
     const f = fieldOf_(code, k);
     if (f.kind === 'f') throw new Error('Нельзя писать в формульный столбец ' + f.title);

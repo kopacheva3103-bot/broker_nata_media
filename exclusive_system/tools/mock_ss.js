@@ -21,6 +21,8 @@ function makeSS() {
         setValues: vals => { vals.forEach((row, i) => row.forEach((v, j) => { S.cells[k(r + i, c + j)] = (typeof v === 'string' && v[0] === '=') ? { f: v } : { v }; })); return p; },
         setValue: v => { S.cells[k(r, c)] = (typeof v === 'string' && v[0] === '=') ? { f: v } : { v }; return p; },
         setFormula: f => { S.cells[k(r, c)] = { f }; return p; },
+        getFormula: () => { const v = S.cells[k(r, c)]; return v && v.f ? v.f : ''; },
+        clearContent: () => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) delete S.cells[k(r + i, c + j)]; return p; },
         setRichTextValues: vals => { vals.forEach((row, i) => row.forEach((v, j) => { S.cells[k(r + i, c + j)] = { v }; })); return p; },
         getRow: () => r, getColumn: () => c, getNumRows: () => nr, getNumColumns: () => nc, getLastRow: () => r + nr - 1, getLastColumn: () => c + nc - 1,
         getSheet: () => sh,
