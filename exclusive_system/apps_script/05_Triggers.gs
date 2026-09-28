@@ -144,7 +144,7 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
       });
     });
     if (Object.keys(upd).length) writeFields_(sh, code, row, upd);
-    if (code === 'OBJ' && o.id && o.name && (isNew || !o.tab_url || editedKeys.indexOf('id') >= 0 || editedKeys.indexOf('name') >= 0)) {
+    if (code === 'OBJ' && o.id && o.name && !isServiceObject_(o) && (isNew || !o.tab_url || editedKeys.indexOf('id') >= 0 || editedKeys.indexOf('name') >= 0)) {
       o._row = row;
       tabSync.push(o);
     }

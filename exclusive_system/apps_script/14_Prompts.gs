@@ -44,6 +44,13 @@ function getPromptText(objId, libId, audience) {
   let text = String(p.text || '');
   text = text.replace(/\{объекты\}/g, readTable_('OBJ').rows.filter(o => o.id && o.name && o.in_work !== 'НЕТ').map(o => o.id + ' — ' + o.name).join('; '));
   text = text.replace(/\{сотрудники\}/g, dictValues_('people').join(', '));
+  if (text.indexOf('{сегодня}') >= 0) text = text.replace(/\{сегодня\}/g, fmtDate_(today_()) + ' (' + ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'][today_().getDay()] + ')');
+  if (text.indexOf('{открытые задачи}') >= 0) {
+    const names = {};
+    readTable_('OBJ').rows.forEach(o => { names[String(o.id)] = o.name; });
+    const open = readTable_('TASK').rows.filter(t => t.task && (t.status ? dictClassOf_('task_status', t.status) : CLS.OPEN) === CLS.OPEN);
+    text = text.replace(/\{открытые задачи\}/g, open.length ? open.map(t => '• ' + t.obj_id + ' (' + (names[String(t.obj_id)] || '') + '): ' + t.task + ' — ' + (t.owner || '—') + ', срок ' + fmtDate_(t.deadline)).join('\n') : '(нет)');
+  }
   text = text.replace(/\{чек-листы\}/g, readTable_('LIB').rows.filter(r => r.kind === 'Чек-лист' && r.title).map(r => r.title).join('; '));
   if (text.indexOf('{промпт серии рилс из документа}') >= 0) { const doc = promptFromDoc_(cfgGet_('REELS_PROMPT_DOC') || findReelsPromptDoc_()); text = text.replace('{промпт серии рилс из документа}', () => doc); }
   if (text.indexOf('{финальный блок объявления}') >= 0) {
@@ -139,18 +146,38 @@ function importMeetingTasks() {
   SpreadsheetApp.getUi().showModalDialog(html, 'Задачи с оперативки');
 }
 
+/** Уже есть открытая задача с тем же текстом по этому объекту — не вносим повторно. */
+function dropDuplicateTasks_(r) {
+  const norm = x => String(x || '').trim().toLowerCase().replace(/[«»"'.,:;!?()]/g, '').replace(/\s+/g, ' ');
+  const open = {};
+  readTable_('TASK').rows.forEach(t => {
+    const cls = t.status ? dictClassOf_('task_status', t.status) : CLS.OPEN;
+    if (t.task && cls === CLS.OPEN) open[String(t.obj_id) + '|' + norm(t.task)] = true;
+  });
+  const dups = [];
+  r.ok = r.ok.filter(o => {
+    const k = String(o.obj_id) + '|' + norm(o.task);
+    if (o.task && open[k]) { dups.push(o.task); return false; }
+    open[k] = true;
+    return true;
+  });
+  r.dups = dups;
+  return r;
+}
+
 function previewMeetingTasks(text) {
-  const r = parseMeetingTasks_(text);
+  const r = dropDuplicateTasks_(parseMeetingTasks_(text));
+  if (r.dups.length) r.errors = r.errors.concat(r.dups.map(t => 'Уже есть в системе, не вносится повторно: ' + t));
   return { ok: r.ok.map(o => ({ obj_id: o.obj_id, task: o.task, owner: o.owner, deadlineText: o.deadline ? fmtDate_(o.deadline) : 'пятница текущей недели', decision: !!o.decision })), errors: r.errors };
 }
 
 function addMeetingTasks(text) {
-  const r = parseMeetingTasks_(text);
+  const r = dropDuplicateTasks_(parseMeetingTasks_(text));
   if (!r.ok.length) return 'Нет задач для внесения.';
   const lock = userLock_();
   try {
     const res = addMeetingTasks_(r);
-    return 'Внесено задач: ' + res.tasks + (res.decisions ? ', решений во вкладки объектов: ' + res.decisions : '') + (r.errors.length ? '. Пропущено строк: ' + r.errors.length : '') + '.';
+    return 'Внесено задач: ' + res.tasks + (res.decisions ? ', решений: ' + res.decisions : '') + (r.dups.length ? '. Уже были в системе (не внесены): ' + r.dups.length : '') + (r.errors.length ? '. Пропущено строк: ' + r.errors.length : '') + '.';
   } finally {
     lock.releaseLock();
   }
@@ -175,7 +202,7 @@ function addMeetingTasks_(r, source) {
   r.ok.filter(o => o.decision).forEach(o => {
     const obj = objectById_(o.obj_id);
     const tab = obj ? findObjectTab_(obj) : null;
-    if (!tab) return;
+    if (!tab) { if (isServiceObject_(obj)) dec++; return; }
     appendTabRow_(tab, 'DEC', [today, o.decision, o.owner || '', o.task || '']);
     hist.push({ sheet: tab.getName(), record_id: 'раздел 7', obj_id: o.obj_id, field: '7. ВЫВОДЫ И РЕШЕНИЯ · с оперативки', old: '', new: o.decision, kind: HIST_KIND.CREATE });
     dec++;

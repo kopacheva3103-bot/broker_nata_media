@@ -138,7 +138,7 @@ function dictDefs_() {
     { key: 'deal_types', cols: ['Сделка'], values: [['Продажа'], ['Аренда']] },
     {
       key: 'obj_status', cols: ['Статус объекта', 'В работе'], values: [
-        ['В работе', 'ДА'], ['Подготовка', 'ДА'], ['Пауза', 'НЕТ'], ['Продан', 'НЕТ'], ['Сдан', 'НЕТ'], ['Договор расторгнут', 'НЕТ'],
+        ['В работе', 'ДА'], ['Подготовка', 'ДА'], ['Пауза', 'НЕТ'], ['Продан', 'НЕТ'], ['Сдан', 'НЕТ'], ['Договор расторгнут', 'НЕТ'], ['Внутреннее', 'НЕТ'],
       ],
     },
     { key: 'people', cols: ['Сотрудник', 'Роль', 'Email'], values: [['Наталья', 'Руководитель', ''], ['Ассистент', 'Ассистент', ''], ['SMM', 'SMM-специалист', '']] },
@@ -835,6 +835,7 @@ function setupSystem() {
   try { const mt = ensureMediaTasks_(); if (mt) log.push('Задачи «фото и видео на Яндекс Диске» новым объектам: ' + mt); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
   try { refreshIdleAudiences_(); } catch (err) { warn += '\n\n⚠ Аудитории без базы: ' + err.message; }
   try { const nb = refreshBaseAudienceLists_(); if (nb) log.push('03_ОБЗВОН_И_КП: списки аудиторий в строках: ' + nb); } catch (err) { warn += '\n\n⚠ Списки аудиторий: ' + err.message; }
+  try { if (ensureAgencyObject_()) log.push('Служебный объект «' + AGENCY_NAME + '» (ID ' + AGENCY_ID + ') — для общих задач с оперативок'); } catch (err) { warn += '\n\n⚠ Общие задачи агентства: ' + err.message; }
   try { const tr = ensureJobTriggers_(); if (tr.length) log.push('Автозапуски включены: ' + tr.join(', ')); } catch (err) { warn += '\n\n⚠ Автозапуски: ' + err.message + ' — меню «Сервис» → «Включить автообновление».'; }
   try { const mb = backfillMediaTasks_(); if (mb) log.push('Задачи ассистенту «фото и видео на Яндекс Диске» по текущим объектам: ' + mb); } catch (err) { warn += '\n\n⚠ Задачи фото и видео: ' + err.message; }
   try { const c = syncCalendar_(); log.push('Google Календарь: создано событий ' + c.created + ', обновлено ' + c.updated +
@@ -1878,7 +1879,7 @@ function tabsWork_(start) {
   const token = tabToken_();
   const res = { created: 0, rebuilt: 0, left: 0 };
   readTable_('OBJ').rows.forEach(o => {
-    if (!o.id || !o.name) return;
+    if (!o.id || !o.name || isServiceObject_(o)) return;
     const sh = findObjectTab_(o);
     const mode = !sh ? 'create' : (!tabIsComplete_(sh) || (pending && String(sh.getRange('A1').getValue()) !== token)) ? 'rebuild' : '';
     if (!mode) return;
@@ -2238,7 +2239,7 @@ function processEditedRows_(sh, spec, r0, rLast, c0, cLast, e) {
       });
     });
     if (Object.keys(upd).length) writeFields_(sh, code, row, upd);
-    if (code === 'OBJ' && o.id && o.name && (isNew || !o.tab_url || editedKeys.indexOf('id') >= 0 || editedKeys.indexOf('name') >= 0)) {
+    if (code === 'OBJ' && o.id && o.name && !isServiceObject_(o) && (isNew || !o.tab_url || editedKeys.indexOf('id') >= 0 || editedKeys.indexOf('name') >= 0)) {
       o._row = row;
       tabSync.push(o);
     }
@@ -3614,8 +3615,27 @@ function libraryDefaults_() {
       '8. ШАГ 5: шаблон еженедельного отчёта собственнику НЕ нужен — отчёт формирует система. Вместо него в конце шага 5 выдай два раздела для вставки в систему (строки через «|», без строки заголовков):\n\n' +
       '## Контент-план\nТема (Ролик N/5: название) | Площадка (Instagram / VK Клипы / Telegram / YouTube Shorts) | Формат (Рилс) | Цель (Найти покупателя / арендатора, Бренд агентства или Все три) | Дата публикации (дд.мм.гггг) | Кто делает | Сценарий — одной фразой\n(строка на каждый ролик и каждую площадку; график — 4–5 публикаций в неделю, серия за 7–10 дней; если SMM несколько — распредели ролики между ними)\n\n' +
       '## Задачи\n{ID объекта} | Блок (Фото и видео или Контент) | Задача | Исполнитель | Единица | План | Срок (дд.мм.гггг)\n(съёмка по шот-листу — 1–2 выезда; озвучка, если есть; монтаж каждого ролика; согласование сценариев и готовых роликов с Натальей до публикации. Исполнитель — из: {сотрудники}; съёмка, монтаж, озвучка — SMM, согласование — Наталья)'],
-    [PR, 'Оперативка → задачи', 'Расшифровка Zoom / заметки встречи → меню «Внести задачи с оперативки»',
-      'Вот расшифровка оперативки агентства недвижимости: {текст}.\nСписок объектов (ID — название): {объекты}. Сотрудники: {сотрудники}.\nВыдели все поручения и решения. Ответ — ТОЛЬКО таблица без пояснений, 8 столбцов через символ «|»:\nID объекта | Блок стратегии | Задача | Исполнитель | Единица | План | Срок | Решение\nПравила: ID объекта — строго из списка; Блок — одно из: Аналитика и цена, Сценарии использования, Целевые аудитории, КП и материалы, База и рассылки, Каналы и партнёры, Контент, Фото и видео, Объявления, Отчётность, Другое; Исполнитель — строго из списка сотрудников; Единица — звонков / КП / ответов / публикаций / писем / встреч / документов / шт или пусто; План — число или пусто; Срок — дд.мм.гггг; Решение — вывод или решение по стратегии объекта, если прозвучал (иначе пусто). Задачу формулируй так, чтобы её можно было показать собственнику объекта.'],
+    [PR, 'Оперативка → задачи', 'Расшифровка Телемоста / Zoom или заметки встречи → ответ целиком в меню «Внести задачи с оперативки»',
+      'Ты — помощник руководителя агентства недвижимости. Ниже — расшифровка оперативки: в ней всё подряд — объекты, рутина агентства, идеи, обсуждения, отвлечения.\n' +
+      'Задача: превратить её в чёткий список задач для системы — без хаоса, без дублей и без лишнего.\n\n' +
+      'ПРАВИЛА\n' +
+      '1. Задача = конкретное действие + исполнитель + срок. Мысли вслух, «надо бы подумать», обсуждения без решения — НЕ задачи (в раздел «На обсуждение»).\n' +
+      '2. Объект — строго по списку (ID — название): {объекты}. Задачи не про конкретный объект (CRM, соцсети агентства, регламенты, документы, найм, обучение, финансы) — ID «АГЕНТСТВО».\n' +
+      '3. Исполнитель — строго из списка: {сотрудники}. Если не прозвучал — поставь по смыслу (базы, звонки, КП, рассылки, документы — ассистент; съёмка, монтаж, публикации — SMM; переговоры, согласования, решения — Наталья) и отметь в разделе «Уточнить».\n' +
+      '4. Срок — дата дд.мм.гггг. Сегодня {сегодня}. «Завтра», «к пятнице», «на этой неделе» переводи в даты. Не прозвучал — пятница этой недели.\n' +
+      '5. Одна задача — одна строка. Похожие объединяй, мелочь не дроби (звонок и письмо одному человеку — одна задача). Если у задачи есть объём — укажи Единицу и План (например, звонков 10).\n' +
+      '6. Не повторяй задачи, которые уже есть в системе (список ниже). Если по ним прозвучало новое (срок, исполнитель, отмена) — в раздел «Изменения по существующим».\n' +
+      '7. Решение — только то, что решили (например, «снижаем цену до…», «первая волна — Внуково-3»). Пиши в столбец «Решение» строки задачи или отдельной строкой без задачи.\n' +
+      '8. Задачи по объектам формулируй так, чтобы их можно было показать собственнику (результат, а не «разобраться»).\n\n' +
+      'ОТВЕТ — строго в таком виде:\n\n' +
+      '## Задачи\n' +
+      'ID объекта | Блок стратегии | Задача | Исполнитель | Единица | План | Срок | Решение\n' +
+      '(Блок — одно из: Аналитика и цена, Сценарии использования, Целевые аудитории, КП и материалы, База и рассылки, Каналы и партнёры, Контент, Фото и видео, Объявления, Отчётность, Другое. Единица — звонков / КП / ответов / публикаций / писем / встреч / документов / шт или пусто. Сначала задачи по объектам, потом АГЕНТСТВО.)\n\n' +
+      '## Изменения по существующим\n(задача из списка ниже — что изменить; если нет — «нет»)\n\n' +
+      '## На обсуждение\n(идеи и вопросы без решения — списком; если нет — «нет»)\n\n' +
+      '## Уточнить\n(что неясно в расшифровке: кто исполнитель, какой объект, какой срок; если нет — «нет»)\n\n' +
+      'УЖЕ ЕСТЬ В СИСТЕМЕ (открытые задачи — не дублировать):\n{открытые задачи}\n\n' +
+      'РАСШИФРОВКА ОПЕРАТИВКИ (вставьте ниже целиком):\n'],
     [RG, 'Регламент недели', 'Вся команда',
       'Пн — оперативка (Zoom), «Создать план недели», задачи по объектам в 02_ЗАДАЧИ.\nЕжедневно — ассистент ведёт 03_ОБЗВОН_И_КП (каждый звонок и КП — строкой, в тот же день); SMM — 04_КОНТЕНТ.\nПт — закрыть статусы задач, внести ручной факт; проверить просрочки.\nПн утром — «Отчёт клиенту» по каждому объекту → проверить → PDF клиенту.\nВ CRM переносим только реально заинтересованных (галочка «Передан в CRM»).'],
     [RG, 'Правила заполнения', 'Вся команда',
@@ -4154,6 +4174,13 @@ function getPromptText(objId, libId, audience) {
   let text = String(p.text || '');
   text = text.replace(/\{объекты\}/g, readTable_('OBJ').rows.filter(o => o.id && o.name && o.in_work !== 'НЕТ').map(o => o.id + ' — ' + o.name).join('; '));
   text = text.replace(/\{сотрудники\}/g, dictValues_('people').join(', '));
+  if (text.indexOf('{сегодня}') >= 0) text = text.replace(/\{сегодня\}/g, fmtDate_(today_()) + ' (' + ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'][today_().getDay()] + ')');
+  if (text.indexOf('{открытые задачи}') >= 0) {
+    const names = {};
+    readTable_('OBJ').rows.forEach(o => { names[String(o.id)] = o.name; });
+    const open = readTable_('TASK').rows.filter(t => t.task && (t.status ? dictClassOf_('task_status', t.status) : CLS.OPEN) === CLS.OPEN);
+    text = text.replace(/\{открытые задачи\}/g, open.length ? open.map(t => '• ' + t.obj_id + ' (' + (names[String(t.obj_id)] || '') + '): ' + t.task + ' — ' + (t.owner || '—') + ', срок ' + fmtDate_(t.deadline)).join('\n') : '(нет)');
+  }
   text = text.replace(/\{чек-листы\}/g, readTable_('LIB').rows.filter(r => r.kind === 'Чек-лист' && r.title).map(r => r.title).join('; '));
   if (text.indexOf('{промпт серии рилс из документа}') >= 0) { const doc = promptFromDoc_(cfgGet_('REELS_PROMPT_DOC') || findReelsPromptDoc_()); text = text.replace('{промпт серии рилс из документа}', () => doc); }
   if (text.indexOf('{финальный блок объявления}') >= 0) {
@@ -4249,18 +4276,38 @@ function importMeetingTasks() {
   SpreadsheetApp.getUi().showModalDialog(html, 'Задачи с оперативки');
 }
 
+/** Уже есть открытая задача с тем же текстом по этому объекту — не вносим повторно. */
+function dropDuplicateTasks_(r) {
+  const norm = x => String(x || '').trim().toLowerCase().replace(/[«»"'.,:;!?()]/g, '').replace(/\s+/g, ' ');
+  const open = {};
+  readTable_('TASK').rows.forEach(t => {
+    const cls = t.status ? dictClassOf_('task_status', t.status) : CLS.OPEN;
+    if (t.task && cls === CLS.OPEN) open[String(t.obj_id) + '|' + norm(t.task)] = true;
+  });
+  const dups = [];
+  r.ok = r.ok.filter(o => {
+    const k = String(o.obj_id) + '|' + norm(o.task);
+    if (o.task && open[k]) { dups.push(o.task); return false; }
+    open[k] = true;
+    return true;
+  });
+  r.dups = dups;
+  return r;
+}
+
 function previewMeetingTasks(text) {
-  const r = parseMeetingTasks_(text);
+  const r = dropDuplicateTasks_(parseMeetingTasks_(text));
+  if (r.dups.length) r.errors = r.errors.concat(r.dups.map(t => 'Уже есть в системе, не вносится повторно: ' + t));
   return { ok: r.ok.map(o => ({ obj_id: o.obj_id, task: o.task, owner: o.owner, deadlineText: o.deadline ? fmtDate_(o.deadline) : 'пятница текущей недели', decision: !!o.decision })), errors: r.errors };
 }
 
 function addMeetingTasks(text) {
-  const r = parseMeetingTasks_(text);
+  const r = dropDuplicateTasks_(parseMeetingTasks_(text));
   if (!r.ok.length) return 'Нет задач для внесения.';
   const lock = userLock_();
   try {
     const res = addMeetingTasks_(r);
-    return 'Внесено задач: ' + res.tasks + (res.decisions ? ', решений во вкладки объектов: ' + res.decisions : '') + (r.errors.length ? '. Пропущено строк: ' + r.errors.length : '') + '.';
+    return 'Внесено задач: ' + res.tasks + (res.decisions ? ', решений: ' + res.decisions : '') + (r.dups.length ? '. Уже были в системе (не внесены): ' + r.dups.length : '') + (r.errors.length ? '. Пропущено строк: ' + r.errors.length : '') + '.';
   } finally {
     lock.releaseLock();
   }
@@ -4285,7 +4332,7 @@ function addMeetingTasks_(r, source) {
   r.ok.filter(o => o.decision).forEach(o => {
     const obj = objectById_(o.obj_id);
     const tab = obj ? findObjectTab_(obj) : null;
-    if (!tab) return;
+    if (!tab) { if (isServiceObject_(obj)) dec++; return; }
     appendTabRow_(tab, 'DEC', [today, o.decision, o.owner || '', o.task || '']);
     hist.push({ sheet: tab.getName(), record_id: 'раздел 7', obj_id: o.obj_id, field: '7. ВЫВОДЫ И РЕШЕНИЯ · с оперативки', old: '', new: o.decision, kind: HIST_KIND.CREATE });
     dec++;
@@ -6217,7 +6264,7 @@ function ensureStrategyDoc_(obj) {
 function appendStrategyDoc_(obj, source, sections) {
   const secs = sections.filter(s => s.lines && s.lines.length);
   if (!secs.length) return '';
-  const file = ensureStrategyDoc_(obj);
+  const file = isServiceObject_(obj) ? ensureAgencyDecisionsDoc_() : ensureStrategyDoc_(obj);
   const doc = DocumentApp.openById(file.getId());
   const b = doc.getBody();
   const who = personByEmail_(userEmail_()) || userEmail_();
@@ -6265,7 +6312,7 @@ function ensureAllStrategyDocs_(start) {
   start = start || Date.now();
   let n = 0;
   readTable_('OBJ').rows.forEach(o => {
-    if (!o.id || !o.name || Date.now() - start > 4 * 60000) return;
+    if (!o.id || !o.name || isServiceObject_(o) || Date.now() - start > 4 * 60000) return;
     try { ensureStrategyDoc_(o); n++; } catch (e) { Logger.log('Стратегия ' + o.id + ': ' + e.message); }
   });
   return n;
@@ -6337,7 +6384,7 @@ const MEDIA_TASK_TEXT = 'Проверить папку объекта на Ян�
 /** Ставит задачу «фото и видео на Яндекс Диске» новым объектам. Возвращает число поставленных задач. */
 function ensureMediaTasks_() {
   const props = PropertiesService.getScriptProperties();
-  const objs = readTable_('OBJ').rows.filter(o => o.id && o.name);
+  const objs = readTable_('OBJ').rows.filter(o => o.id && o.name && !isServiceObject_(o));
   const raw = props.getProperty('MEDIA_TASK_KNOWN');
   if (raw === null) { // первый запуск: текущие объекты запоминаем, задачи не ставим
     props.setProperty('MEDIA_TASK_KNOWN', JSON.stringify(objs.map(o => String(o.id))));
@@ -6614,4 +6661,43 @@ function sendAssistantManual_(force) {
 function sendAssistantManual() {
   const s = sendAssistantManual_(true);
   toast_(s.length ? 'Инструкция отправлена: ' + s.join(', ') : 'Не найден документ «' + ASSISTANT_MANUAL_TITLE + '…» или у ассистента нет email в 07_СПРАВОЧНИКИ.', 'Инструкция', 8);
+}
+
+// ═════════════ 27_Agency.gs ═════════════
+/**
+ * 27_Agency — «Агентство — общие задачи»: служебный объект для рутинных задач с оперативки, не привязанных к объекту
+ * (CRM, соцсети агентства, регламенты, документы, найм, обучение). ID «АГЕНТСТВО», статус «Внутреннее» (не в работе):
+ * без вкладки, папки, отчётов и дэшборда объектов; задачи — в 02_ЗАДАЧИ, календарях и утренней сводке как обычно.
+ * Общие решения с оперативок — в документ «Решения оперативок — общие по агентству» в корневой папке системы.
+ */
+
+const AGENCY_ID = 'АГЕНТСТВО';
+const AGENCY_NAME = 'Агентство — общие задачи';
+const AGENCY_DOC_NAME = 'Решения оперативок — общие по агентству';
+
+function isServiceObject_(o) { return !!o && String(o.id) === AGENCY_ID; }
+
+/** Создаёт служебный объект, если его нет. */
+function ensureAgencyObject_() {
+  if (objectById_(AGENCY_ID)) return false;
+  appendRow_('OBJ', Object.assign({}, teamDefaults_(), { id: AGENCY_ID, name: AGENCY_NAME, status: 'Внутреннее', created_at: today_() }));
+  return true;
+}
+
+/** Документ для общих решений с оперативок (в корневой папке системы). */
+function ensureAgencyDecisionsDoc_() {
+  const root = folderById_(cfgGet_('FOLDER_ROOT_ID'));
+  if (!root) throw new Error('Нет корневой папки системы — «Установить / обновить систему»');
+  const it = root.getFiles();
+  while (it.hasNext()) { const f = it.next(); if (f.getName() === AGENCY_DOC_NAME && !f.isTrashed()) return f; }
+  const doc = DocumentApp.create(AGENCY_DOC_NAME);
+  const b = doc.getBody();
+  b.getParagraphs()[0].setText(AGENCY_DOC_NAME);
+  b.getParagraphs()[0].setHeading(DocumentApp.ParagraphHeading.TITLE);
+  b.appendParagraph('Общие решения с оперативок (не по конкретному объекту). Новые записи добавляются ниже: сначала дата, затем решения.')
+    .editAsText().setItalic(true).setFontSize(10);
+  doc.saveAndClose();
+  const file = DriveApp.getFileById(doc.getId());
+  file.moveTo(root);
+  return file;
 }

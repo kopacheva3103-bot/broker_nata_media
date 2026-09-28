@@ -494,7 +494,7 @@ function tabsWork_(start) {
   const token = tabToken_();
   const res = { created: 0, rebuilt: 0, left: 0 };
   readTable_('OBJ').rows.forEach(o => {
-    if (!o.id || !o.name) return;
+    if (!o.id || !o.name || isServiceObject_(o)) return;
     const sh = findObjectTab_(o);
     const mode = !sh ? 'create' : (!tabIsComplete_(sh) || (pending && String(sh.getRange('A1').getValue()) !== token)) ? 'rebuild' : '';
     if (!mode) return;

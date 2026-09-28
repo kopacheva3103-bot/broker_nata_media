@@ -10,7 +10,7 @@ const MEDIA_TASK_TEXT = 'Проверить папку объекта на Ян�
 /** Ставит задачу «фото и видео на Яндекс Диске» новым объектам. Возвращает число поставленных задач. */
 function ensureMediaTasks_() {
   const props = PropertiesService.getScriptProperties();
-  const objs = readTable_('OBJ').rows.filter(o => o.id && o.name);
+  const objs = readTable_('OBJ').rows.filter(o => o.id && o.name && !isServiceObject_(o));
   const raw = props.getProperty('MEDIA_TASK_KNOWN');
   if (raw === null) { // первый запуск: текущие объекты запоминаем, задачи не ставим
     props.setProperty('MEDIA_TASK_KNOWN', JSON.stringify(objs.map(o => String(o.id))));

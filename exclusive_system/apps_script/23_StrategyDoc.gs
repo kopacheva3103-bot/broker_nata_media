@@ -37,7 +37,7 @@ function ensureStrategyDoc_(obj) {
 function appendStrategyDoc_(obj, source, sections) {
   const secs = sections.filter(s => s.lines && s.lines.length);
   if (!secs.length) return '';
-  const file = ensureStrategyDoc_(obj);
+  const file = isServiceObject_(obj) ? ensureAgencyDecisionsDoc_() : ensureStrategyDoc_(obj);
   const doc = DocumentApp.openById(file.getId());
   const b = doc.getBody();
   const who = personByEmail_(userEmail_()) || userEmail_();
@@ -85,7 +85,7 @@ function ensureAllStrategyDocs_(start) {
   start = start || Date.now();
   let n = 0;
   readTable_('OBJ').rows.forEach(o => {
-    if (!o.id || !o.name || Date.now() - start > 4 * 60000) return;
+    if (!o.id || !o.name || isServiceObject_(o) || Date.now() - start > 4 * 60000) return;
     try { ensureStrategyDoc_(o); n++; } catch (e) { Logger.log('Стратегия ' + o.id + ': ' + e.message); }
   });
   return n;

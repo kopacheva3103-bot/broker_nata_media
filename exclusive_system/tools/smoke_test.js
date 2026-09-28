@@ -520,3 +520,22 @@ console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПр
   console.log('cal request:', X.requestCalendarAccess_().join(','), '| again:', X.requestCalendarAccess_().length, '| mail:', MAILS.map(m => m.to + ' / ' + m.subject).join(' ; '));
 }
 console.log('acl shares:', ACL.length, ACL[0] && ACL[0].replace(/^.*calendars\//, '').slice(0, 90));
+
+// оперативка: служебный объект АГЕНТСТВО, ответ Claude целиком, дубли не вносятся
+{
+  console.log('agency obj:', X.ensureAgencyObject_(), X.ensureAgencyObject_(), '| in_work:', X.objectById_('АГЕНТСТВО').in_work);
+  const lib = X.readTable_('LIB').rows.find(x => x.title === 'Оперативка → задачи');
+  const pt = X.getPromptText('', lib.id, '');
+  console.log('meeting prompt:', /Сегодня \d\d\.\d\d\.\d{4} \(/.test(pt), /УЖЕ ЕСТЬ В СИСТЕМЕ[\s\S]*• /.test(pt), '| left:', (pt.match(/\{[^}]+\}/g) || []).join(','));
+  const ans = ['## Задачи', 'ID объекта | Блок стратегии | Задача | Исполнитель | Единица | План | Срок | Решение',
+    '4801 | База и рассылки | Обзвон сетей стоматологий | Мария | звонков | 10 | 02.10.2026 | Первая волна — стоматологии',
+    'АГЕНТСТВО | Другое | Обновить регламент работы с CRM | Мария | | | 01.10.2026 |',
+    'АГЕНТСТВО | Другое | | | | | | Оперативка по понедельникам в 10:00',
+    '## Изменения по существующим', 'нет', '## На обсуждение', '- идея: подкаст про загородку', '## Уточнить', 'нет'].join('\n');
+  const pv = X.previewMeetingTasks(ans);
+  console.log('meeting preview:', pv.ok.length, '| errors:', pv.errors.join(' / '));
+  console.log(X.addMeetingTasks(ans));
+  console.log('again:', X.addMeetingTasks(ans));
+  const tabs = X.objectTabs_().map(s => s.getName()).filter(n => /АГЕНТСТВО/.test(n));
+  console.log('agency tab:', tabs.length, '| tabsWork:', JSON.stringify(X.tabsWork_()), '| agency doc:', Object.values(DOCS).filter(d => d.file && d.file.getName() === 'Решения оперативок — общие по агентству').length);
+}
