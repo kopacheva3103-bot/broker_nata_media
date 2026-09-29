@@ -131,6 +131,7 @@ function pasteAdReportLinks() {
     'Вставьте одну или несколько ссылок вида crm.topnlab.ru/lk/report/… (через пробел или с новой строки).\nК какому объекту относится каждая ссылка, система определит сама.', ui.ButtonSet.OK_CANCEL);
   if (r.getSelectedButton() !== ui.Button.OK) return;
   const res = saveAdReportLinks_(r.getResponseText());
+  try { const c = closeAdLinkTasks_(); if (c) res.push('Закрыто задач «вставить ссылку»: ' + c); } catch (e) { /* закроются утром */ }
   ui.alert('Ссылки на отчёты по рекламе', res.length ? res.join('\n') : 'Ссылок вида crm.topnlab.ru/lk/report/… не найдено.', ui.ButtonSet.OK);
 }
 
@@ -144,6 +145,7 @@ function saveAdReportLinks_(text) {
       const o = a && t.rows.find(x => String(x.id) === a.entity);
       if (!o) { out.push('⚠ …' + url.slice(-10) + ': объект CRM ' + (a ? a.entity : '?') + ' не найден в ' + SHEET_NAMES.OBJ); return; }
       writeFields_(t.sh, 'OBJ', o._row, { crm_report_link: url });
+      o.crm_report_link = url;
       out.push('✓ ' + o.name + ': площадок ' + a.sites.length + ', просмотры ' + a.views);
     } catch (e) { out.push('⚠ …' + url.slice(-10) + ': ' + e.message); }
   });
@@ -155,6 +157,7 @@ const AD_LINK_TASK_TEXT = 'Вставить ссылку на отчёт по р
 
 /** Ассистенту — задача по объектам в работе без ссылки на отчёт по рекламе (одна задача на объект). */
 function ensureAdLinkTasks_() {
+  closeAdLinkTasks_();
   const tasks = readTable_('TASK').rows;
   const has = id => tasks.some(x => String(x.obj_id) === String(id) && String(x.task).indexOf(AD_LINK_TASK_MARK) >= 0);
   const objs = readTable_('OBJ').rows.filter(o => o.id && o.name && !isServiceObject_(o) && o.in_work !== 'НЕТ' && isCrmId_(o.id) && !o.crm_report_link && !has(o.id));
@@ -169,4 +172,20 @@ function ensureAdLinkTasks_() {
     to_report: false, source: source, created_at: new Date(), author: 'система',
   })));
   return objs.length;
+}
+
+/** Ссылка на отчёт по рекламе уже вставлена — открытая задача «вставить ссылку» закрывается сама. */
+function closeAdLinkTasks_() {
+  const withLink = {};
+  readTable_('OBJ').rows.forEach(o => { if (o.id && o.crm_report_link) withLink[String(o.id)] = true; });
+  const t = readTable_('TASK');
+  const done = dictFirstByClass_('task_status', CLS.DONE);
+  let n = 0;
+  t.rows.forEach(r => {
+    if (!withLink[String(r.obj_id)] || String(r.task).indexOf(AD_LINK_TASK_MARK) < 0) return;
+    if (r.status && dictClassOf_('task_status', r.status) !== CLS.OPEN) return;
+    writeFields_(t.sh, 'TASK', r._row, { status: done, result: 'Ссылка вставлена в 01_ОБЪЕКТЫ' });
+    n++;
+  });
+  return n;
 }

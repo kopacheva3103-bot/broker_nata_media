@@ -60,6 +60,8 @@ X.writeFields_(sh, 'OBJ', 3, { crm_report_link: LINK });
 const v3 = X.addAdStats_({ kv: {} }, X.objectById_('137073408'), '2026-W40');
 ok('ссылка от другого объекта — раздела нет, руководителю ⚠', v3.kv.AD_STATS === '' && /другого объекта/.test(v3.adInner));
 ok('шаблон отчёта содержит раздел 4', /AD_STATS/.test(X.buildReportTemplate_.toString()));
+X.appendRow_('TASK', { id: 'TASK-9001', obj_id: '144890621', task: X.AD_LINK_TASK_TEXT, status: 'Запланировано', week: '2026-W40' });
+ok('задача «вставить ссылку» закрывается сама', X.closeAdLinkTasks_() === 1 && X.readTable_('TASK').rows.find(r => r.id === 'TASK-9001').status === 'Выполнено');
 // защита от сдвига: заголовок не совпадает → понятная ошибка вместо записи в чужой столбец
 sh.getRange(1, X.fieldIndex_('OBJ', 'folder_link')).setValue('Что-то другое');
 X.headerGuard_.ok = {};
