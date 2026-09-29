@@ -313,7 +313,7 @@ console.log('client note:', (n1.note || '').split('\n').slice(0, 3).join(' / '),
 console.log('no crm id:', X.sendReportToCrm_({ id: 'НОВ-002', name: 'x' }, X.readReportValues_(), '', ''));
 // автоотчёты по пятницам: все объекты в работе, пропуск уже созданных, восстановление выбора в 05
 const GEN = [];
-X.autoReportsRun_.generate = (id, wk) => { GEN.push(id + '|' + wk + '|' + X.sheet_('REP').getRange('B3').getValue()); return { pdfUrl: 'https://pdf/' + id, crm: '✓ в CRM' }; };
+X.autoReportsRun_.generate = (id, wk) => { GEN.push(id + '|' + wk + '|' + X.sheet_('REP').getRange('B3').getValue()); return { docUrl: 'https://doc/' + id, crm: '✓ в CRM' }; };
 X.sheet_('REP').getRange('B5').setValue('мой коммент');
 X.autoReportsJob();
 const inWork = X.readTable_('OBJ').rows.filter(o => o.id && o.name).length;

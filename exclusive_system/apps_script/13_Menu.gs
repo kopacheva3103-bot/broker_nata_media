@@ -28,7 +28,6 @@ function onOpen() {
     .addItem('➜ Проверить отчёты по рекламе CRM', 'checkAdReports')
     .addSeparator()
     .addItem('➜ Создать отчёт клиенту', 'createReport')
-    .addItem('➜ Обновить PDF отчёта', 'createPdf')
     .addSeparator()
     .addItem('➜ Дэшборд', 'openDashboard')
     .addItem('➜ Обновить (ID, вкладки, строки)', 'refreshAll')

@@ -9,7 +9,7 @@ const SELFTEST_SHEET = '99_САМОПРОВЕРКА';
 function runSelfTest() {
   if (!requireAdmin_('Запустить самопроверку')) return;
   const ui = SpreadsheetApp.getUi();
-  const withDoc = ui.alert('Самопроверка', 'Проверить также создание отчёта (Google Doc + PDF) по примеру? Будет создан тестовый отчёт в папке примера.', ui.ButtonSet.YES_NO) === ui.Button.YES;
+  const withDoc = ui.alert('Самопроверка', 'Проверить также создание отчёта (Google Документ) по примеру? Будет создан тестовый отчёт в папке примера.', ui.ButtonSet.YES_NO) === ui.Button.YES;
   const res = selfTest_({ withDoc: withDoc });
   const bad = res.filter(r => !r[1]).length;
   ui.alert('Самопроверка', bad ? '✗ Ошибок: ' + bad + '. Подробности — лист ' + SELFTEST_SHEET + '.' : '✓ Все проверки пройдены (' + res.length + ').', ui.ButtonSet.OK);
@@ -79,11 +79,11 @@ function selfTest_(opts) {
       try {
         const r = generateReport_(EXAMPLE_ID, '2026-W38', { interactive: false });
         const text = DocumentApp.openById(r.docId).getBody().getText();
-        check('Отчёт: Google Doc и PDF созданы', r.pdfUrl, r.docUrl);
+        check('Отчёт: Google Документ создан', r.docUrl, r.docUrl);
         check('Отчёт: в документе не осталось меток {{…}}', !/\{\{[A-Z_]+\}\}/.test(text));
         check('Отчёт: в документе «Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА»', text.indexOf('Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА') >= 0);
       } catch (e) {
-        check('Отчёт: Google Doc и PDF созданы', false, e.message);
+        check('Отчёт: Google Документ создан', false, e.message);
       }
     }
     restoreSel_(rep, 'B3', keep[0]);

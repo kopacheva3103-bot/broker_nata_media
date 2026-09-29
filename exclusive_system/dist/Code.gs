@@ -371,7 +371,7 @@ function sheetSpecs_() {
   // ───────────────────────── 10_АРХИВ_ОТЧЁТОВ ─────────────────────────
   S.ARCH = {
     code: 'ARCH', guard: 'ts', frozenCols: 1, readonly: true,
-    about: 'Все отчёты клиентам: номер, период, ссылки на Google Doc и PDF.',
+    about: 'Все отчёты клиентам: номер, период, ссылка на Google Документ (PDF — у старых отчётов).',
     fields: [
       F('ts', 'Создан', 'sys', { fmt: 'datetime', w: 130 }),
       F('obj_id', 'ID объекта', 'sys'),
@@ -743,7 +743,7 @@ function reportLayout_() {
   cells.push({ a1: 'A5', v: 'Комментарий для клиента:', style: 'label' });
   cells.push({ a1: 'B5', v: '', style: 'select', note: 'Необязательно. Если пусто — раздела «Комментарий» в отчёте не будет.' });
   cells.push({ a1: 'A6', v: 'Комментарий для себя (только в CRM):', style: 'label' });
-  cells.push({ a1: 'B6', v: '', style: 'select', note: 'Необязательно. Уходит в карточку объекта в TopenLab вместе с отчётом. В PDF для клиента не попадает.' });
+  cells.push({ a1: 'B6', v: '', style: 'select', note: 'Необязательно. Уходит в карточку объекта в TopenLab вместе с отчётом. В отчёт для клиента не попадает.' });
   cells.push({ a1: 'D2', v: 'Служебное', style: 'muted' });
   [
     ['D3', 'ID объекта', 'E3', '=IFERROR(REGEXEXTRACT(B3,"^(.*?) · "),"")'],
@@ -2430,13 +2430,13 @@ function appendRows_(code, objs) {
 
 // ═════════════ 06_Reports.gs ═════════════
 /**
- * 06_Reports — еженедельный отчёт клиенту: Google Doc + PDF + архив.
+ * 06_Reports — еженедельный отчёт клиенту: Google Документ (единственная актуальная версия, ссылка — клиенту) + архив.
  *
  * Формат — как в отчётах руководителя (шапка ИП, таблица реквизитов,
  * Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА, Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ, Раздел 3. ПЛАН РАБОТЫ, Раздел 4. РЕКЛАМА НА ПЛОЩАДКАХ).
  * Источник — лист 05_ОТЧЁТ_КЛИЕНТУ (предпросмотр): скрипт берёт оттуда только поля с метками {{…}},
  * поэтому внутренние данные (контакты, звонки, комментарии) в документ попасть не могут.
- * Клиент доступа к таблице не получает — только PDF.
+ * Клиент доступа к таблице не получает — только ссылку на Google Документ отчёта (просмотр; скачать в Word — Файл → Скачать).
  */
 
 /** Меню «Создать отчёт клиенту»: окно выбора объекта и недели (по умолчанию — объект текущей вкладки / строки). */
@@ -2460,7 +2460,7 @@ function createReport() {
     'function go(force){var b=document.getElementById("b");b.disabled=true;document.getElementById("s").textContent="Собираю отчёт… (до минуты)";document.getElementById("r").innerHTML="";' +
     'google.script.run.withSuccessHandler(function(x){b.disabled=false;document.getElementById("s").textContent="";' +
     'if(x.exists){if(confirm("Отчёт по этому объекту за эту неделю уже есть. Создать новую версию? Прежняя останется в архиве со статусом «Заменён».")){go(true);}return;}' +
-    'document.getElementById("r").innerHTML="<b>Готово: "+x.name+"</b><br><a target=_blank href=\'"+x.docUrl+"\'>Google Doc</a> · <a target=_blank href=\'"+x.pdfUrl+"\'>PDF для клиента</a> · "+(x.docxUrl?"<a target=_blank href=\'"+x.docxUrl+"\'>Word (.docx)</a> · ":"")+" <a target=_blank href=\'"+x.folderUrl+"\'>Папка отчётов</a>"+(x.crm?"<br>"+x.crm:"");})' +
+    'document.getElementById("r").innerHTML="<b>Готово: "+x.name+"</b><br><a target=_blank href=\'"+x.docUrl+"\'>Отчёт (Google Документ) — эту ссылку клиенту</a> · <a target=_blank href=\'"+x.docxUrl+"\'>Скачать в Word</a> · <a target=_blank href=\'"+x.folderUrl+"\'>Папка отчётов</a>"+(x.crm?"<br>"+x.crm:"");})' +
     '.withFailureHandler(function(e){b.disabled=false;document.getElementById("s").textContent="";document.getElementById("r").textContent="Ошибка: "+e.message;})' +
     '.createReportFor(document.getElementById("o").value,document.getElementById("w").value,document.getElementById("c").value,document.getElementById("i").value,force);}' +
     '</script>').setWidth(520).setHeight(470);
@@ -2484,7 +2484,7 @@ function createReportFor(id, weekLabel, comment, internal, force) {
     throw new Error('Лист ' + SHEET_NAMES.REP + ' не переключился на объект / неделю — попробуйте ещё раз');
   }
   const res = generateReport_(String(obj.id), wk, { interactive: false });
-  return { name: res.name, docUrl: res.docUrl, pdfUrl: res.pdfUrl, docxUrl: res.docxUrl || '', folderUrl: res.folderUrl, crm: res.crm || '' };
+  return { name: res.name, docUrl: res.docUrl, docxUrl: res.docxUrl || '', folderUrl: res.folderUrl, crm: res.crm || '' };
 }
 
 /** Собирает отчёт. Лист 05_ОТЧЁТ_КЛИЕНТУ должен быть выставлен на этот объект и неделю. */
@@ -2516,80 +2516,20 @@ function generateReport_(id, wk, opts) {
   const doc = DocumentApp.openById(copy.getId());
   fillReportDoc_(doc, values);
   doc.saveAndClose();
-  const pdf = folder.createFile(copy.getAs(MimeType.PDF)).setName(name + '.pdf');
-  let docx = null;
-  try { docx = exportDocx_(copy.getId(), folder, name); } catch (e) { Logger.log('Word: ' + e.message); }
+  // PDF и копии не делаем: отчёт — один Google Документ, правки в нём сразу видны по ссылке
+  try { copy.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) { Logger.log('Доступ по ссылке: ' + e.message); }
 
   appendRow_('ARCH', {
     ts: new Date(), obj_id: id, obj_name: obj.name, report_no: values.kv.REPORT_NO, week: wk, period: values.kv.PERIOD,
-    doc_link: copy.getUrl(), pdf_link: pdf.getUrl(), author: userEmail_(), status: REPORT_STATUS.ACTUAL,
+    doc_link: copy.getUrl(), pdf_link: '', author: userEmail_(), status: REPORT_STATUS.ACTUAL,
   });
-  writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { last_report_link: pdf.getUrl(), last_report_date: today_() });
+  writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { last_report_link: copy.getUrl(), last_report_date: today_() });
   let crm = '';
-  try { crm = sendReportToCrm_(obj, values, pdf.getUrl(), sheet_('REP').getRange('B6').getValue(), wk); } catch (e) { crm = '⚠ CRM: ' + e.message; }
+  try { crm = sendReportToCrm_(obj, values, copy.getUrl(), sheet_('REP').getRange('B6').getValue(), wk); } catch (e) { crm = '⚠ CRM: ' + e.message; }
   if (crm) { const a = readTable_('ARCH'); const last = a.rows[a.rows.length - 1]; if (last) writeFields_(a.sh, 'ARCH', last._row, { crm: crm }); }
-  return { crm: crm, name: name, docId: copy.getId(), docUrl: copy.getUrl(), pdfId: pdf.getId(), pdfUrl: pdf.getUrl(), docxUrl: docx ? docx.getUrl() : '', folderUrl: folder.getUrl() };
+  return { crm: crm, name: name, docId: copy.getId(), docUrl: copy.getUrl(), docxUrl: wordExportUrl_(copy.getId()), folderUrl: folder.getUrl() };
 }
 
-/** Пересоздаёт PDF из (возможно отредактированного) Google Doc последнего отчёта. */
-function createPdf() {
-  const ui = SpreadsheetApp.getUi();
-  SpreadsheetApp.flush();
-  const rep = sheet_('REP');
-  const id = String(selectedObjectId_() || rep.getRange('E3').getValue() || '');
-  const wkSel = String(rep.getRange('E4').getValue() || '');
-  const arch = readTable_('ARCH');
-  const all = arch.rows.filter(r => String(r.obj_id) === id && r.status === REPORT_STATUS.ACTUAL && r.doc_link);
-  const same = all.filter(r => r.week === wkSel);
-  const r = (same.length ? same : all).slice(-1)[0];
-  if (!r) {
-    ui.alert('По этому объекту ещё нет отчёта. Встаньте на вкладку объекта (или его строку) и сначала «Создать отчёт клиенту».');
-    return;
-  }
-  const docFile = DriveApp.getFileById(idFromUrl_(r.doc_link));
-  const folder = docFile.getParents().hasNext() ? docFile.getParents().next() : ensureObjectFolder_(id, 'REPORTS');
-  // правки могли быть в Google Doc или в Word-файле отчёта на Диске — берём то, что правили позже
-  let src = docFile, from = 'Google Doc', tmp = null;
-  const docx = editedDocx_(folder, docFile.getName());
-  if (docx && docx.getLastUpdated() > docFile.getLastUpdated()) {
-    tmp = docxToGoogleDoc_(docx, folder);
-    src = tmp; from = 'Word (' + docx.getName() + ')';
-  }
-  try {
-    const old = DriveApp.getFileById(idFromUrl_(r.pdf_link));
-    old.setName(old.getName().replace(/\.pdf$/i, '') + ' (устаревший).pdf');
-  } catch (e) { /* старый PDF мог быть удалён вручную */ }
-  const pdf = folder.createFile(src.getAs(MimeType.PDF)).setName(docFile.getName() + '.pdf');
-  if (tmp) { try { tmp.setTrashed(true); } catch (e) { /* временная копия */ } }
-  writeFields_(arch.sh, 'ARCH', r._row, { pdf_link: pdf.getUrl() });
-  const obj = objectById_(id);
-  if (obj) writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { last_report_link: pdf.getUrl() });
-  showLinks_('PDF обновлён', [{ label: pdf.getName(), url: pdf.getUrl() }],
-    'Собран из: ' + from + '. Старый PDF переименован с пометкой «устаревший» и остался в папке.');
-}
-
-/** Word-файл отчёта «<имя>.docx» в папке, если его правили после создания (иначе null). */
-function editedDocx_(folder, name) {
-  let best = null;
-  const it = folder.getFilesByName(name + '.docx');
-  while (it.hasNext()) {
-    const f = it.next();
-    if (f.isTrashed() || f.getLastUpdated() - f.getDateCreated() < 60000) continue; // только что выгружен — не правили
-    if (!best || f.getLastUpdated() > best.getLastUpdated()) best = f;
-  }
-  return best;
-}
-
-/** Временная Google-копия Word-файла (для PDF). */
-function docxToGoogleDoc_(file, folder) {
-  const r = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + file.getId() + '/copy?fields=id', {
-    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
-    payload: JSON.stringify({ name: file.getName().replace(/\.docx$/i, '') + ' (временно)', mimeType: MimeType.GOOGLE_DOCS, parents: [folder.getId()] }),
-  });
-  if (r.getResponseCode() >= 300) throw new Error('Word → PDF: ' + r.getContentText().slice(0, 200));
-  return DriveApp.getFileById(JSON.parse(r.getContentText()).id);
-}
 
 /** Значения из 05_ОТЧЁТ_КЛИЕНТУ: {kv: {PH: текст}, tables: {PH: [[№, текст, текст]]}}. */
 function readReportValues_() {
@@ -2877,14 +2817,8 @@ function oldReportInfo_(name, created) {
   return out;
 }
 
-/** Копия отчёта в формате Word (.docx) — рядом с PDF в папке «Отчёты»: скачать, дописать вручную, отправить. */
-function exportDocx_(docId, folder, name) {
-  const r = UrlFetchApp.fetch('https://docs.google.com/document/d/' + docId + '/export?format=docx', {
-    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true,
-  });
-  if (r.getResponseCode() !== 200) throw new Error('экспорт в Word: код ' + r.getResponseCode());
-  return folder.createFile(r.getBlob().setName(name + '.docx'));
-}
+/** Ссылка «скачать в Word» — всегда актуальная версия Google Документа отчёта. */
+function wordExportUrl_(docId) { return 'https://docs.google.com/document/d/' + docId + '/export?format=docx'; }
 
 // ═════════════ 07_Planning.gs ═════════════
 /**
@@ -3550,7 +3484,7 @@ const SELFTEST_SHEET = '99_САМОПРОВЕРКА';
 function runSelfTest() {
   if (!requireAdmin_('Запустить самопроверку')) return;
   const ui = SpreadsheetApp.getUi();
-  const withDoc = ui.alert('Самопроверка', 'Проверить также создание отчёта (Google Doc + PDF) по примеру? Будет создан тестовый отчёт в папке примера.', ui.ButtonSet.YES_NO) === ui.Button.YES;
+  const withDoc = ui.alert('Самопроверка', 'Проверить также создание отчёта (Google Документ) по примеру? Будет создан тестовый отчёт в папке примера.', ui.ButtonSet.YES_NO) === ui.Button.YES;
   const res = selfTest_({ withDoc: withDoc });
   const bad = res.filter(r => !r[1]).length;
   ui.alert('Самопроверка', bad ? '✗ Ошибок: ' + bad + '. Подробности — лист ' + SELFTEST_SHEET + '.' : '✓ Все проверки пройдены (' + res.length + ').', ui.ButtonSet.OK);
@@ -3620,11 +3554,11 @@ function selfTest_(opts) {
       try {
         const r = generateReport_(EXAMPLE_ID, '2026-W38', { interactive: false });
         const text = DocumentApp.openById(r.docId).getBody().getText();
-        check('Отчёт: Google Doc и PDF созданы', r.pdfUrl, r.docUrl);
+        check('Отчёт: Google Документ создан', r.docUrl, r.docUrl);
         check('Отчёт: в документе не осталось меток {{…}}', !/\{\{[A-Z_]+\}\}/.test(text));
         check('Отчёт: в документе «Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА»', text.indexOf('Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА') >= 0);
       } catch (e) {
-        check('Отчёт: Google Doc и PDF созданы', false, e.message);
+        check('Отчёт: Google Документ создан', false, e.message);
       }
     }
     restoreSel_(rep, 'B3', keep[0]);
@@ -3818,7 +3752,7 @@ function libraryDefaults_() {
       'УЖЕ ЕСТЬ В СИСТЕМЕ (открытые задачи — не дублировать):\n{открытые задачи}\n\n' +
       'РАСШИФРОВКА ОПЕРАТИВКИ (вставьте ниже целиком):\n'],
     [RG, 'Регламент недели', 'Вся команда',
-      'Пн — оперативка (Zoom), «Создать план недели», задачи по объектам в 02_ЗАДАЧИ.\nЕжедневно — ассистент ведёт 03_ОБЗВОН_И_КП (каждый звонок и КП — строкой, в тот же день); SMM — 04_КОНТЕНТ.\nПт — закрыть статусы задач, внести ручной факт; проверить просрочки.\nПн утром — «Отчёт клиенту» по каждому объекту → проверить → PDF клиенту.\nВ CRM переносим только реально заинтересованных (галочка «Передан в CRM»).'],
+      'Пн — оперативка (Zoom), «Создать план недели», задачи по объектам в 02_ЗАДАЧИ.\nЕжедневно — ассистент ведёт 03_ОБЗВОН_И_КП (каждый звонок и КП — строкой, в тот же день); SMM — 04_КОНТЕНТ.\nПт — закрыть статусы задач, внести ручной факт; проверить просрочки.\nПн утром — «Отчёт клиенту» по каждому объекту → проверить → ссылку на отчёт клиенту.\nВ CRM переносим только реально заинтересованных (галочка «Передан в CRM»).'],
     [RG, 'Правила заполнения', 'Вся команда',
       'Один объект — одна вкладка, ID как в CRM. Аудитория в 03_ОБЗВОН_И_КП пишется так же, как во вкладке объекта. Задачи формулируем для клиента. КП партнёру — без наших контактов. Ничего не удаляем: неактуальное — статус «Отменено» / «Отказались». Формульные (серые) столбцы не трогаем.'],
     [SC, 'Письмо-рассылка по медцентрам (образец)', 'ЖК «Время», сети медцентров',
@@ -4291,7 +4225,6 @@ function onOpen() {
     .addItem('➜ Проверить отчёты по рекламе CRM', 'checkAdReports')
     .addSeparator()
     .addItem('➜ Создать отчёт клиенту', 'createReport')
-    .addItem('➜ Обновить PDF отчёта', 'createPdf')
     .addSeparator()
     .addItem('➜ Дэшборд', 'openDashboard')
     .addItem('➜ Обновить (ID, вкладки, строки)', 'refreshAll')
@@ -5203,8 +5136,8 @@ function objectMatcher_() {
  * Ограничение API: поиск не чаще 1 раза в 6 секунд — при массовой отметке используйте «Отправить отмеченные в CRM».
  *
  * Отчёт клиенту: при «Создать отчёт клиенту» в карточку объекта (ID объекта = ID карточки в CRM) добавляются
- * всегда два комментария: отчёт для клиента (текст отчёта и ссылка на PDF) и для руководителя (выполнение задач недели,
- * невыполненные и просроченные задачи, «Комментарий для себя» из 05_ОТЧЁТ_КЛИЕНТУ, B6). В PDF клиенту второе не попадает.
+ * всегда два комментария: отчёт для клиента (текст отчёта и ссылка на Google Документ) и для руководителя (выполнение задач недели,
+ * невыполненные и просроченные задачи, «Комментарий для себя» из 05_ОТЧЁТ_КЛИЕНТУ, B6). В отчёт клиенту второе не попадает.
  */
 
 const CRM_BASE_DEFAULT = 'https://agencies-p.topnlab.ru/public';
@@ -5292,7 +5225,7 @@ function crmPostNote_(cfg, type, id, note, author) {
 // ───────────────────────── отчёт клиенту → карточка объекта ─────────────────────────
 
 /** Текст комментария «отчёт клиенту» и внутреннего комментария для руководителя. */
-function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
+function reportCrmNotes_(obj, values, reportUrl, internal, wk) {
   const kv = values.kv, t = values.tables;
   const rows = (ph, empty) => {
     const r = (t[ph] || []).filter(x => x[1] && x[0] !== '—');
@@ -5306,7 +5239,7 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
     '\nПлан работы на следующую неделю:\n' + rows('NEXT_ROWS', 'план не внесён'),
     kv.COMMENT ? '\nКомментарий для клиента:\n' + kv.COMMENT : '',
     kv.AD_STATS ? '\nРеклама на площадках:\n' + kv.AD_STATS : '',
-    pdfUrl ? '\nPDF отчёта: ' + pdfUrl : '',
+    reportUrl ? '\nОтчёт (Google Документ, актуальная версия): ' + reportUrl : '',
   ].filter(Boolean).join('\n');
   const tasks = readTable_('TASK').rows.filter(x => String(x.obj_id) === String(obj.id) && x.task);
   const cls = x => x.status ? dictClassOf_('task_status', x.status) : CLS.OPEN;
@@ -5337,12 +5270,12 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
 }
 
 /** Отправляет отчёт в карточку объекта (ID объекта = ID карточки в CRM). Возвращает текст статуса. */
-function sendReportToCrm_(obj, values, pdfUrl, internal, wk) {
+function sendReportToCrm_(obj, values, reportUrl, internal, wk) {
   const cfg = crmConfig_();
   if (!cfg.key) return '';
   if (!cfg.user) return '⚠ не задан ID автора заметок (Сервис → Подключить CRM TopenLab)';
   if (!isCrmId_(obj.id)) return '⚠ у объекта нет ID из CRM (сейчас «' + obj.id + '»)';
-  const n = reportCrmNotes_(obj, values, pdfUrl, internal, wk);
+  const n = reportCrmNotes_(obj, values, reportUrl, internal, wk);
   const author = crmAuthorId_(cfg, personByEmail_(userEmail_())); // отчёт создал сотрудник — заметка от его имени
   const a = crmPostNote_(cfg, 'realty', obj.id, n.client, author);
   if (!a.ok) return '⚠ CRM: отчёт не добавлен (' + a.code + (a.msg ? ', ' + a.msg : '') + ')';
@@ -5362,7 +5295,7 @@ function crmSendReport() {
   const arch = readTable_('ARCH');
   const rows = arch.rows.filter(r => String(r.obj_id) === id && r.week === wk && r.status === REPORT_STATUS.ACTUAL);
   const last = rows[rows.length - 1];
-  const st = sendReportToCrm_(obj, addAdStats_(readReportValues_(), obj, wk), last ? last.pdf_link : '', rep.getRange('B6').getValue(), wk);
+  const st = sendReportToCrm_(obj, addAdStats_(readReportValues_(), obj, wk), last ? (last.doc_link || last.pdf_link) : '', rep.getRange('B6').getValue(), wk);
   if (last) writeFields_(arch.sh, 'ARCH', last._row, { crm: st });
   ui.alert('Отчёт → CRM', st || 'CRM не подключена', ui.ButtonSet.OK);
 }
@@ -5897,9 +5830,9 @@ function guessObjectInfo_(text) {
 /**
  * 20_AutoReports — еженедельные отчёты автоматически: каждую пятницу в 20:00 (МСК).
  *
- * По каждому объекту «в работе» за текущую неделю: Google Doc + PDF в папке объекта и комментарий
+ * По каждому объекту «в работе» за текущую неделю: Google Документ в папке объекта и комментарий
  * в карточку TopenLab (как «Создать отчёт клиенту»). Если отчёт за эту неделю уже создан вручную, новый не создаётся,
- * но если он ещё не попал в CRM — отправляется. Клиенту система ничего не отправляет — ссылки на PDF приходят письмом руководителю.
+ * но если он ещё не попал в CRM — отправляется. Клиенту система ничего не отправляет — ссылки на отчёты приходят письмом руководителю.
  * Поля «Комментарий для клиента / для себя» (05_ОТЧЁТ_КЛИЕНТУ) в автоотчёт не попадают — они общие для всех объектов.
  * Если за один запуск (лимит Google — 6 минут) не успели все объекты, продолжает сам через минуту.
  */
@@ -5914,8 +5847,8 @@ function enableAutoReports() {
   let mail = true;
   try { MailApp.getRemainingDailyQuota(); } catch (e) { mail = false; }
   SpreadsheetApp.getUi().alert('Автоотчёты включены',
-    'Каждую пятницу в 20:00 (МСК) по всем объектам «в работе»: отчёт (Google Doc + PDF в папке объекта) и комментарий в карточку TopenLab.\n' +
-    'Клиентам ничего не отправляется — ссылки на PDF придут вам письмом.' +
+    'Каждую пятницу в 20:00 (МСК) по всем объектам «в работе»: отчёт (Google Документ в папке объекта) и комментарий в карточку TopenLab.\n' +
+    'Клиентам ничего не отправляется — ссылки на отчёты придут вам письмом.' +
     (mail ? '' : '\n\n⚠ Нет разрешения на отправку писем: в Apps Script → ⚙ Настройки проекта включите показ appsscript.json и замените его содержимым dist/appsscript.json, затем включите автоотчёты ещё раз. Отчёты и комментарии в CRM работают и без письма.'),
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
@@ -5976,7 +5909,7 @@ function autoReportsRun_() {
             rep.getRange('B3').setValue(id + ' · ' + o.name);
             rep.getRange('B4').setValue(label);
             SpreadsheetApp.flush();
-            const st = sendReportToCrm_(o, addAdStats_(readReportValues_(), o, state.wk), manual.pdf_link, '', state.wk);
+            const st = sendReportToCrm_(o, addAdStats_(readReportValues_(), o, state.wk), manual.doc_link || manual.pdf_link, '', state.wk);
             const a = readTable_('ARCH');
             const row = a.rows.find(r => r._row === manual._row);
             if (row && st) writeFields_(a.sh, 'ARCH', row._row, { crm: st });
@@ -5984,7 +5917,7 @@ function autoReportsRun_() {
           } catch (e) { note += ' · ⚠ CRM: ' + e.message; }
         }
         state.done.push(id);
-        state.results.push({ name: o.name, pdf: manual.pdf_link, note: note });
+        state.results.push({ name: o.name, pdf: manual.doc_link || manual.pdf_link, note: note });
         props.setProperty('AUTO_REP_STATE', JSON.stringify(state));
         return;
       }
@@ -5993,7 +5926,7 @@ function autoReportsRun_() {
         rep.getRange('B4').setValue(label);
         SpreadsheetApp.flush();
         const res = (autoReportsRun_.generate || generateReport_)(id, state.wk, {}); // .generate — подмена в тестах
-        state.results.push({ name: o.name, pdf: res ? res.pdfUrl : '', note: res ? (res.crm || 'CRM не подключена') : 'не создан' });
+        state.results.push({ name: o.name, pdf: res ? res.docUrl : '', note: res ? (res.crm || 'CRM не подключена') : 'не создан' });
       } catch (e) {
         state.results.push({ name: o.name, note: '⚠ ошибка: ' + e.message });
       }
@@ -6020,15 +5953,15 @@ function scheduleAutoReportsContinue_(on) {
   if (on) ScriptApp.newTrigger('autoReportsContinue').timeBased().after(60 * 1000).create();
 }
 
-/** Письмо руководителю: объект → PDF → статус CRM. */
+/** Письмо руководителю: объект → отчёт → статус CRM. */
 function autoReportsMail_(state) {
   const to = String(Session.getEffectiveUser().getEmail() || '');
   const rows = state.results || [];
   logHistory_([{ sheet: SHEET_NAMES.ARCH, record_id: state.wk, field: 'Автоотчёты', old: '', new: 'объектов: ' + rows.length, kind: HIST_KIND.CREATE }], 'автоотчёты');
   if (!to || !rows.length) return;
-  const html = '<p>Еженедельные отчёты за ' + htmlEscape_(state.wk) + ' созданы. Проверьте PDF и отправьте клиентам.</p><ol>' +
-    rows.map(r => '<li><b>' + htmlEscape_(r.name) + '</b>' + (r.pdf ? ' — <a href="' + r.pdf + '">PDF</a>' : '') + '<br><span style="color:#5f6368">' + htmlEscape_(r.note || '') + '</span></li>').join('') +
-    '</ol><p>Поправить: откройте Google Doc отчёта (папка объекта → Отчёты), затем «Обновить PDF отчёта» и при необходимости «Отправить отчёт клиенту в CRM».</p>' +
+  const html = '<p>Еженедельные отчёты за ' + htmlEscape_(state.wk) + ' созданы. Проверьте и отправьте клиентам ссылки на отчёты.</p><ol>' +
+    rows.map(r => '<li><b>' + htmlEscape_(r.name) + '</b>' + (r.pdf ? ' — <a href="' + r.pdf + '">отчёт</a>' : '') + '<br><span style="color:#5f6368">' + htmlEscape_(r.note || '') + '</span></li>').join('') +
+    '</ol><p>Поправить: откройте отчёт по ссылке и правьте прямо в нём — клиент по той же ссылке сразу видит исправленную версию.</p>' +
     '<p><a href="' + ss_().getUrl() + '">Открыть систему</a></p>';
   try { MailApp.sendEmail({ to: to, subject: 'Отчёты клиентам за ' + state.wk + ' готовы (' + rows.length + ')', htmlBody: html }); } catch (e) { Logger.log('Письмо: ' + e.message); }
 }

@@ -1,11 +1,11 @@
 /**
- * 06_Reports — еженедельный отчёт клиенту: Google Doc + PDF + архив.
+ * 06_Reports — еженедельный отчёт клиенту: Google Документ (единственная актуальная версия, ссылка — клиенту) + архив.
  *
  * Формат — как в отчётах руководителя (шапка ИП, таблица реквизитов,
  * Раздел 1. ВЫПОЛНЕНИЕ ПЛАНА, Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ, Раздел 3. ПЛАН РАБОТЫ, Раздел 4. РЕКЛАМА НА ПЛОЩАДКАХ).
  * Источник — лист 05_ОТЧЁТ_КЛИЕНТУ (предпросмотр): скрипт берёт оттуда только поля с метками {{…}},
  * поэтому внутренние данные (контакты, звонки, комментарии) в документ попасть не могут.
- * Клиент доступа к таблице не получает — только PDF.
+ * Клиент доступа к таблице не получает — только ссылку на Google Документ отчёта (просмотр; скачать в Word — Файл → Скачать).
  */
 
 /** Меню «Создать отчёт клиенту»: окно выбора объекта и недели (по умолчанию — объект текущей вкладки / строки). */
@@ -29,7 +29,7 @@ function createReport() {
     'function go(force){var b=document.getElementById("b");b.disabled=true;document.getElementById("s").textContent="Собираю отчёт… (до минуты)";document.getElementById("r").innerHTML="";' +
     'google.script.run.withSuccessHandler(function(x){b.disabled=false;document.getElementById("s").textContent="";' +
     'if(x.exists){if(confirm("Отчёт по этому объекту за эту неделю уже есть. Создать новую версию? Прежняя останется в архиве со статусом «Заменён».")){go(true);}return;}' +
-    'document.getElementById("r").innerHTML="<b>Готово: "+x.name+"</b><br><a target=_blank href=\'"+x.docUrl+"\'>Google Doc</a> · <a target=_blank href=\'"+x.pdfUrl+"\'>PDF для клиента</a> · "+(x.docxUrl?"<a target=_blank href=\'"+x.docxUrl+"\'>Word (.docx)</a> · ":"")+" <a target=_blank href=\'"+x.folderUrl+"\'>Папка отчётов</a>"+(x.crm?"<br>"+x.crm:"");})' +
+    'document.getElementById("r").innerHTML="<b>Готово: "+x.name+"</b><br><a target=_blank href=\'"+x.docUrl+"\'>Отчёт (Google Документ) — эту ссылку клиенту</a> · <a target=_blank href=\'"+x.docxUrl+"\'>Скачать в Word</a> · <a target=_blank href=\'"+x.folderUrl+"\'>Папка отчётов</a>"+(x.crm?"<br>"+x.crm:"");})' +
     '.withFailureHandler(function(e){b.disabled=false;document.getElementById("s").textContent="";document.getElementById("r").textContent="Ошибка: "+e.message;})' +
     '.createReportFor(document.getElementById("o").value,document.getElementById("w").value,document.getElementById("c").value,document.getElementById("i").value,force);}' +
     '</script>').setWidth(520).setHeight(470);
@@ -53,7 +53,7 @@ function createReportFor(id, weekLabel, comment, internal, force) {
     throw new Error('Лист ' + SHEET_NAMES.REP + ' не переключился на объект / неделю — попробуйте ещё раз');
   }
   const res = generateReport_(String(obj.id), wk, { interactive: false });
-  return { name: res.name, docUrl: res.docUrl, pdfUrl: res.pdfUrl, docxUrl: res.docxUrl || '', folderUrl: res.folderUrl, crm: res.crm || '' };
+  return { name: res.name, docUrl: res.docUrl, docxUrl: res.docxUrl || '', folderUrl: res.folderUrl, crm: res.crm || '' };
 }
 
 /** Собирает отчёт. Лист 05_ОТЧЁТ_КЛИЕНТУ должен быть выставлен на этот объект и неделю. */
@@ -85,80 +85,20 @@ function generateReport_(id, wk, opts) {
   const doc = DocumentApp.openById(copy.getId());
   fillReportDoc_(doc, values);
   doc.saveAndClose();
-  const pdf = folder.createFile(copy.getAs(MimeType.PDF)).setName(name + '.pdf');
-  let docx = null;
-  try { docx = exportDocx_(copy.getId(), folder, name); } catch (e) { Logger.log('Word: ' + e.message); }
+  // PDF и копии не делаем: отчёт — один Google Документ, правки в нём сразу видны по ссылке
+  try { copy.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) { Logger.log('Доступ по ссылке: ' + e.message); }
 
   appendRow_('ARCH', {
     ts: new Date(), obj_id: id, obj_name: obj.name, report_no: values.kv.REPORT_NO, week: wk, period: values.kv.PERIOD,
-    doc_link: copy.getUrl(), pdf_link: pdf.getUrl(), author: userEmail_(), status: REPORT_STATUS.ACTUAL,
+    doc_link: copy.getUrl(), pdf_link: '', author: userEmail_(), status: REPORT_STATUS.ACTUAL,
   });
-  writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { last_report_link: pdf.getUrl(), last_report_date: today_() });
+  writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { last_report_link: copy.getUrl(), last_report_date: today_() });
   let crm = '';
-  try { crm = sendReportToCrm_(obj, values, pdf.getUrl(), sheet_('REP').getRange('B6').getValue(), wk); } catch (e) { crm = '⚠ CRM: ' + e.message; }
+  try { crm = sendReportToCrm_(obj, values, copy.getUrl(), sheet_('REP').getRange('B6').getValue(), wk); } catch (e) { crm = '⚠ CRM: ' + e.message; }
   if (crm) { const a = readTable_('ARCH'); const last = a.rows[a.rows.length - 1]; if (last) writeFields_(a.sh, 'ARCH', last._row, { crm: crm }); }
-  return { crm: crm, name: name, docId: copy.getId(), docUrl: copy.getUrl(), pdfId: pdf.getId(), pdfUrl: pdf.getUrl(), docxUrl: docx ? docx.getUrl() : '', folderUrl: folder.getUrl() };
+  return { crm: crm, name: name, docId: copy.getId(), docUrl: copy.getUrl(), docxUrl: wordExportUrl_(copy.getId()), folderUrl: folder.getUrl() };
 }
 
-/** Пересоздаёт PDF из (возможно отредактированного) Google Doc последнего отчёта. */
-function createPdf() {
-  const ui = SpreadsheetApp.getUi();
-  SpreadsheetApp.flush();
-  const rep = sheet_('REP');
-  const id = String(selectedObjectId_() || rep.getRange('E3').getValue() || '');
-  const wkSel = String(rep.getRange('E4').getValue() || '');
-  const arch = readTable_('ARCH');
-  const all = arch.rows.filter(r => String(r.obj_id) === id && r.status === REPORT_STATUS.ACTUAL && r.doc_link);
-  const same = all.filter(r => r.week === wkSel);
-  const r = (same.length ? same : all).slice(-1)[0];
-  if (!r) {
-    ui.alert('По этому объекту ещё нет отчёта. Встаньте на вкладку объекта (или его строку) и сначала «Создать отчёт клиенту».');
-    return;
-  }
-  const docFile = DriveApp.getFileById(idFromUrl_(r.doc_link));
-  const folder = docFile.getParents().hasNext() ? docFile.getParents().next() : ensureObjectFolder_(id, 'REPORTS');
-  // правки могли быть в Google Doc или в Word-файле отчёта на Диске — берём то, что правили позже
-  let src = docFile, from = 'Google Doc', tmp = null;
-  const docx = editedDocx_(folder, docFile.getName());
-  if (docx && docx.getLastUpdated() > docFile.getLastUpdated()) {
-    tmp = docxToGoogleDoc_(docx, folder);
-    src = tmp; from = 'Word (' + docx.getName() + ')';
-  }
-  try {
-    const old = DriveApp.getFileById(idFromUrl_(r.pdf_link));
-    old.setName(old.getName().replace(/\.pdf$/i, '') + ' (устаревший).pdf');
-  } catch (e) { /* старый PDF мог быть удалён вручную */ }
-  const pdf = folder.createFile(src.getAs(MimeType.PDF)).setName(docFile.getName() + '.pdf');
-  if (tmp) { try { tmp.setTrashed(true); } catch (e) { /* временная копия */ } }
-  writeFields_(arch.sh, 'ARCH', r._row, { pdf_link: pdf.getUrl() });
-  const obj = objectById_(id);
-  if (obj) writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { last_report_link: pdf.getUrl() });
-  showLinks_('PDF обновлён', [{ label: pdf.getName(), url: pdf.getUrl() }],
-    'Собран из: ' + from + '. Старый PDF переименован с пометкой «устаревший» и остался в папке.');
-}
-
-/** Word-файл отчёта «<имя>.docx» в папке, если его правили после создания (иначе null). */
-function editedDocx_(folder, name) {
-  let best = null;
-  const it = folder.getFilesByName(name + '.docx');
-  while (it.hasNext()) {
-    const f = it.next();
-    if (f.isTrashed() || f.getLastUpdated() - f.getDateCreated() < 60000) continue; // только что выгружен — не правили
-    if (!best || f.getLastUpdated() > best.getLastUpdated()) best = f;
-  }
-  return best;
-}
-
-/** Временная Google-копия Word-файла (для PDF). */
-function docxToGoogleDoc_(file, folder) {
-  const r = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + file.getId() + '/copy?fields=id', {
-    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
-    payload: JSON.stringify({ name: file.getName().replace(/\.docx$/i, '') + ' (временно)', mimeType: MimeType.GOOGLE_DOCS, parents: [folder.getId()] }),
-  });
-  if (r.getResponseCode() >= 300) throw new Error('Word → PDF: ' + r.getContentText().slice(0, 200));
-  return DriveApp.getFileById(JSON.parse(r.getContentText()).id);
-}
 
 /** Значения из 05_ОТЧЁТ_КЛИЕНТУ: {kv: {PH: текст}, tables: {PH: [[№, текст, текст]]}}. */
 function readReportValues_() {
@@ -446,11 +386,5 @@ function oldReportInfo_(name, created) {
   return out;
 }
 
-/** Копия отчёта в формате Word (.docx) — рядом с PDF в папке «Отчёты»: скачать, дописать вручную, отправить. */
-function exportDocx_(docId, folder, name) {
-  const r = UrlFetchApp.fetch('https://docs.google.com/document/d/' + docId + '/export?format=docx', {
-    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true,
-  });
-  if (r.getResponseCode() !== 200) throw new Error('экспорт в Word: код ' + r.getResponseCode());
-  return folder.createFile(r.getBlob().setName(name + '.docx'));
-}
+/** Ссылка «скачать в Word» — всегда актуальная версия Google Документа отчёта. */
+function wordExportUrl_(docId) { return 'https://docs.google.com/document/d/' + docId + '/export?format=docx'; }

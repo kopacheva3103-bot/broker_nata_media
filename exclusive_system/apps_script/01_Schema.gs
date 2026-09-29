@@ -186,7 +186,7 @@ function sheetSpecs_() {
   // ───────────────────────── 10_АРХИВ_ОТЧЁТОВ ─────────────────────────
   S.ARCH = {
     code: 'ARCH', guard: 'ts', frozenCols: 1, readonly: true,
-    about: 'Все отчёты клиентам: номер, период, ссылки на Google Doc и PDF.',
+    about: 'Все отчёты клиентам: номер, период, ссылка на Google Документ (PDF — у старых отчётов).',
     fields: [
       F('ts', 'Создан', 'sys', { fmt: 'datetime', w: 130 }),
       F('obj_id', 'ID объекта', 'sys'),

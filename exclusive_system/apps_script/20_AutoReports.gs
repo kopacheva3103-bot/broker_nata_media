@@ -1,9 +1,9 @@
 /**
  * 20_AutoReports — еженедельные отчёты автоматически: каждую пятницу в 20:00 (МСК).
  *
- * По каждому объекту «в работе» за текущую неделю: Google Doc + PDF в папке объекта и комментарий
+ * По каждому объекту «в работе» за текущую неделю: Google Документ в папке объекта и комментарий
  * в карточку TopenLab (как «Создать отчёт клиенту»). Если отчёт за эту неделю уже создан вручную, новый не создаётся,
- * но если он ещё не попал в CRM — отправляется. Клиенту система ничего не отправляет — ссылки на PDF приходят письмом руководителю.
+ * но если он ещё не попал в CRM — отправляется. Клиенту система ничего не отправляет — ссылки на отчёты приходят письмом руководителю.
  * Поля «Комментарий для клиента / для себя» (05_ОТЧЁТ_КЛИЕНТУ) в автоотчёт не попадают — они общие для всех объектов.
  * Если за один запуск (лимит Google — 6 минут) не успели все объекты, продолжает сам через минуту.
  */
@@ -18,8 +18,8 @@ function enableAutoReports() {
   let mail = true;
   try { MailApp.getRemainingDailyQuota(); } catch (e) { mail = false; }
   SpreadsheetApp.getUi().alert('Автоотчёты включены',
-    'Каждую пятницу в 20:00 (МСК) по всем объектам «в работе»: отчёт (Google Doc + PDF в папке объекта) и комментарий в карточку TopenLab.\n' +
-    'Клиентам ничего не отправляется — ссылки на PDF придут вам письмом.' +
+    'Каждую пятницу в 20:00 (МСК) по всем объектам «в работе»: отчёт (Google Документ в папке объекта) и комментарий в карточку TopenLab.\n' +
+    'Клиентам ничего не отправляется — ссылки на отчёты придут вам письмом.' +
     (mail ? '' : '\n\n⚠ Нет разрешения на отправку писем: в Apps Script → ⚙ Настройки проекта включите показ appsscript.json и замените его содержимым dist/appsscript.json, затем включите автоотчёты ещё раз. Отчёты и комментарии в CRM работают и без письма.'),
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
@@ -80,7 +80,7 @@ function autoReportsRun_() {
             rep.getRange('B3').setValue(id + ' · ' + o.name);
             rep.getRange('B4').setValue(label);
             SpreadsheetApp.flush();
-            const st = sendReportToCrm_(o, addAdStats_(readReportValues_(), o, state.wk), manual.pdf_link, '', state.wk);
+            const st = sendReportToCrm_(o, addAdStats_(readReportValues_(), o, state.wk), manual.doc_link || manual.pdf_link, '', state.wk);
             const a = readTable_('ARCH');
             const row = a.rows.find(r => r._row === manual._row);
             if (row && st) writeFields_(a.sh, 'ARCH', row._row, { crm: st });
@@ -88,7 +88,7 @@ function autoReportsRun_() {
           } catch (e) { note += ' · ⚠ CRM: ' + e.message; }
         }
         state.done.push(id);
-        state.results.push({ name: o.name, pdf: manual.pdf_link, note: note });
+        state.results.push({ name: o.name, pdf: manual.doc_link || manual.pdf_link, note: note });
         props.setProperty('AUTO_REP_STATE', JSON.stringify(state));
         return;
       }
@@ -97,7 +97,7 @@ function autoReportsRun_() {
         rep.getRange('B4').setValue(label);
         SpreadsheetApp.flush();
         const res = (autoReportsRun_.generate || generateReport_)(id, state.wk, {}); // .generate — подмена в тестах
-        state.results.push({ name: o.name, pdf: res ? res.pdfUrl : '', note: res ? (res.crm || 'CRM не подключена') : 'не создан' });
+        state.results.push({ name: o.name, pdf: res ? res.docUrl : '', note: res ? (res.crm || 'CRM не подключена') : 'не создан' });
       } catch (e) {
         state.results.push({ name: o.name, note: '⚠ ошибка: ' + e.message });
       }
@@ -124,15 +124,15 @@ function scheduleAutoReportsContinue_(on) {
   if (on) ScriptApp.newTrigger('autoReportsContinue').timeBased().after(60 * 1000).create();
 }
 
-/** Письмо руководителю: объект → PDF → статус CRM. */
+/** Письмо руководителю: объект → отчёт → статус CRM. */
 function autoReportsMail_(state) {
   const to = String(Session.getEffectiveUser().getEmail() || '');
   const rows = state.results || [];
   logHistory_([{ sheet: SHEET_NAMES.ARCH, record_id: state.wk, field: 'Автоотчёты', old: '', new: 'объектов: ' + rows.length, kind: HIST_KIND.CREATE }], 'автоотчёты');
   if (!to || !rows.length) return;
-  const html = '<p>Еженедельные отчёты за ' + htmlEscape_(state.wk) + ' созданы. Проверьте PDF и отправьте клиентам.</p><ol>' +
-    rows.map(r => '<li><b>' + htmlEscape_(r.name) + '</b>' + (r.pdf ? ' — <a href="' + r.pdf + '">PDF</a>' : '') + '<br><span style="color:#5f6368">' + htmlEscape_(r.note || '') + '</span></li>').join('') +
-    '</ol><p>Поправить: откройте Google Doc отчёта (папка объекта → Отчёты), затем «Обновить PDF отчёта» и при необходимости «Отправить отчёт клиенту в CRM».</p>' +
+  const html = '<p>Еженедельные отчёты за ' + htmlEscape_(state.wk) + ' созданы. Проверьте и отправьте клиентам ссылки на отчёты.</p><ol>' +
+    rows.map(r => '<li><b>' + htmlEscape_(r.name) + '</b>' + (r.pdf ? ' — <a href="' + r.pdf + '">отчёт</a>' : '') + '<br><span style="color:#5f6368">' + htmlEscape_(r.note || '') + '</span></li>').join('') +
+    '</ol><p>Поправить: откройте отчёт по ссылке и правьте прямо в нём — клиент по той же ссылке сразу видит исправленную версию.</p>' +
     '<p><a href="' + ss_().getUrl() + '">Открыть систему</a></p>';
   try { MailApp.sendEmail({ to: to, subject: 'Отчёты клиентам за ' + state.wk + ' готовы (' + rows.length + ')', htmlBody: html }); } catch (e) { Logger.log('Письмо: ' + e.message); }
 }

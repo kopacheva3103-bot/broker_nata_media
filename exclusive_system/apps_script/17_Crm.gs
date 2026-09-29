@@ -10,8 +10,8 @@
  * Ограничение API: поиск не чаще 1 раза в 6 секунд — при массовой отметке используйте «Отправить отмеченные в CRM».
  *
  * Отчёт клиенту: при «Создать отчёт клиенту» в карточку объекта (ID объекта = ID карточки в CRM) добавляются
- * всегда два комментария: отчёт для клиента (текст отчёта и ссылка на PDF) и для руководителя (выполнение задач недели,
- * невыполненные и просроченные задачи, «Комментарий для себя» из 05_ОТЧЁТ_КЛИЕНТУ, B6). В PDF клиенту второе не попадает.
+ * всегда два комментария: отчёт для клиента (текст отчёта и ссылка на Google Документ) и для руководителя (выполнение задач недели,
+ * невыполненные и просроченные задачи, «Комментарий для себя» из 05_ОТЧЁТ_КЛИЕНТУ, B6). В отчёт клиенту второе не попадает.
  */
 
 const CRM_BASE_DEFAULT = 'https://agencies-p.topnlab.ru/public';
@@ -99,7 +99,7 @@ function crmPostNote_(cfg, type, id, note, author) {
 // ───────────────────────── отчёт клиенту → карточка объекта ─────────────────────────
 
 /** Текст комментария «отчёт клиенту» и внутреннего комментария для руководителя. */
-function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
+function reportCrmNotes_(obj, values, reportUrl, internal, wk) {
   const kv = values.kv, t = values.tables;
   const rows = (ph, empty) => {
     const r = (t[ph] || []).filter(x => x[1] && x[0] !== '—');
@@ -113,7 +113,7 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
     '\nПлан работы на следующую неделю:\n' + rows('NEXT_ROWS', 'план не внесён'),
     kv.COMMENT ? '\nКомментарий для клиента:\n' + kv.COMMENT : '',
     kv.AD_STATS ? '\nРеклама на площадках:\n' + kv.AD_STATS : '',
-    pdfUrl ? '\nPDF отчёта: ' + pdfUrl : '',
+    reportUrl ? '\nОтчёт (Google Документ, актуальная версия): ' + reportUrl : '',
   ].filter(Boolean).join('\n');
   const tasks = readTable_('TASK').rows.filter(x => String(x.obj_id) === String(obj.id) && x.task);
   const cls = x => x.status ? dictClassOf_('task_status', x.status) : CLS.OPEN;
@@ -144,12 +144,12 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
 }
 
 /** Отправляет отчёт в карточку объекта (ID объекта = ID карточки в CRM). Возвращает текст статуса. */
-function sendReportToCrm_(obj, values, pdfUrl, internal, wk) {
+function sendReportToCrm_(obj, values, reportUrl, internal, wk) {
   const cfg = crmConfig_();
   if (!cfg.key) return '';
   if (!cfg.user) return '⚠ не задан ID автора заметок (Сервис → Подключить CRM TopenLab)';
   if (!isCrmId_(obj.id)) return '⚠ у объекта нет ID из CRM (сейчас «' + obj.id + '»)';
-  const n = reportCrmNotes_(obj, values, pdfUrl, internal, wk);
+  const n = reportCrmNotes_(obj, values, reportUrl, internal, wk);
   const author = crmAuthorId_(cfg, personByEmail_(userEmail_())); // отчёт создал сотрудник — заметка от его имени
   const a = crmPostNote_(cfg, 'realty', obj.id, n.client, author);
   if (!a.ok) return '⚠ CRM: отчёт не добавлен (' + a.code + (a.msg ? ', ' + a.msg : '') + ')';
@@ -169,7 +169,7 @@ function crmSendReport() {
   const arch = readTable_('ARCH');
   const rows = arch.rows.filter(r => String(r.obj_id) === id && r.week === wk && r.status === REPORT_STATUS.ACTUAL);
   const last = rows[rows.length - 1];
-  const st = sendReportToCrm_(obj, addAdStats_(readReportValues_(), obj, wk), last ? last.pdf_link : '', rep.getRange('B6').getValue(), wk);
+  const st = sendReportToCrm_(obj, addAdStats_(readReportValues_(), obj, wk), last ? (last.doc_link || last.pdf_link) : '', rep.getRange('B6').getValue(), wk);
   if (last) writeFields_(arch.sh, 'ARCH', last._row, { crm: st });
   ui.alert('Отчёт → CRM', st || 'CRM не подключена', ui.ButtonSet.OK);
 }
