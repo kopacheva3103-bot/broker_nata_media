@@ -91,6 +91,7 @@ function strategyBaseRows_(obj, lines, plan) {
       const resp = dictValues_('responses').find(x => x.toLowerCase() === c[6].toLowerCase());
       if (resp) { row.response = resp; row.response_date = kpDate || today_(); } else row.call_result = c[6];
     }
+    if (c[7]) { row.next_step = c[7]; row.next_date = parseRuDate_(c[7]) || today_(); } // 8-я колонка — следующий шаг (дата внутри текста или сегодня)
     out.push(row);
     const other = companyElsewhere_(c[1], obj.id);
     if (other.length) (plan.baseDup = plan.baseDup || []).push(c[1] + ' — уже по объекту ' + other.map(x => (objectById_(x.obj_id) || {}).name || x.obj_id).join(', '));

@@ -478,9 +478,11 @@ console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПр
 {
   const ans = ['## База для обзвона', 'Аудитория | Компания | Сайт | Контакт | Почему подходит | Дата КП | Ответ',
     'Производства — база отдыха | ООО Старое КП | old-kp.ru | info@old-kp.ru | производство рядом | 22.09.2026 |',
-    'Производства — база отдыха | Завод Ответил | zavod.ru | 7 495 000-00-00 | завод | 22.09.2026 | Не интересно'].join('\n');
+    'Производства — база отдыха | Завод Ответил | zavod.ru | 7 495 000-00-00 | завод | 22.09.2026 | Не интересно',
+    'Производства — база отдыха | Тёплый Контакт | — | 7 900 000-00-00 | взял презентацию | 17.08.2026 | Интересно | Повторный контакт: впечатления от презентации'].join('\n');
   X.runStrategyImport('4801', ans);
-  const b = X.readTable_('BASE').rows.filter(r => /Старое КП|Завод Ответил/.test(r.company));
+  const b = X.readTable_('BASE').rows.filter(r => /Старое КП|Завод Ответил|Тёплый/.test(r.company));
+  console.log('warm next:', b.filter(r => /Тёплый/.test(r.company)).map(r => r.response + ' / ' + r.next_step + ' / ' + X.fmtDate_(r.next_date)).join());
   console.log('old kp rows:', b.map(r => [r.company, X.fmtDate_(r.kp_date), r.kp_type, r.response || r.call_result].join(' / ')).join(' ; '));
   console.log('manager base lines:', X.baseWorkLines_('4801', '2026-W39').replace(/\n/g, ' | '));
   console.log('old kp report:', X.audienceReportLines_('4801', X.isoWeekKey_(X.today_())).filter(l => /база отдыха/.test(l)).join(' | '));
