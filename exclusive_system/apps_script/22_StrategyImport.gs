@@ -83,7 +83,15 @@ function strategyBaseRows_(obj, lines, plan) {
     if (have.indexOf(norm(c[1])) >= 0) { plan.skipped++; return; }
     have.push(norm(c[1]));
     const site = /^(https?:\/\/|www\.|[\w-]+\.[a-zа-я]{2,})/i.test(c[2] || '') ? c[2] : '';
-    out.push({ obj_id: String(obj.id), audience: c[0], company: c[1], site: site, contact: c[3] || '', fit_note: c[4] || '', owner: owner });
+    const row = { obj_id: String(obj.id), audience: c[0], company: c[1], site: site, contact: c[3] || '', fit_note: c[4] || '', owner: owner };
+    // необязательно: 6-я колонка — дата КП (перенос уже сделанной работы), 7-я — ответ / комментарий
+    const kpDate = parseRuDate_(c[5]);
+    if (kpDate) { row.kp_date = kpDate; row.kp_type = dictValues_('kp_types')[0] || ''; }
+    if (c[6]) {
+      const resp = dictValues_('responses').find(x => x.toLowerCase() === c[6].toLowerCase());
+      if (resp) row.response = resp; else row.call_result = c[6];
+    }
+    out.push(row);
     const other = companyElsewhere_(c[1], obj.id);
     if (other.length) (plan.baseDup = plan.baseDup || []).push(c[1] + ' — уже по объекту ' + other.map(x => (objectById_(x.obj_id) || {}).name || x.obj_id).join(', '));
   });

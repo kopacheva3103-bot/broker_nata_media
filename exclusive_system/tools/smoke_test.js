@@ -474,6 +474,17 @@ console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПр
   if (MAILS[0]) console.log(MAILS[0].htmlBody.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 400));
 }
 
+// перенос старой работы: база с датой КП и ответом → строки отчёта «всего с начала работы»
+{
+  const ans = ['## База для обзвона', 'Аудитория | Компания | Сайт | Контакт | Почему подходит | Дата КП | Ответ',
+    'Производства — база отдыха | ООО Старое КП | old-kp.ru | info@old-kp.ru | производство рядом | 22.09.2026 |',
+    'Производства — база отдыха | Завод Ответил | zavod.ru | 7 495 000-00-00 | завод | 22.09.2026 | Не интересно'].join('\n');
+  X.runStrategyImport('4801', ans);
+  const b = X.readTable_('BASE').rows.filter(r => /Старое КП|Завод Ответил/.test(r.company));
+  console.log('old kp rows:', b.map(r => [r.company, X.fmtDate_(r.kp_date), r.kp_type, r.response || r.call_result].join(' / ')).join(' ; '));
+  console.log('old kp report:', X.audienceReportLines_('4801', X.isoWeekKey_(X.today_())).filter(l => /база отдыха/.test(l)).join(' | '));
+}
+
 // A–E: план недели по аудиториям, подстановка аудитории в промпт, дубли компаний, простой аудиторий, строки отчёта
 {
   const ans = ['## Аудитории', 'Клиенты деловой авиации | Партнёры-посредники | VIP-отдел, 10 минут до борта | Внуково-3 | ★★★'].join('\n');
