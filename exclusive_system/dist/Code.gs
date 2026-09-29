@@ -2536,26 +2536,59 @@ function createPdf() {
   const ui = SpreadsheetApp.getUi();
   SpreadsheetApp.flush();
   const rep = sheet_('REP');
-  const id = String(rep.getRange('E3').getValue() || '');
-  const wk = String(rep.getRange('E4').getValue() || '');
+  const id = String(selectedObjectId_() || rep.getRange('E3').getValue() || '');
+  const wkSel = String(rep.getRange('E4').getValue() || '');
   const arch = readTable_('ARCH');
-  const rows = arch.rows.filter(r => r.obj_id === id && r.week === wk && r.status === REPORT_STATUS.ACTUAL);
-  if (!id || !wk || !rows.length) {
-    ui.alert('Для выбранного в ' + SHEET_NAMES.REP + ' объекта и недели ещё нет отчёта. Сначала «Создать отчёт клиенту».');
+  const all = arch.rows.filter(r => String(r.obj_id) === id && r.status === REPORT_STATUS.ACTUAL && r.doc_link);
+  const same = all.filter(r => r.week === wkSel);
+  const r = (same.length ? same : all).slice(-1)[0];
+  if (!r) {
+    ui.alert('По этому объекту ещё нет отчёта. Встаньте на вкладку объекта (или его строку) и сначала «Создать отчёт клиенту».');
     return;
   }
-  const r = rows[rows.length - 1];
   const docFile = DriveApp.getFileById(idFromUrl_(r.doc_link));
   const folder = docFile.getParents().hasNext() ? docFile.getParents().next() : ensureObjectFolder_(id, 'REPORTS');
+  // правки могли быть в Google Doc или в Word-файле отчёта на Диске — берём то, что правили позже
+  let src = docFile, from = 'Google Doc', tmp = null;
+  const docx = editedDocx_(folder, docFile.getName());
+  if (docx && docx.getLastUpdated() > docFile.getLastUpdated()) {
+    tmp = docxToGoogleDoc_(docx, folder);
+    src = tmp; from = 'Word (' + docx.getName() + ')';
+  }
   try {
     const old = DriveApp.getFileById(idFromUrl_(r.pdf_link));
     old.setName(old.getName().replace(/\.pdf$/i, '') + ' (устаревший).pdf');
   } catch (e) { /* старый PDF мог быть удалён вручную */ }
-  const pdf = folder.createFile(docFile.getAs(MimeType.PDF)).setName(docFile.getName() + '.pdf');
+  const pdf = folder.createFile(src.getAs(MimeType.PDF)).setName(docFile.getName() + '.pdf');
+  if (tmp) { try { tmp.setTrashed(true); } catch (e) { /* временная копия */ } }
   writeFields_(arch.sh, 'ARCH', r._row, { pdf_link: pdf.getUrl() });
   const obj = objectById_(id);
   if (obj) writeFields_(sheet_('OBJ'), 'OBJ', obj._row, { last_report_link: pdf.getUrl() });
-  showLinks_('PDF обновлён', [{ label: pdf.getName(), url: pdf.getUrl() }], 'Старый PDF переименован с пометкой «устаревший» и остался в папке.');
+  showLinks_('PDF обновлён', [{ label: pdf.getName(), url: pdf.getUrl() }],
+    'Собран из: ' + from + '. Старый PDF переименован с пометкой «устаревший» и остался в папке.');
+}
+
+/** Word-файл отчёта «<имя>.docx» в папке, если его правили после создания (иначе null). */
+function editedDocx_(folder, name) {
+  let best = null;
+  const it = folder.getFilesByName(name + '.docx');
+  while (it.hasNext()) {
+    const f = it.next();
+    if (f.isTrashed() || f.getLastUpdated() - f.getDateCreated() < 60000) continue; // только что выгружен — не правили
+    if (!best || f.getLastUpdated() > best.getLastUpdated()) best = f;
+  }
+  return best;
+}
+
+/** Временная Google-копия Word-файла (для PDF). */
+function docxToGoogleDoc_(file, folder) {
+  const r = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + file.getId() + '/copy?fields=id', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    payload: JSON.stringify({ name: file.getName().replace(/\.docx$/i, '') + ' (временно)', mimeType: MimeType.GOOGLE_DOCS, parents: [folder.getId()] }),
+  });
+  if (r.getResponseCode() >= 300) throw new Error('Word → PDF: ' + r.getContentText().slice(0, 200));
+  return DriveApp.getFileById(JSON.parse(r.getContentText()).id);
 }
 
 /** Значения из 05_ОТЧЁТ_КЛИЕНТУ: {kv: {PH: текст}, tables: {PH: [[№, текст, текст]]}}. */
@@ -2706,7 +2739,7 @@ function ensureObjectFolder_(id, kind) {
  * Шаблон отчёта в формате руководителя. Создаётся один раз в 02_ШАБЛОНЫ; дальше вёрстку (шрифты, логотип,
  * отступы) можно менять прямо в Google Docs — метки {{…}} не удаляйте.
  */
-const REPORT_TEMPLATE_VERSION = '4'; // 2: без строки «Приложение №1 к Договору № … от …»; 4: раздел 4 «Реклама на площадках»
+const REPORT_TEMPLATE_VERSION = '5'; // 2: без строки «Приложение №1 к Договору № … от …»; 4: раздел 4 «Реклама на площадках»; 5: подпись без «Исполнитель: ____»
 
 function ensureReportTemplate_() {
   const id = String(cfgGet_('TEMPLATE_REPORT_ID') || '');
@@ -2767,7 +2800,7 @@ function buildReportTemplate_(doc) {
   b.appendParagraph('Комментарий').setHeading(H.HEADING4);
   b.appendParagraph('{{COMMENT}}');
   b.appendParagraph('');
-  b.appendParagraph('Исполнитель: ______________________ {{SIGNATURE}}');
+  b.appendParagraph('{{SIGNATURE}}');
   doc.saveAndClose();
 }
 
@@ -2805,6 +2838,7 @@ function registerOldReports_() {
       const f = it.next();
       const mime = f.getMimeType();
       if (known[f.getId()] || (mime !== MimeType.PDF && mime !== MimeType.GOOGLE_DOCS)) continue;
+      if (/\((устаревший|временно)\)/i.test(f.getName())) continue; // старые версии PDF системных отчётов
       if (mime === MimeType.GOOGLE_DOCS && folder.getFilesByName(f.getName() + '.pdf').hasNext()) continue; // док системного отчёта рядом с PDF
       const info = oldReportInfo_(f.getName(), f.getDateCreated());
       rows.push({
