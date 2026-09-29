@@ -301,7 +301,7 @@ function reportTables_() {
     {
       ph: 'LEADS_ROWS', title: 'Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ', rows: 15,
       cols: ['№', 'Заявка', 'Следующий шаг'],
-      f: numbered(15, 'FILTER({[[BASE.company]]&IF([[BASE.audience]]="",""," ("&[[BASE.audience]]&")"),[[BASE.next_step]]&IF([[BASE.next_date]]="",""," — "&TEXT([[BASE.next_date]],"dd.mm.yyyy"))},' +
+      f: numbered(15, 'FILTER({IF([[BASE.audience]]="","Заинтересованная компания","Заинтересованная компания — «"&[[BASE.audience]]&"»"),[[BASE.next_step]]&IF([[BASE.next_date]]="",""," — "&TEXT([[BASE.next_date]],"dd.mm.yyyy"))},' +
         '[[BASE.obj_id]]=' + P.id + ',[[BASE.resp_week]]=' + P.wk + ',[[BASE.resp_class]]="YES")', 'Новых заявок за неделю нет'),
     },
     {

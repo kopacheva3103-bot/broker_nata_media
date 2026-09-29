@@ -135,6 +135,7 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
     '\nВыполнение задач недели: ' + (week.length ? done.length + ' из ' + week.length + ' (' + Math.round(done.length / week.length * 100) + '%)' : 'задачи на неделю не внесены'),
     notDone.length ? '\nНе выполнено:\n' + notDone.slice(0, 15).map(line).join('\n') : '',
     '\nПросрочено задач: ' + overdue.length + (overdue.length ? '\n' + overdue.slice(0, 10).map(line).join('\n') : ''),
+    baseWorkLines_(obj.id, wk),
     content,
     values.adInner ? '\n' + values.adInner : '',
     own ? '\nКомментарий руководителя:\n' + own : '',
@@ -289,4 +290,21 @@ function removeCrmSettings() {
   const p = PropertiesService.getScriptProperties();
   ['TOPNLAB_KEY', 'TOPNLAB_USER_ID', 'TOPNLAB_LAST', 'TOPNLAB_NOTE_EXTRA', 'TOPNLAB_PEOPLE'].forEach(k => p.deleteProperty(k));
   return { status: 'не подключена', msg: 'Отключено.' };
+}
+
+/** Для руководителя: работа с базой за неделю поимённо (клиенту — только цифры, без компаний и контактов). */
+function baseWorkLines_(objId, wk) {
+  if (!wk) return '';
+  const inWk = d => d instanceof Date && isoWeekKey_(d) === wk;
+  const rows = readTable_('BASE').rows.filter(r => String(r.obj_id) === String(objId) && r.company &&
+    (inWk(r.call_date) || inWk(r.kp_date) || inWk(r.response_date)));
+  if (!rows.length) return '';
+  const line = r => {
+    const act = [inWk(r.call_date) ? 'звонок ' + fmtDate_(r.call_date) + (r.call_result ? ' (' + r.call_result + ')' : '') : '',
+      inWk(r.kp_date) ? (r.kp_type || 'КП') + ' ' + fmtDate_(r.kp_date) : '',
+      inWk(r.response_date) && r.response ? 'ответ: ' + r.response : ''].filter(Boolean).join('; ');
+    return '• ' + r.company + (r.audience ? ' [' + r.audience + ']' : '') + (r.contact ? ', ' + r.contact : '') + ' — ' + act +
+      (r.next_step ? '. Дальше: ' + r.next_step + (r.next_date instanceof Date ? ' ' + fmtDate_(r.next_date) : '') : '');
+  };
+  return '\nРабота с базой за неделю (' + rows.length + '):\n' + rows.slice(0, 40).map(line).join('\n') + (rows.length > 40 ? '\n… и ещё ' + (rows.length - 40) : '');
 }

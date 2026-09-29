@@ -89,7 +89,7 @@ function strategyBaseRows_(obj, lines, plan) {
     if (kpDate) { row.kp_date = kpDate; row.kp_type = dictValues_('kp_types')[0] || ''; }
     if (c[6]) {
       const resp = dictValues_('responses').find(x => x.toLowerCase() === c[6].toLowerCase());
-      if (resp) row.response = resp; else row.call_result = c[6];
+      if (resp) { row.response = resp; row.response_date = kpDate || today_(); } else row.call_result = c[6];
     }
     out.push(row);
     const other = companyElsewhere_(c[1], obj.id);

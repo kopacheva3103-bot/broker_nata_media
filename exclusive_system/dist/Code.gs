@@ -720,7 +720,7 @@ function reportTables_() {
     {
       ph: 'LEADS_ROWS', title: 'Раздел 2. ПОЛУЧЕННЫЕ ЗАЯВКИ', rows: 15,
       cols: ['№', 'Заявка', 'Следующий шаг'],
-      f: numbered(15, 'FILTER({[[BASE.company]]&IF([[BASE.audience]]="",""," ("&[[BASE.audience]]&")"),[[BASE.next_step]]&IF([[BASE.next_date]]="",""," — "&TEXT([[BASE.next_date]],"dd.mm.yyyy"))},' +
+      f: numbered(15, 'FILTER({IF([[BASE.audience]]="","Заинтересованная компания","Заинтересованная компания — «"&[[BASE.audience]]&"»"),[[BASE.next_step]]&IF([[BASE.next_date]]="",""," — "&TEXT([[BASE.next_date]],"dd.mm.yyyy"))},' +
         '[[BASE.obj_id]]=' + P.id + ',[[BASE.resp_week]]=' + P.wk + ',[[BASE.resp_class]]="YES")', 'Новых заявок за неделю нет'),
     },
     {
@@ -5294,6 +5294,7 @@ function reportCrmNotes_(obj, values, pdfUrl, internal, wk) {
     '\nВыполнение задач недели: ' + (week.length ? done.length + ' из ' + week.length + ' (' + Math.round(done.length / week.length * 100) + '%)' : 'задачи на неделю не внесены'),
     notDone.length ? '\nНе выполнено:\n' + notDone.slice(0, 15).map(line).join('\n') : '',
     '\nПросрочено задач: ' + overdue.length + (overdue.length ? '\n' + overdue.slice(0, 10).map(line).join('\n') : ''),
+    baseWorkLines_(obj.id, wk),
     content,
     values.adInner ? '\n' + values.adInner : '',
     own ? '\nКомментарий руководителя:\n' + own : '',
@@ -5448,6 +5449,23 @@ function removeCrmSettings() {
   const p = PropertiesService.getScriptProperties();
   ['TOPNLAB_KEY', 'TOPNLAB_USER_ID', 'TOPNLAB_LAST', 'TOPNLAB_NOTE_EXTRA', 'TOPNLAB_PEOPLE'].forEach(k => p.deleteProperty(k));
   return { status: 'не подключена', msg: 'Отключено.' };
+}
+
+/** Для руководителя: работа с базой за неделю поимённо (клиенту — только цифры, без компаний и контактов). */
+function baseWorkLines_(objId, wk) {
+  if (!wk) return '';
+  const inWk = d => d instanceof Date && isoWeekKey_(d) === wk;
+  const rows = readTable_('BASE').rows.filter(r => String(r.obj_id) === String(objId) && r.company &&
+    (inWk(r.call_date) || inWk(r.kp_date) || inWk(r.response_date)));
+  if (!rows.length) return '';
+  const line = r => {
+    const act = [inWk(r.call_date) ? 'звонок ' + fmtDate_(r.call_date) + (r.call_result ? ' (' + r.call_result + ')' : '') : '',
+      inWk(r.kp_date) ? (r.kp_type || 'КП') + ' ' + fmtDate_(r.kp_date) : '',
+      inWk(r.response_date) && r.response ? 'ответ: ' + r.response : ''].filter(Boolean).join('; ');
+    return '• ' + r.company + (r.audience ? ' [' + r.audience + ']' : '') + (r.contact ? ', ' + r.contact : '') + ' — ' + act +
+      (r.next_step ? '. Дальше: ' + r.next_step + (r.next_date instanceof Date ? ' ' + fmtDate_(r.next_date) : '') : '');
+  };
+  return '\nРабота с базой за неделю (' + rows.length + '):\n' + rows.slice(0, 40).map(line).join('\n') + (rows.length > 40 ? '\n… и ещё ' + (rows.length - 40) : '');
 }
 
 // ═════════════ 18_ImportObjects.gs ═════════════
@@ -6243,7 +6261,7 @@ function strategyBaseRows_(obj, lines, plan) {
     if (kpDate) { row.kp_date = kpDate; row.kp_type = dictValues_('kp_types')[0] || ''; }
     if (c[6]) {
       const resp = dictValues_('responses').find(x => x.toLowerCase() === c[6].toLowerCase());
-      if (resp) row.response = resp; else row.call_result = c[6];
+      if (resp) { row.response = resp; row.response_date = kpDate || today_(); } else row.call_result = c[6];
     }
     out.push(row);
     const other = companyElsewhere_(c[1], obj.id);

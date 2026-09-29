@@ -482,6 +482,7 @@ console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПр
   X.runStrategyImport('4801', ans);
   const b = X.readTable_('BASE').rows.filter(r => /Старое КП|Завод Ответил/.test(r.company));
   console.log('old kp rows:', b.map(r => [r.company, X.fmtDate_(r.kp_date), r.kp_type, r.response || r.call_result].join(' / ')).join(' ; '));
+  console.log('manager base lines:', X.baseWorkLines_('4801', '2026-W39').replace(/\n/g, ' | '));
   console.log('old kp report:', X.audienceReportLines_('4801', X.isoWeekKey_(X.today_())).filter(l => /база отдыха/.test(l)).join(' | '));
 }
 
