@@ -290,30 +290,125 @@ def yes_no(value):
     return ""
 
 
-def read_table(path):
-    """Строки .csv или .xlsx как список словарей {заголовок: значение}."""
+def read_grid(path):
+    """Все листы файла как [(лист, [[ячейки строки], ...]), ...]."""
     if str(path).lower().endswith(".xlsx"):
         try:
             import openpyxl
         except ImportError:
             sys.exit("Для .xlsx установите: python3 -m pip install --user openpyxl")
-        ws = openpyxl.load_workbook(path, read_only=True, data_only=True).active
-        rows = list(ws.iter_rows(values_only=True))
-        if not rows:
-            return []
-        head = [str(h or "").strip() for h in rows[0]]
-        return [{h: ("" if v is None else str(v)) for h, v in zip(head, r)}
-                for r in rows[1:] if any(v not in (None, "") for v in r)]
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        sheets = []
+        for ws in wb.worksheets:
+            rows = [["" if v is None else str(v).strip() for v in r]
+                    for r in ws.iter_rows(values_only=True)]
+            sheets.append((ws.title, [r for r in rows if any(r)]))
+        return sheets
     text = read_csv_text(path)
     first_line = text.split("\n", 1)[0]
     delimiter = ";" if first_line.count(";") > first_line.count(",") else ","
-    return list(csv.DictReader(io.StringIO(text), delimiter=delimiter))
+    rows = [[c.strip() for c in r] for r in csv.reader(io.StringIO(text),
+                                                        delimiter=delimiter)]
+    return [("", [r for r in rows if any(r)])]
+
+
+def read_table(path):
+    """Первый лист как список словарей {заголовок: значение}."""
+    sheets = read_grid(path)
+    if not sheets or not sheets[0][1]:
+        return []
+    head, *rows = sheets[0][1]
+    return [dict(zip(head, r + [""] * (len(head) - len(r)))) for r in rows]
+
+
+# Как называют колонки в чужих таблицах (списки с мероприятий и т.п.).
+GUESS_HEADERS = {  # порядок важен: «Телеграм» раньше, чем «тел»
+    "telegram": ("telegram", "телеграм", "телега", "тг", "tg", "ник", "username",
+                 "логин"),
+    "phone": ("телефон", "phone", "номер", "тел", "mobile", "моб", "whatsapp",
+              "ватсап", "сотов"),
+    "name": ("фио", "имя", "name", "фамилия", "отчество", "контакт", "участник",
+             "клиент", "гость"),
+    "sphere": ("сфера", "деятельн", "компания", "должность", "ниша", "бизнес",
+               "профессия", "род занятий", "отрасль", "company", "position"),
+}
+
+
+def _guess_kind(header):
+    h = header.lower()
+    for kind, words in GUESS_HEADERS.items():
+        if any(w in h for w in words):
+            return kind
+    return ""
+
+
+def parse_any_sheet(rows):
+    """Таблица неизвестного вида: ищем строку заголовков и колонки
+    с телефоном / Telegram / именем / сферой; остальное — в заметки."""
+    if not rows:
+        return []
+    head_i = next((i for i, r in enumerate(rows[:10])
+                   if sum(bool(_guess_kind(c)) for c in r if c) >= 1
+                   and not any(normalize_phone(c) for c in r)), None)
+    width = max(len(r) for r in rows)
+    body = rows[head_i + 1:] if head_i is not None else rows
+    head = (rows[head_i] if head_i is not None else []) + [""] * width
+    kinds = [_guess_kind(h) for h in head[:width]]
+    # Колонка без понятного заголовка, но где в основном номера или @ники.
+    for c in range(width):
+        vals = [r[c] for r in body if c < len(r) and r[c]]
+        if not vals or kinds[c]:
+            continue
+        if sum(bool(normalize_phone(v)) for v in vals) > len(vals) / 2:
+            kinds[c] = "phone"
+        elif sum(v.startswith("@") or "t.me/" in v for v in vals) > len(vals) / 2:
+            kinds[c] = "telegram"
+    if "phone" not in kinds and "telegram" not in kinds:
+        return []
+    items = []
+    for r in body:
+        r = r + [""] * (width - len(r))
+        item = {"phones": [], "name": "", "telegram": "", "sphere": "", "notes": "",
+                "tags": [], "add_only": True}
+        names, notes, spheres = [], [], []
+        for c, kind in enumerate(kinds):
+            v = r[c]
+            if not v:
+                continue
+            if kind == "phone":
+                item["phones"] += [p for p in re.split(r"[,;/]| {2,}", v) if p.strip()]
+            elif kind == "telegram" and not item["telegram"]:
+                if normalize_phone(v) and not v.startswith("@"):
+                    item["phones"].append(v)  # в колонке «ТГ» бывает номер
+                else:
+                    item["telegram"] = v.split()[0]
+            elif kind == "name":
+                names.append(v)
+            elif kind == "sphere":
+                spheres.append(v)
+            else:
+                notes.append(f"{head[c]}: {v}" if head[c] else v)
+        item["name"] = " ".join(names)
+        item["sphere"] = ", ".join(spheres)
+        item["notes"] = "; ".join(notes)
+        if item["phones"] or item["telegram"]:
+            items.append(item)
+    return items
 
 
 def parse_table(path):
-    """Наша таблица (после export / списки чатов) или экспорт Google Контактов."""
+    """Наша таблица (после export / списки чатов), экспорт Google Контактов
+    или любая другая таблица с телефонами или ником Telegram."""
+    table = read_table(path)
+    head = {k.strip().lower() for k in (table[0] if table else {})}
+    if not ({"phone", "телефон"} & head) and \
+            not any(h.startswith("phone 1") for h in head):
+        items = []
+        for _, rows in read_grid(path):
+            items += parse_any_sheet(rows)
+        return items
     result = []
-    for r in read_table(path):
+    for r in table:
         r = {k.strip(): (v or "").strip() for k, v in r.items()
              if isinstance(k, str) and isinstance(v, (str, type(None)))}
         mine = {HEADER_TO_KEY[k.lower()]: v for k, v in r.items()
@@ -374,7 +469,11 @@ def upsert_contact(db, item, extra_tags=()):
         row = db.execute("SELECT * FROM contacts WHERE id=?", (item["id"],)).fetchone()
     if row is None and phone:
         row = db.execute("SELECT * FROM contacts WHERE phone=?", (phone,)).fetchone()
-    if row is None and not phone:
+    tg = normalize_telegram(item.get("telegram"))
+    if row is None and tg:
+        row = db.execute("SELECT * FROM contacts WHERE telegram<>'' AND"
+                         " lower(telegram)=lower(?)", (tg,)).fetchone()
+    if row is None and not phone and not tg:
         return "skip"
 
     values = dict(item)
@@ -431,7 +530,10 @@ def upsert_contact(db, item, extra_tags=()):
 # ---------------------------------------------------------------- выборка, шаблоны
 
 def find_contact(db, key):
-    if str(key).isdigit() and len(str(key)) < 7:
+    if str(key).startswith("@"):
+        row = db.execute("SELECT * FROM contacts WHERE lower(telegram)=lower(?)",
+                         (normalize_telegram(key),)).fetchone()
+    elif str(key).isdigit() and len(str(key)) < 7:
         row = db.execute("SELECT * FROM contacts WHERE id=?", (int(key),)).fetchone()
     else:
         row = db.execute("SELECT * FROM contacts WHERE phone=?",
@@ -719,9 +821,10 @@ def cmd_list(db, a):
     for r in rows:
         flags = ("" if r["consent"] else " [нет согласия]") + \
                 (" [СТОП]" if r["stopped"] else "") + \
-                ("" if phone_ok(r["phone"]) else " [ОШИБКА В НОМЕРЕ]")
+                ("" if phone_ok(r["phone"]) or (r["telegram"] and not r["phone"])
+                 else " [ОШИБКА В НОМЕРЕ]")
         tg = f" @{r['telegram']}" if r["telegram"] else ""
-        print(f"{r['id']:>5}  {r['phone']:<14} {r['name'][:28]:<28} "
+        print(f"{r['id']:>5}  {r['phone'] or '':<14} {r['name'][:28]:<28} "
               f"{r['gender'] or '?'}  {r['region'][:18]:<18} "
               f"{r['tags']}{tg}{flags}")
     print(f"Итого: {len(rows)}")
@@ -924,9 +1027,11 @@ def cmd_send(db, a):
     everyone = select_contacts(db, tags, exclude, gender=a.gender, region=a.region)
     stopped = [r for r in everyone if r["stopped"]]
     no_consent = [r for r in everyone if not r["stopped"] and not r["consent"]]
-    bad_phone = [r for r in everyone if not phone_ok(r["phone"])]
+    bad_phone = [r for r in everyone
+                 if not phone_ok(r["phone"]) and not r["telegram"]]
     targets = [r for r in everyone
-               if not r["stopped"] and r["consent"] and phone_ok(r["phone"])]
+               if not r["stopped"] and r["consent"]
+               and (phone_ok(r["phone"]) or r["telegram"])]
 
     campaign = db.execute("SELECT * FROM campaigns WHERE name=?", (a.name,)).fetchone()
     if campaign:
@@ -996,6 +1101,8 @@ def cmd_send(db, a):
             for ch in channels:
                 if ch in dead or sent_count[ch] >= per_run:
                     continue
+                if ch != "tg" and not phone_ok(r["phone"]):
+                    continue  # только ник Telegram, номера нет
                 sender = get_sender(ch)
                 if sender is None:
                     continue

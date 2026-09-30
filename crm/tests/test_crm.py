@@ -127,6 +127,34 @@ class CrmTest(unittest.TestCase):
         self.assertEqual(items[0]["name"], "Рома Барбаев Wlc")
         self.assertEqual(items[1]["name"], "Агентство Дом")
 
+    def test_import_any_event_table(self):
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["Мероприятие 15.03.24, Москва"])
+        ws.append(["№", "ФИО", "Номер телефона", "Телеграм", "Компания", "Email"])
+        ws.append([1, "Иванова Мария", "8 916 123-45-67", "@maria_i", "Кофейня", "m@x.ru"])
+        ws.append([2, "Петров Олег", 79031112233, "", "IT", ""])
+        ws.append([3, "Только ник", "", "t.me/nick_only", "", ""])
+        ws2 = wb.create_sheet("ники")
+        ws2.append(["@one"]); ws2.append(["@two"]); ws2.append(["@three"])
+        path = self.dir / "event.xlsx"
+        wb.save(path)
+        crm.cmd_import(self.db, type("A", (), {"file": str(path), "tag": "мероприятие-мск"}))
+        rows = {r["telegram"] or r["phone"]: r for r in
+                self.db.execute("SELECT * FROM contacts").fetchall()}
+        self.assertEqual(rows["maria_i"]["phone"], "+79161234567")
+        self.assertEqual(rows["maria_i"]["sphere"], "Кофейня")
+        self.assertIn("Email: m@x.ru", rows["maria_i"]["notes"])
+        self.assertEqual(rows["+79031112233"]["name"], "Петров Олег")
+        self.assertIsNone(rows["nick_only"]["phone"])
+        self.assertIn("two", rows)
+        self.assertEqual(len(rows), 6)
+        self.assertTrue(all("мероприятие-мск" in r["tags"] for r in rows.values()))
+        # повторная загрузка не плодит дублей
+        crm.cmd_import(self.db, type("A", (), {"file": str(path), "tag": "мероприятие-мск"}))
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0], 6)
+
     def test_classify(self):
         import classify
         self.assertEqual(classify.guess_gender("", "Галина Вайбер Зал"), "ж")
