@@ -119,6 +119,14 @@ class CrmTest(unittest.TestCase):
         self.assertEqual(len(items), 3)
         self.assertIn("чат-wlc", [t for i in items for t in i["tags"]])
 
+    def test_vcf_org_goes_to_name(self):
+        items = crm.parse_vcf("BEGIN:VCARD\nVERSION:3.0\nN:Барбаев;Рома;;;\n"
+                              "FN:Рома Барбаев\nORG:Wlc;\nTEL:+79161112233\nEND:VCARD\n"
+                              "BEGIN:VCARD\nVERSION:3.0\nORG:Агентство Дом\n"
+                              "TEL:+79161112244\nEND:VCARD\n")
+        self.assertEqual(items[0]["name"], "Рома Барбаев Wlc")
+        self.assertEqual(items[1]["name"], "Агентство Дом")
+
     def test_classify(self):
         import classify
         self.assertEqual(classify.guess_gender("", "Галина Вайбер Зал"), "ж")

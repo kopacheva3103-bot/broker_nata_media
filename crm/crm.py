@@ -192,11 +192,16 @@ def parse_vcf(text):
             continue
         upper = line.upper()
         if upper.startswith("BEGIN:VCARD"):
-            cur = {"name": "", "n": "", "phones": [], "tags": [], "notes": ""}
+            cur = {"name": "", "n": "", "org": "", "phones": [], "tags": [],
+                   "notes": ""}
             continue
         if upper.startswith("END:VCARD"):
             if cur is not None:
-                cur["name"] = cur["name"] or cur["n"]
+                cur["name"] = cur["name"] or cur["n"] or cur["org"]
+                # Поле «Компания»: там часто стоят пометки вроде «Wlc», «агент».
+                if cur["org"] and cur["org"].lower() not in cur["name"].lower():
+                    cur["name"] = f"{cur['name']} {cur['org']}".strip()
+                del cur["n"], cur["org"]
                 contacts.append(cur)
             cur = None
             continue
@@ -218,6 +223,8 @@ def parse_vcf(text):
         elif key == "N":
             last, first = (value.split(";") + ["", ""])[:2]
             cur["n"] = " ".join(x for x in (first, last) if x).strip()
+        elif key == "ORG":
+            cur["org"] = " ".join(x.strip() for x in value.split(";") if x.strip())
         elif key == "TEL":
             cur["phones"].append(value)
         elif key == "CATEGORIES":
@@ -777,7 +784,7 @@ def cmd_regions(db, a):
         print(f"Скопировано файлов реестра: {n}")
     else:
         print("Скачиваю реестр номеров Минцифры (несколько минут)…")
-        n = classify.download_registry(folder)
+        n = classify.download_registry(folder, insecure=a.insecure)
     if not classify.Numbering(folder):
         sys.exit("Реестр не загружен. Скачайте в браузере файлы DEF-9xx.csv "
                  f"(и ABC-3xx/4xx/8xx) со страницы {classify.REGISTRY_PAGE} "
@@ -1056,6 +1063,8 @@ def build_parser():
 
     s = sub.add_parser("regions", help="загрузить реестр номеров (регион, оператор)")
     s.add_argument("--dir", help="папка, куда вы сами скачали DEF-9xx.csv")
+    s.add_argument("--insecure", action="store_true",
+                   help="не проверять сертификат сайта Минцифры (реестр — открытые данные)")
     s.set_defaults(func=cmd_regions)
 
     s = sub.add_parser("words", help="частые слова в именах контактов")

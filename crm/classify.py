@@ -232,17 +232,30 @@ def region_of(phone, numbering=None):
     return "", ""
 
 
-def download_registry(folder, log=print):
+def _ssl_context(insecure):
+    import ssl
+    if insecure:
+        return ssl._create_unverified_context()
+    try:
+        import certifi  # свежие корневые сертификаты (ставится вместе с requests)
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
+
+
+def download_registry(folder, log=print, insecure=False):
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
-    ok = 0
+    ok, ssl_failed = 0, False
     for name in REGISTRY_FILES:
         url = REGISTRY_URL.format(name)
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=120) as r:
+            with urllib.request.urlopen(req, timeout=180,
+                                        context=_ssl_context(insecure)) as r:
                 data = r.read()
         except Exception as e:  # сеть, сертификат, блокировка
+            ssl_failed |= "SSL" in str(e) or "CERTIFICATE" in str(e).upper()
             log(f"  {name}: не скачался ({e.__class__.__name__}: {e})")
             continue
         if data.count(b";") < 1000:
@@ -251,6 +264,11 @@ def download_registry(folder, log=print):
         (folder / name).write_bytes(data)
         ok += 1
         log(f"  {name}: скачан ({len(data) // 1024} КБ)")
+    if ssl_failed and not insecure:
+        log("Сайт Минцифры использует сертификат, которому Mac не доверяет "
+            "(российский удостоверяющий центр). Реестр — открытые данные без "
+            "личной информации, его можно скачать без проверки сертификата:\n"
+            "  python3 crm.py regions --insecure")
     return ok
 
 
