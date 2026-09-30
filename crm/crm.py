@@ -330,7 +330,7 @@ GUESS_HEADERS = {  # порядок важен: «Телеграм» раньш�
     "name": ("фио", "имя", "name", "фамилия", "отчество", "контакт", "участник",
              "клиент", "гость"),
     "sphere": ("сфера", "деятельн", "компания", "должность", "ниша", "бизнес",
-               "профессия", "род занятий", "отрасль", "company", "position"),
+               "профессия", "занима", "отрасль", "работ", "company", "position"),
 }
 
 
@@ -957,7 +957,7 @@ def cmd_set(db, a):
 
 def cmd_history(db, a):
     r = find_contact(db, a.contact)
-    print(f"{r['name']}  {r['phone']}  теги: {r['tags'] or '—'}  "
+    print(f"{r['name']}  {r['phone'] or ('@' + r['telegram'])}  теги: {r['tags'] or '—'}  "
           f"согласие: {'да' if r['consent'] else 'нет'}"
           f"{'  [СТОП]' if r['stopped'] else ''}")
     if r["notes"]:
