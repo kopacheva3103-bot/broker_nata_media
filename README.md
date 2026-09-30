@@ -5,3 +5,9 @@
 
 Фото лежат в `photos/`, ссылки на них формата:
 `https://raw.githubusercontent.com/kopacheva3103-bot/broker_nata_media/main/photos/<файл>`
+
+## crm/ — база контактов и рассылки
+
+В папке `crm/` лежит только код инструмента для рассылок (без данных).
+Контакты и ключи хранятся локально и исключены через `crm/.gitignore`.
+Инструкция: [crm/README.md](crm/README.md).

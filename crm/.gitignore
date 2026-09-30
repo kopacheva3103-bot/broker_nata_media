@@ -1,0 +1,13 @@
+# Личные данные и секреты НЕ попадают в git (репозиторий публичный!)
+data/
+*.db
+*.sqlite
+*.session
+*.session-journal
+*.vcf
+*.csv
+!example_contacts.csv
+.env
+config.ini
+wa_links_*.html
+__pycache__/
