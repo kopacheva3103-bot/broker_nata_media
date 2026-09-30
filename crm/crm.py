@@ -145,6 +145,16 @@ def timeline(db, contact_id):
     return sorted(items, key=lambda x: x["at"], reverse=True)
 
 
+def telegram_configured(cfg):
+    """Заполнен ли [telegram] в config.ini (а не образец из config.example.ini)."""
+    if not cfg.has_section("telegram"):
+        return False
+    t = cfg["telegram"]
+    return t.get("api_id", "").strip().isdigit() and t.get("api_id") != "1234567" \
+        and len(t.get("api_hash", "").strip()) == 32 \
+        and not t.get("api_hash", "").startswith("0123456789abcdef")
+
+
 def load_config():
     cfg = configparser.ConfigParser()
     if CONFIG_PATH.exists():
@@ -673,8 +683,9 @@ class TelegramSender:
             from telethon.sync import TelegramClient
         except ImportError:
             raise StopChannel("не установлен telethon: pip install -r requirements.txt")
-        if not cfg.has_section("telegram"):
-            raise StopChannel("нет секции [telegram] в config.ini")
+        if not telegram_configured(cfg):
+            raise StopChannel("Telegram не настроен: заполните [telegram] в config.ini "
+                              "и выполните python3 crm.py tg-login")
         t = cfg["telegram"]
         self.client = TelegramClient(str(DATA_DIR / "telegram"),
                                      int(t["api_id"]), t["api_hash"])
@@ -1264,6 +1275,39 @@ def cmd_send(db, a):
     print("Итог по каналам:", sent_count)
 
 
+def cmd_tg_login(db, a):
+    """Первый вход в Telegram: код из приложения Telegram (и облачный пароль,
+    если он включён) вводится здесь, дальше вход запоминается."""
+    cfg = load_config()
+    if not telegram_configured(cfg) or a.reset:
+        print("Нужны ключи с https://my.telegram.org → API development tools "
+              "(App api_id и App api_hash).")
+        api_id = input("api_id (только цифры): ").strip()
+        api_hash = input("api_hash (32 символа): ").strip()
+        phone = normalize_phone(input("Ваш номер телефона в Telegram: ").strip())
+        if not cfg.has_section("telegram"):
+            cfg.add_section("telegram")
+        cfg["telegram"].update(api_id=api_id, api_hash=api_hash, phone=phone or "")
+        if not telegram_configured(cfg):
+            sys.exit("Ключи не похожи на настоящие: api_id — только цифры, "
+                     "api_hash — 32 символа. Запустите команду ещё раз.")
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            cfg.write(f)
+        print("Ключи сохранены в config.ini (он только на вашем компьютере).")
+    print("Подключаюсь к Telegram. Если попросит — введите код, который придёт "
+          "в приложение Telegram (не SMS), и облачный пароль, если он у вас есть.")
+    try:
+        tg = TelegramSender(cfg)
+    except StopChannel as e:
+        sys.exit(str(e))
+    me = tg.client.get_me()
+    tg.client.send_message("me", "✅ База контактов подключена к Telegram. "
+                                 "Отсюда можно отправлять сообщения.")
+    print(f"Готово: вход как {me.first_name or ''} {me.last_name or ''} (+{me.phone}). "
+          "Проверочное сообщение — в «Избранном» в Telegram.")
+    tg.client.disconnect()
+
+
 def cmd_app(db, a):
     import webapp
     webapp.run(db, port=a.port, open_browser=not a.no_browser)
@@ -1346,6 +1390,10 @@ def build_parser():
                    help="максимум сообщений на канал за запуск")
     s.add_argument("--send", action="store_true", help="реально отправить")
     s.set_defaults(func=cmd_send)
+
+    s = sub.add_parser("tg-login", help="подключить ваш Telegram (один раз)")
+    s.add_argument("--reset", action="store_true", help="ввести ключи заново")
+    s.set_defaults(func=cmd_tg_login)
 
     s = sub.add_parser("app", help="открыть базу в браузере: карточки, история, сообщения")
     s.add_argument("--port", type=int, default=8765)

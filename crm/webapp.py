@@ -85,7 +85,7 @@ class App:
             "categories": [[t, t, n] for t, n in order if not crm.is_source(t)],
             "spheres": sorted(spheres.items(), key=lambda x: -x[1])[:100],
             "total": self.db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0],
-            "telegram_auto": self.cfg.has_section("telegram"),
+            "telegram_auto": crm.telegram_configured(self.cfg),
             "mac": __import__("sys").platform == "darwin",
         }
 
@@ -179,7 +179,7 @@ class App:
                 results.append({**item, "status": "нет номера и ника"})
                 continue
             use_auto = auto and not stop_reason and (
-                (channel == "tg" and self.cfg.has_section("telegram")) or
+                (channel == "tg" and crm.telegram_configured(self.cfg)) or
                 (channel == "sms" and __import__("sys").platform == "darwin"))
             if not use_auto:
                 results.append({**item, "status": "ссылка", "link": self.links(r, text, channel)})
