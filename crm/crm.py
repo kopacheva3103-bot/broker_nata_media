@@ -75,7 +75,25 @@ CREATE TABLE IF NOT EXISTS messages (
     sent_at     TEXT NOT NULL,
     UNIQUE (campaign_id, contact_id, channel)
 );
+-- История взаимодействий: сообщения (в обе стороны), звонки, встречи,
+-- заметки, откуда человек попал в базу.
+CREATE TABLE IF NOT EXISTS interactions (
+    id          INTEGER PRIMARY KEY,
+    contact_id  INTEGER NOT NULL REFERENCES contacts(id),
+    at          TEXT NOT NULL,
+    channel     TEXT NOT NULL DEFAULT '',
+    direction   TEXT NOT NULL DEFAULT '',
+    kind        TEXT NOT NULL DEFAULT '',
+    text        TEXT NOT NULL DEFAULT '',
+    status      TEXT NOT NULL DEFAULT '',
+    ext_id      TEXT,
+    UNIQUE (contact_id, ext_id)
+);
+CREATE INDEX IF NOT EXISTS interactions_contact ON interactions (contact_id, at);
 """
+
+CHANNEL_TITLES = {"tg": "Telegram", "wa": "WhatsApp", "sms": "SMS", "call": "Звонок",
+                  "meet": "Встреча", "email": "Email", "": ""}
 
 # Статусы, при которых человек считается охваченным кампанией.
 DELIVERED = ("sent", "queued", "link")
@@ -102,6 +120,29 @@ def connect(path=None):
         db.execute("UPDATE contacts SET in_phonebook=1 WHERE notes NOT LIKE 'из чата%'")
     db.commit()
     return db
+
+
+def log_interaction(db, contact_id, kind, text="", channel="", direction="",
+                    status="", at=None, ext_id=None):
+    db.execute(
+        "INSERT OR IGNORE INTO interactions (contact_id, at, channel, direction,"
+        " kind, text, status, ext_id) VALUES (?,?,?,?,?,?,?,?)",
+        (contact_id, at or now(), channel, direction, kind, text, status, ext_id))
+
+
+def timeline(db, contact_id):
+    """Вся история человека, от новых к старым: взаимодействия и рассылки."""
+    items = [dict(r) for r in db.execute(
+        "SELECT at, channel, direction, kind, text, status FROM interactions"
+        " WHERE contact_id=?", (contact_id,))]
+    for m in db.execute(
+            "SELECT m.sent_at AS at, m.channel, m.status, m.text, c.name AS campaign"
+            " FROM messages m JOIN campaigns c ON c.id=m.campaign_id"
+            " WHERE m.contact_id=?", (contact_id,)):
+        items.append({"at": m["at"], "channel": m["channel"], "direction": "out",
+                      "kind": f"рассылка «{m['campaign']}»", "text": m["text"],
+                      "status": m["status"]})
+    return sorted(items, key=lambda x: x["at"], reverse=True)
 
 
 def load_config():
@@ -516,6 +557,7 @@ def upsert_contact(db, item, extra_tags=()):
             (phone, join_tags(list(item.get("tags", [])) + list(extra_tags)),
              *[values.get(f) or "" for f in TEXT_FIELDS],
              *[int(values.get(f) or 0) for f in INT_FIELDS], now(), now()))
+        item["_contact_id"] = db.execute("SELECT last_insert_rowid()").fetchone()[0]
         return "new"
 
     if item.get("replace_tags"):  # файл из export — это «истина» для тегов
@@ -535,6 +577,8 @@ def upsert_contact(db, item, extra_tags=()):
         value, old = values.get(f), row[f]
         if f == "notes" and add_only and value:
             new[f] = value  # склеенная заметка
+        elif f == "call_name" and add_only and row["name"]:
+            new[f] = old  # обращение — по вашей записи, не по нику из чата
         elif value in (None, "") or (add_only and old not in (None, "", 0)):
             new[f] = old  # не затираем имя из телефонной книги и т.п.
         else:
@@ -548,6 +592,7 @@ def upsert_contact(db, item, extra_tags=()):
         (phone or row["phone"], join_tags(tags),
          *[int(new[f] or 0) if f in INT_FIELDS else new[f] for f in fields],
          now(), row["id"]))
+    item["_contact_id"] = row["id"]
     return "upd"
 
 
@@ -568,7 +613,7 @@ def find_contact(db, key):
 
 
 def select_contacts(db, tags=(), exclude=(), search="", gender="", region=""):
-    rows = db.execute("SELECT * FROM contacts ORDER BY name").fetchall()
+    rows = db.execute("SELECT * FROM contacts ORDER BY name='', name").fetchall()
     gender = classify.parse_gender(gender) if gender else ""
     out = []
     for r in rows:
@@ -667,6 +712,15 @@ class TelegramSender:
         except (ValueError, errors.RPCError) as e:
             return "error", str(e)
 
+    def history(self, contact, limit=30):
+        """Последние сообщения переписки с человеком: [(id, дата, out?, текст)]."""
+        user = self._resolve(contact)
+        if user is None:
+            return []
+        return [(m.id, m.date.astimezone().replace(tzinfo=None).isoformat(timespec="seconds"),
+                 m.out, m.raw_text or "[вложение]")
+                for m in self.client.iter_messages(user, limit=limit)]
+
     def stopped_senders(self, days=30):
         """Номера/юзернеймы тех, кто ответил «стоп» за последние дни."""
         since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)
@@ -710,6 +764,45 @@ class SmsSender:
         if r.status_code >= 400:
             return "error", f"HTTP {r.status_code}: {r.text[:200]}"
         return "queued", ""
+
+
+class MacMessagesSender:
+    """SMS с вашего номера через «Сообщения» на Mac (iPhone пересылает SMS:
+    Настройки iPhone → Сообщения → Переадресация → включить этот Mac)."""
+
+    SCRIPTS = (
+        # macOS 11+
+        '''on run argv
+  tell application "Messages"
+    set s to 1st account whose service type = SMS
+    send (item 2 of argv) to participant (item 1 of argv) of s
+  end tell
+end run''',
+        # старые macOS
+        '''on run argv
+  tell application "Messages"
+    set s to 1st service whose service type = SMS
+    send (item 2 of argv) to buddy (item 1 of argv) of s
+  end tell
+end run''',
+    )
+
+    def __init__(self, cfg=None):
+        if sys.platform != "darwin":
+            raise StopChannel("SMS через «Сообщения» работает только на Mac")
+
+    def send(self, contact, text, photo=""):
+        import subprocess
+        if photo:
+            text = f"{text}\n{photo}"
+        err = ""
+        for script in self.SCRIPTS:
+            r = subprocess.run(["osascript", "-e", script, contact["phone"], text],
+                               capture_output=True, text=True, timeout=60)
+            if r.returncode == 0:
+                return "sent", ""
+            err = r.stderr.strip()
+        return "error", err[:300]
 
 
 class WhatsAppLinks:
@@ -766,8 +859,17 @@ def cmd_import(db, a):
     else:
         sys.exit("Поддерживаются .vcf (из телефона), .csv и .xlsx")
     stats = {"new": 0, "upd": 0, "skip": 0}
+    source = path.name
     for item in items:
-        stats[upsert_contact(db, item, split_tags(a.tag))] += 1
+        status = upsert_contact(db, item, split_tags(a.tag))
+        stats[status] += 1
+        # В историю: откуда человек появился или что о нём добавилось.
+        if status == "new":
+            log_interaction(db, item["_contact_id"], "добавлен в базу",
+                            f"из файла {source}", ext_id=f"import:{source}")
+        elif status == "upd" and item.get("add_only"):
+            log_interaction(db, item["_contact_id"], "найден в списке",
+                            f"{source}", ext_id=f"import:{source}")
     db.commit()
     print(f"Новых: {stats['new']}, обновлено: {stats['upd']}, "
           f"без номера (пропущено): {stats['skip']}")
@@ -967,6 +1069,7 @@ def cmd_set(db, a):
     notes = r["notes"]
     if a.note:
         notes = f"{notes}\n{dt.date.today()}: {a.note}".strip()
+        log_interaction(db, r["id"], "заметка", a.note)
     db.execute(
         "UPDATE contacts SET tags=?, telegram=?, consent=?, stopped=?, notes=?,"
         " updated_at=? WHERE id=?",
@@ -986,11 +1089,12 @@ def cmd_history(db, a):
           f"{'  [СТОП]' if r['stopped'] else ''}")
     if r["notes"]:
         print(f"Заметки: {r['notes']}")
-    for m in db.execute(
-            "SELECT m.*, c.name AS campaign FROM messages m JOIN campaigns c"
-            " ON c.id=m.campaign_id WHERE contact_id=? ORDER BY sent_at", (r["id"],)):
-        print(f"  {m['sent_at']}  {m['channel']:<3} {m['status']:<10} "
-              f"{m['campaign']} {m['error']}")
+    for e in timeline(db, r["id"]):
+        arrow = {"out": "→", "in": "←"}.get(e["direction"], "•")
+        print(f"  {e['at'][:16].replace('T', ' ')}  {arrow} "
+              f"{CHANNEL_TITLES.get(e['channel'], e['channel']):<9} {e['kind']}"
+              f"{': ' + e['text'][:80] if e['text'] else ''}"
+              f"{' [' + e['status'] + ']' if e['status'] else ''}")
 
 
 def cmd_campaigns(db, a):
@@ -1160,6 +1264,11 @@ def cmd_send(db, a):
     print("Итог по каналам:", sent_count)
 
 
+def cmd_app(db, a):
+    import webapp
+    webapp.run(db, port=a.port, open_browser=not a.no_browser)
+
+
 def build_parser():
     p = argparse.ArgumentParser(description="CRM брокера: контакты и рассылки")
     p.add_argument("--db", help="путь к базе (по умолчанию data/crm.db)")
@@ -1237,6 +1346,11 @@ def build_parser():
                    help="максимум сообщений на канал за запуск")
     s.add_argument("--send", action="store_true", help="реально отправить")
     s.set_defaults(func=cmd_send)
+
+    s = sub.add_parser("app", help="открыть базу в браузере: карточки, история, сообщения")
+    s.add_argument("--port", type=int, default=8765)
+    s.add_argument("--no-browser", action="store_true")
+    s.set_defaults(func=cmd_app)
 
     sub.add_parser("campaigns", help="список рассылок и статистика") \
         .set_defaults(func=cmd_campaigns)

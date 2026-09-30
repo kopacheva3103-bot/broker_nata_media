@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>База контактов</title>
+<style>
+:root {
+  --bg: #f6f6f4; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66;
+  --line: #e4e3de; --accent: #2f6f5e; --accent-ink: #ffffff; --soft: #eef4f1;
+  --warn: #9a5b00; --warn-bg: #fff4dd; --bad: #a33a2a; --hl: #fff8d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615; --panel: #1f1f1d; --ink: #ecebe6; --muted: #a09f98;
+    --line: #34332f; --accent: #6cc2a6; --accent-ink: #0d1f19; --soft: #1f2b27;
+    --warn: #f0b35a; --warn-bg: #3a2c12; --bad: #f08a78; --hl: #33301c;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+       background: var(--bg); color: var(--ink); }
+header { display: flex; gap: 12px; align-items: center; padding: 10px 16px;
+         background: var(--panel); border-bottom: 1px solid var(--line);
+         position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+header h1 { font-size: 16px; margin: 0 8px 0 0; }
+input, select, textarea, button { font: inherit; color: inherit; }
+input[type=text], input[type=search], select, textarea {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; }
+#q { flex: 1; min-width: 220px; }
+button { border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
+         padding: 6px 12px; cursor: pointer; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+.layout { display: grid; grid-template-columns: 250px 1fr; min-height: calc(100vh - 56px); }
+aside { padding: 14px 16px; border-right: 1px solid var(--line); overflow: auto;
+        max-height: calc(100vh - 56px); position: sticky; top: 56px; }
+aside h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+           color: var(--muted); margin: 16px 0 6px; }
+aside label { display: flex; gap: 6px; align-items: center; padding: 2px 0; cursor: pointer; }
+aside .n { margin-left: auto; color: var(--muted); font-size: 12px; }
+aside select, aside input[type=text] { width: 100%; }
+main { padding: 12px 16px; overflow: auto; }
+.bar { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.muted { color: var(--muted); }
+table { width: 100%; border-collapse: collapse; background: var(--panel);
+        border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line);
+         vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; background: var(--panel); }
+tr.row { cursor: pointer; }
+tr.row:hover td { background: var(--soft); }
+tr.ov td { background: var(--hl); }
+.tag { display: inline-block; padding: 1px 7px; margin: 1px 2px 1px 0; border-radius: 999px;
+       background: var(--soft); font-size: 12px; white-space: nowrap; }
+.tag.src { border: 1px solid var(--line); background: transparent; }
+.flag { font-size: 12px; color: var(--warn); }
+.flag.bad { color: var(--bad); }
+.pager { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
+#card { position: fixed; top: 0; right: 0; width: min(520px, 100vw); height: 100vh;
+        background: var(--panel); border-left: 1px solid var(--line); overflow: auto;
+        padding: 16px 18px 40px; transform: translateX(105%); transition: transform .18s;
+        z-index: 20; box-shadow: -8px 0 24px rgba(0,0,0,.12); }
+#card.open { transform: none; }
+#card h2 { margin: 0 0 2px; font-size: 18px; }
+.grid { display: grid; grid-template-columns: 120px 1fr; gap: 6px 10px; margin: 12px 0; }
+.grid label { color: var(--muted); padding-top: 6px; }
+.grid input, .grid select, .grid textarea { width: 100%; }
+.grid input[type=checkbox] { width: auto; }
+.grid label.chk { color: var(--ink); display: flex; gap: 6px; align-items: center; }
+.tl { list-style: none; padding: 0; margin: 8px 0; }
+.tl li { border-left: 2px solid var(--line); padding: 4px 0 10px 12px; position: relative; }
+.tl li::before { content: ""; position: absolute; left: -5px; top: 9px; width: 8px; height: 8px;
+                 border-radius: 50%; background: var(--line); }
+.tl li.out::before { background: var(--accent); }
+.tl li.in::before { background: var(--warn); }
+.tl .meta { font-size: 12px; color: var(--muted); }
+.tl .txt { white-space: pre-wrap; }
+.row2 { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+         color: var(--ink); width: min(680px, 96vw); padding: 18px; }
+dialog::backdrop { background: rgba(0,0,0,.35); }
+.channels label { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+                  cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.channels input:checked + span { font-weight: 600; }
+.note { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px;
+        font-size: 13px; margin: 8px 0; }
+.preview { background: var(--bg); border-radius: 8px; padding: 10px; white-space: pre-wrap;
+           border: 1px solid var(--line); }
+.queue { max-height: 50vh; overflow: auto; }
+.queue .q { display: flex; gap: 8px; align-items: center; padding: 6px 0;
+            border-bottom: 1px solid var(--line); }
+.queue .q .who { flex: 1; }
+.close { float: right; }
+@media (max-width: 800px) {
+  .layout { grid-template-columns: 1fr; }
+  aside { position: static; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
+  .hide-sm { display: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>База контактов</h1>
+  <input id="q" type="search" placeholder="Поиск: имя, телефон, заметка, @ник">
+  <span id="count" class="muted"></span>
+  <button id="sendSel" class="primary" disabled>Написать выбранным (0)</button>
+</header>
+<div class="layout">
+  <aside>
+    <h3>Откуда</h3><div id="fSources"></div>
+    <h3>Категории</h3><div id="fCats"></div>
+    <h3>Пол</h3>
+    <select id="fGender"><option value="">все</option><option value="ж">женщины</option>
+      <option value="м">мужчины</option></select>
+    <h3>Регион номера</h3><input id="fRegion" type="text" placeholder="например, Москва">
+    <h3>Сфера деятельности</h3><input id="fSphere" type="text" placeholder="например, IT">
+    <h3>Ещё</h3>
+    <label><input type="checkbox" id="fOverlap"> есть и в телефоне, и в списках</label>
+    <label><input type="checkbox" id="fConsent"> только с согласием</label>
+    <label><input type="checkbox" id="fNoStop" checked> скрыть «СТОП»</label>
+    <p class="muted" style="font-size:12px">Внутри блока — «любой из»; «Откуда» и «Категории» вместе — пересечение (например, агенты из чата WLC).</p>
+  </aside>
+  <main>
+    <div class="bar">
+      <button id="selPage">Выбрать на странице</button>
+      <button id="selAll">Выбрать всех найденных</button>
+      <button id="selNone">Снять выбор</button>
+    </div>
+    <table>
+      <thead><tr><th style="width:28px"></th><th>Имя</th><th>Телефон / Telegram</th>
+        <th class="hide-sm">Регион</th><th>Категории и списки</th><th class="hide-sm">Последний контакт</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="pager"><button id="prev">←</button><span id="page" class="muted"></span>
+      <button id="next">→</button></div>
+  </main>
+</div>
+
+<div id="card"></div>
+
+<dialog id="composer">
+  <button class="close" onclick="composer.close()">✕</button>
+  <h3 style="margin-top:0">Сообщение: <span id="cmpWho"></span></h3>
+  <div class="channels row2">
+    <label><input type="radio" name="ch" value="tg" checked><span>Telegram</span></label>
+    <label><input type="radio" name="ch" value="wa"><span>WhatsApp</span></label>
+    <label><input type="radio" name="ch" value="sms"><span>SMS</span></label>
+  </div>
+  <div id="chHint" class="muted" style="font-size:13px"></div>
+  <textarea id="cmpText" rows="7" style="width:100%;margin-top:8px"
+    placeholder="{hello}, {first_name}! …">{hello}, {first_name}! </textarea>
+  <div class="muted" style="font-size:12px">Подстановки: {hello} — «Добрый день»,
+    {first_name} — обращение, {name} — имя как в телефоне.</div>
+  <div id="cmpWarn"></div>
+  <p class="muted" style="margin:10px 0 4px">Как увидит первый получатель:</p>
+  <div id="cmpPreview" class="preview"></div>
+  <div class="row2" style="justify-content:flex-end;margin-top:12px">
+    <button onclick="composer.close()">Отмена</button>
+    <button id="cmpSend" class="primary">Отправить</button>
+  </div>
+  <div id="cmpResult"></div>
+</dialog>
+
+<script>
+const TOKEN = "__TOKEN__";
+const H = {"X-CRM-Token": TOKEN, "Content-Type": "application/json"};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const CH = {tg: "Telegram", wa: "WhatsApp", sms: "SMS", call: "Звонок", meet: "Встреча", email: "Email"};
+const fmt = at => at ? at.slice(0, 16).replace("T", " ") : "";
+let facets = {}, page = 0, total = 0, items = [], selected = new Set(), current = null;
+const LIMIT = 100;
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {headers: H}
+    : {method: "POST", headers: H, body: JSON.stringify(body)});
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || r.status);
+  return data;
+}
+
+function checks(el, list, name) {
+  el.innerHTML = list.map(([t, title, n]) =>
+    `<label><input type="checkbox" name="${name}" value="${esc(t)}"> ${esc(title)}
+     <span class="n">${n}</span></label>`).join("") || '<span class="muted">—</span>';
+  el.querySelectorAll("input").forEach(i => i.onchange = () => { page = 0; load(); });
+}
+
+function query(extra = {}) {
+  const val = n => [...document.querySelectorAll(`aside input[name=${n}]:checked`)].map(i => i.value).join(",");
+  const p = new URLSearchParams({
+    q: $("#q").value, src: val("src"), cat: val("cat"), gender: $("#fGender").value,
+    region: $("#fRegion").value, sphere: $("#fSphere").value,
+    overlap: $("#fOverlap").checked ? 1 : 0, consent: $("#fConsent").checked ? 1 : 0,
+    nostop: $("#fNoStop").checked ? 1 : 0, offset: page * LIMIT, limit: LIMIT, ...extra});
+  return p.toString();
+}
+
+async function load() {
+  const data = await api("/api/contacts?" + query());
+  total = data.total; items = data.items;
+  $("#count").textContent = `найдено ${total} из ${facets.total}`;
+  $("#page").textContent = total ? `${page * LIMIT + 1}–${Math.min(total, (page + 1) * LIMIT)}` : "";
+  $("#prev").disabled = page === 0; $("#next").disabled = (page + 1) * LIMIT >= total;
+  $("#rows").innerHTML = items.map(c => `
+    <tr class="row ${c.overlap ? "ov" : ""}" data-id="${c.id}">
+      <td><input type="checkbox" data-sel="${c.id}" ${selected.has(c.id) ? "checked" : ""}></td>
+      <td><b>${esc(c.name || "—")}</b>${c.call_name && c.call_name !== c.name ? `<div class="muted">${esc(c.call_name)}</div>` : ""}
+        ${c.stopped ? '<div class="flag bad">СТОП</div>' : ""}${!c.consent ? '<div class="flag">нет согласия</div>' : ""}</td>
+      <td>${esc(c.phone || "")}${c.telegram ? `<div class="muted">@${esc(c.telegram)}</div>` : ""}</td>
+      <td class="hide-sm">${esc(c.region || "")}</td>
+      <td>${c.tags.map(t => `<span class="tag ${t.startsWith("чат-") || t.startsWith("мероприятие-") || t.startsWith("сделки-") ? "src" : ""}">${esc(t)}</span>`).join("")}
+        ${c.sphere ? `<div class="muted">${esc(c.sphere)}</div>` : ""}</td>
+      <td class="hide-sm muted">${fmt(c.last)}</td>
+    </tr>`).join("") || '<tr><td colspan="6" class="muted">Никого не нашлось</td></tr>';
+  document.querySelectorAll("tr.row").forEach(tr => tr.onclick = e => {
+    if (e.target.matches("input")) return;
+    openCard(+tr.dataset.id);
+  });
+  document.querySelectorAll("[data-sel]").forEach(cb => cb.onchange = () => {
+    cb.checked ? selected.add(+cb.dataset.sel) : selected.delete(+cb.dataset.sel); updSel();
+  });
+}
+
+function updSel() {
+  $("#sendSel").textContent = `Написать выбранным (${selected.size})`;
+  $("#sendSel").disabled = !selected.size;
+}
+
+async function openCard(id) {
+  current = await api("/api/contact/" + id);
+  renderCard();
+  $("#card").classList.add("open");
+}
+
+function renderCard() {
+  const c = current;
+  $("#card").innerHTML = `
+    <button class="close" onclick="document.querySelector('#card').classList.remove('open')">✕</button>
+    <h2>${esc(c.name || c.phone || "@" + c.telegram)}</h2>
+    <div class="muted">${esc(c.phone || "")} ${c.telegram ? "· @" + esc(c.telegram) : ""}
+      · ${esc(c.region || "")} ${c.operator ? "· " + esc(c.operator) : ""}</div>
+    <div class="muted">Откуда: ${esc(c.sources || "—")}</div>
+    <div class="row2">
+      <button class="primary" onclick="compose([${c.id}], 'tg')">Telegram</button>
+      <button class="primary" onclick="compose([${c.id}], 'wa')">WhatsApp</button>
+      <button class="primary" onclick="compose([${c.id}], 'sms')">SMS</button>
+      ${facets.telegram_auto ? `<button onclick="syncTg(${c.id})">Подтянуть переписку из Telegram</button>` : ""}
+    </div>
+    <div class="grid">
+      <label>Имя</label><input id="eName" value="${esc(c.name)}">
+      <label>Обращение</label><input id="eCall" value="${esc(c.call_name)}">
+      <label>Пол</label><select id="eGender"><option value=""></option>
+        <option value="ж" ${c.gender_code === "ж" ? "selected" : ""}>женщина</option>
+        <option value="м" ${c.gender_code === "м" ? "selected" : ""}>мужчина</option></select>
+      <label>Сфера</label><input id="eSphere" value="${esc(c.sphere)}" placeholder="IT, красота…">
+      <label>Категории</label><input id="eTags" value="${esc(c.tags.join(", "))}">
+      <label>Telegram</label><input id="eTg" value="${esc(c.telegram)}" placeholder="ник без @">
+      <label>Согласие</label><label class="chk"><input type="checkbox" id="eConsent" ${c.consent ? "checked" : ""}> согласен(на) получать предложения</label>
+      <label>СТОП</label><label class="chk"><input type="checkbox" id="eStop" ${c.stopped ? "checked" : ""}> просит не писать</label>
+      <label>Заметки</label><textarea id="eNotes" rows="4">${esc(c.notes)}</textarea>
+    </div>
+    <div class="row2"><button class="primary" onclick="saveCard()">Сохранить</button><span id="saved" class="muted"></span></div>
+    <h3>Добавить в историю</h3>
+    <div class="row2">
+      <select id="lKind"><option>звонок</option><option>встреча</option><option>входящее сообщение</option>
+        <option>сообщение</option><option>показ объекта</option><option>заметка</option></select>
+      <select id="lCh"><option value="">—</option><option value="call">звонок</option><option value="tg">Telegram</option>
+        <option value="wa">WhatsApp</option><option value="sms">SMS</option><option value="meet">встреча</option></select>
+      <input id="lAt" type="datetime-local">
+    </div>
+    <textarea id="lText" rows="2" style="width:100%" placeholder="О чём договорились, что интересно…"></textarea>
+    <div class="row2"><button onclick="addLog()">Добавить</button></div>
+    <h3>История</h3>
+    <ul class="tl">${c.timeline.map(e => `
+      <li class="${esc(e.direction)}"><div class="meta">${[fmt(e.at), CH[e.channel] || e.channel,
+        e.direction === "out" ? "→ исходящее" : e.direction === "in" ? "← входящее" : "",
+        e.kind, e.status].filter(Boolean).map(esc).join(" · ")}</div>
+        ${e.text ? `<div class="txt">${esc(e.text)}</div>` : ""}</li>`).join("") || '<li class="muted">Пока пусто</li>'}
+    </ul>`;
+}
+
+async function saveCard() {
+  current = await api("/api/contact/" + current.id, {
+    name: $("#eName").value, call_name: $("#eCall").value, gender: $("#eGender").value,
+    sphere: $("#eSphere").value, tags: $("#eTags").value, telegram: $("#eTg").value,
+    consent: $("#eConsent").checked ? 1 : 0, stopped: $("#eStop").checked ? 1 : 0,
+    notes: $("#eNotes").value});
+  renderCard(); $("#saved").textContent = "сохранено"; load();
+}
+
+async function addLog() {
+  const kind = $("#lKind").value;
+  current = await api(`/api/contact/${current.id}/log`, {
+    kind, channel: $("#lCh").value, text: $("#lText").value,
+    direction: kind === "входящее сообщение" ? "in" : kind === "сообщение" ? "out" : "",
+    at: $("#lAt").value ? $("#lAt").value + ":00" : ""});
+  renderCard(); load();
+}
+
+async function syncTg(id) {
+  try {
+    current = await api(`/api/contact/${id}/sync-tg`, {});
+    renderCard(); alert(`Добавлено сообщений из Telegram: ${current.synced}`);
+  } catch (e) { alert("Не получилось: " + e.message); }
+}
+
+// ---------------------------------------------------------- отправка
+let cmpIds = [];
+function chan() { return document.querySelector("input[name=ch]:checked").value; }
+
+async function compose(ids, channel) {
+  cmpIds = ids;
+  if (channel) document.querySelector(`input[name=ch][value=${channel}]`).checked = true;
+  $("#cmpWho").textContent = ids.length === 1
+    ? (items.find(i => i.id === ids[0])?.name || current?.name || "1 человек") : `${ids.length} чел.`;
+  $("#cmpResult").innerHTML = ""; $("#cmpSend").disabled = false;
+  const chk = await api("/api/send", {ids, dry: true});
+  compose.first = chk.first;
+  const noConsent = chk.no_consent, stop = chk.stopped;
+  if (ids.length > 200) alert("За один раз — до 200 человек, отправятся первые 200.");
+  compose.warn = (noConsent ? `У ${noConsent} чел. нет отметки о согласии. Рекламное предложение без согласия отправлять нельзя (38-ФЗ); личное сообщение — можно. ` : "")
+    + (stop ? `${stop} чел. просили не писать — им не отправится.` : "");
+  hint(); preview();
+  composer.showModal();
+}
+
+function hint() {
+  const c = chan();
+  $("#chHint").textContent = c === "wa"
+    ? "WhatsApp: откроется чат с готовым текстом, нажмите «Отправить» в WhatsApp. Отметка попадёт в историю."
+    : c === "tg" ? (facets.telegram_auto
+      ? "Telegram: отправится автоматически с вашего аккаунта (пауза 4–12 с между сообщениями)."
+      : "Telegram: откроется чат, текст будет скопирован — вставьте (⌘V) и отправьте. Для автоматической отправки заполните [telegram] в config.ini.")
+    : (facets.mac ? "SMS: отправится автоматически через «Сообщения» на Mac с вашего номера (нужна переадресация SMS с iPhone)."
+      : "SMS: откроется приложение сообщений с готовым текстом.");
+  $("#cmpWarn").innerHTML = compose.warn ? `<div class="note">${esc(compose.warn)}</div>` : "";
+}
+
+function render(t, c) {
+  const h = new Date().getHours();
+  const hello = h >= 5 && h < 12 ? "Доброе утро" : h < 18 && h >= 12 ? "Добрый день" : "Добрый вечер";
+  return t.replaceAll("{hello}", hello).replaceAll("{first_name}", c?.call_name || "")
+    .replaceAll("{name}", c?.name || "").replaceAll(", !", "!").trim();
+}
+function preview() { $("#cmpPreview").textContent = render($("#cmpText").value, compose.first); }
+document.querySelectorAll("input[name=ch]").forEach(i => i.onchange = hint);
+$("#cmpText").oninput = preview;
+
+$("#cmpSend").onclick = async () => {
+  $("#cmpSend").disabled = true;
+  $("#cmpResult").innerHTML = '<p class="muted">Отправляю…</p>';
+  let data;
+  try { data = await api("/api/send", {ids: cmpIds, channel: chan(), text: $("#cmpText").value}); }
+  catch (e) { $("#cmpResult").innerHTML = `<div class="note">${esc(e.message)}</div>`; return; }
+  const links = data.results.filter(r => r.link);
+  const done = data.results.filter(r => !r.link);
+  $("#cmpResult").innerHTML =
+    (data.stop_reason ? `<div class="note">${esc(data.stop_reason)}</div>` : "") +
+    (done.length ? `<p>${done.map(r => `${esc(r.name)} — ${esc(r.status)}${r.error ? " (" + esc(r.error) + ")" : ""}`).join("<br>")}</p>` : "") +
+    (links.length ? `<p class="muted">Нажимайте по очереди — откроется чат, после отправки отметится в истории:</p>
+      <div class="queue">${links.map((r, i) => `<div class="q"><span class="who">${esc(r.name)}
+        ${r.status !== "ссылка" ? `<span class="flag">${esc(r.status)} → WhatsApp</span>` : ""}</span>
+        <button data-q="${i}">Открыть</button></div>`).join("")}</div>` : "");
+  document.querySelectorAll("[data-q]").forEach(b => b.onclick = async () => {
+    const r = links[+b.dataset.q];
+    const ch = r.link.startsWith("https://wa.me") ? "wa" : r.link.startsWith("sms:") ? "sms" : "tg";
+    if (ch === "tg") { try { await navigator.clipboard.writeText(r.text); } catch (e) {} }
+    window.open(r.link, "_blank");
+    await api(`/api/contact/${r.id}/log`, {kind: "сообщение", channel: ch, direction: "out",
+      text: r.text, status: "отправлено вручную"});
+    b.textContent = "✓ отмечено"; b.disabled = true;
+  });
+  load();
+  if (current && cmpIds.includes(current.id)) openCard(current.id);
+};
+
+$("#sendSel").onclick = () => compose([...selected]);
+$("#selPage").onclick = () => { items.forEach(i => selected.add(i.id)); updSel(); load(); };
+$("#selAll").onclick = async () => {
+  const d = await api("/api/contacts?" + query({ids_only: 1}));
+  d.ids.forEach(i => selected.add(i)); updSel(); load();
+};
+$("#selNone").onclick = () => { selected.clear(); updSel(); load(); };
+$("#prev").onclick = () => { page--; load(); };
+$("#next").onclick = () => { page++; load(); };
+let t;
+["#q", "#fRegion", "#fSphere"].forEach(s => $(s).oninput = () => { clearTimeout(t); t = setTimeout(() => { page = 0; load(); }, 250); });
+["#fGender", "#fOverlap", "#fConsent", "#fNoStop"].forEach(s => $(s).onchange = () => { page = 0; load(); });
+
+(async () => {
+  facets = await api("/api/facets");
+  checks($("#fSources"), facets.sources, "src");
+  checks($("#fCats"), facets.categories, "cat");
+  load();
+})();
+</script>
+</body>
+</html>

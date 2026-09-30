@@ -155,6 +155,30 @@ class CrmTest(unittest.TestCase):
         crm.cmd_import(self.db, type("A", (), {"file": str(path), "tag": "мероприятие-мск"}))
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0], 6)
 
+    def test_webapp_api(self):
+        import webapp
+        for it in crm.parse_vcf(VCF):
+            crm.upsert_contact(self.db, it, ["клиент"])
+        crm.upsert_contact(self.db, {"phones": ["+79161234567"], "tags": ["чат-wlc"],
+                                     "add_only": True})
+        app = webapp.App(self.db)
+        both = app.contacts({"src": "чат-wlc", "cat": "клиент"})
+        self.assertEqual([c["phone"] for c in both["items"]], ["+79161234567"])
+        self.assertEqual(app.contacts({"cat": "инвестор"})["total"], 1)
+        cid = both["items"][0]["id"]
+        card = app.update(cid, {"sphere": "IT", "consent": 1})
+        self.assertEqual(card["sphere"], "IT")
+        card = app.log(cid, {"kind": "звонок", "text": "договорились о показе",
+                             "channel": "call"})
+        kinds = [e["kind"] for e in card["timeline"]]
+        self.assertIn("звонок", kinds)
+        self.assertIn("согласие", kinds)
+        chk = app.send({"ids": [cid], "dry": True})
+        self.assertEqual((chk["no_consent"], chk["stopped"]), (0, 0))
+        res = app.send({"ids": [cid], "channel": "wa", "text": "{hello}, {first_name}!"})
+        self.assertTrue(res["results"][0]["link"].startswith("https://wa.me/79161234567?text="))
+        self.assertIn("Иван", res["results"][0]["text"])
+
     def test_classify(self):
         import classify
         self.assertEqual(classify.guess_gender("", "Галина Вайбер Зал"), "ж")
@@ -191,8 +215,11 @@ class CrmTest(unittest.TestCase):
         path.write_text("id;name;call_name;phone;telegram;tags;consent;stopped;notes\n"
                         ";Ivan;;+79161234567;;чат-1;;;из чата\n", encoding="utf-8-sig")
         crm.cmd_import(self.db, type("A", (), {"file": str(path), "tag": ""}))
+        crm.upsert_contact(self.db, {"phones": ["+79161234567"], "call_name": "Ирина",
+                                     "add_only": True})
         r = self.db.execute("SELECT * FROM contacts WHERE phone='+79161234567'").fetchone()
         self.assertEqual(r["name"], "Иван Петров")
+        self.assertEqual(r["call_name"], "")
         self.assertEqual(r["tags"], "клиент,чат-1")
         self.assertEqual(r["consent"], 1)
         self.assertIn("из чата", r["notes"])
