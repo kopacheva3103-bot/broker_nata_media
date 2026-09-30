@@ -41,6 +41,23 @@ class CrmTest(unittest.TestCase):
         self.assertEqual(crm.normalize_phone("9161234567"), "+79161234567")
         self.assertEqual(crm.normalize_phone("+375 29 123 45 67"), "+375291234567")
         self.assertIsNone(crm.normalize_phone("112"))
+        self.assertIsNone(crm.normalize_phone("+7 (932) 300-57-8"))
+        self.assertFalse(crm.phone_ok("+7932300578"))
+
+    def test_guess_first_name(self):
+        self.assertEqual(crm.guess_first_name(". Светлана Владимировна Мира 1"), "Светлана")
+        self.assertEqual(crm.guess_first_name("Галина Вайбер Зал"), "Галина")
+        self.assertEqual(crm.guess_first_name("2ой Покупатель Снт Урал"), "")
+        self.assertEqual(crm.guess_first_name("+7 (912) 083-27-79"), "")
+        self.assertEqual(crm.guess_first_name("Покупатель Иван"), "")
+
+    def test_autotag(self):
+        for it in crm.parse_vcf(VCF):
+            crm.upsert_contact(self.db, it)
+        crm.cmd_autotag(self.db, type("A", (), {"words": "петров", "tag": "Покупатель",
+                                                "dry": False}))
+        r = self.db.execute("SELECT tags FROM contacts WHERE phone='+79161234567'").fetchone()
+        self.assertEqual(r["tags"], "покупатель")
 
     def test_parse_vcf(self):
         items = crm.parse_vcf(VCF)

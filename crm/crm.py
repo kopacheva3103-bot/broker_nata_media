@@ -37,6 +37,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS contacts (
     id         INTEGER PRIMARY KEY,
     name       TEXT NOT NULL DEFAULT '',
+    call_name  TEXT NOT NULL DEFAULT '',
     phone      TEXT UNIQUE,
     telegram   TEXT NOT NULL DEFAULT '',
     tags       TEXT NOT NULL DEFAULT '',
@@ -82,6 +83,9 @@ def connect(path=None):
     db = sqlite3.connect(path)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
+    cols = {r["name"] for r in db.execute("PRAGMA table_info(contacts)")}
+    if "call_name" not in cols:  # база, созданная прошлой версией
+        db.execute("ALTER TABLE contacts ADD COLUMN call_name TEXT NOT NULL DEFAULT ''")
     return db
 
 
@@ -101,14 +105,40 @@ def normalize_phone(raw):
     raw = raw.strip()
     digits = re.sub(r"\D", "", raw)
     if raw.startswith("+"):
-        return "+" + digits if len(digits) >= 10 else None
+        if digits.startswith("7"):  # Россия/Казахстан: ровно 11 цифр
+            return "+" + digits if len(digits) == 11 else None
+        return "+" + digits if 10 <= len(digits) <= 15 else None
     if len(digits) == 11 and digits[0] in "78":
         return "+7" + digits[1:]
     if len(digits) == 10 and digits[0] == "9":
         return "+7" + digits
-    if len(digits) > 11:
+    if 11 < len(digits) <= 15:
         return "+" + digits
     return None
+
+
+def phone_ok(phone):
+    return bool(phone) and normalize_phone(phone) == phone
+
+
+# Слова в имени контакта, которые обозначают не имя, а пометку.
+NOT_A_NAME = {"покупатель", "продавец", "собственник", "клиент", "аренда",
+              "арендатор", "инвестор", "риелтор", "риэлтор", "агент", "агентство",
+              "застройщик", "ооо", "ип", "неотвеченный", "мама", "папа"}
+
+
+def guess_first_name(name):
+    """Имя для обращения: «. Светлана Владимировна» -> «Светлана»,
+    «2ой Покупатель Снт» -> '' (лучше без имени, чем с ошибкой)."""
+    words = [w for w in (name or "").split() if re.search(r"\w", w)]
+    if not words:
+        return ""
+    first = words[0].strip(".,-_()")
+    if not re.fullmatch(r"[A-Za-zА-Яа-яЁё]+(-[A-Za-zА-Яа-яЁё]+)?", first):
+        return ""
+    if first.lower() in NOT_A_NAME or len(first) < 2:
+        return ""
+    return first[0].upper() + first[1:]
 
 
 def split_tags(value):
@@ -202,6 +232,7 @@ def parse_csv(path):
             result.append({
                 "id": r.get("id", ""),
                 "name": r.get("name", ""),
+                "call_name": r.get("call_name", ""),
                 "phones": [r.get("phone", "")],
                 "telegram": r.get("telegram", ""),
                 "tags": split_tags(r.get("tags", "")),
@@ -243,9 +274,9 @@ def upsert_contact(db, item, extra_tags=()):
 
     if row is None:
         db.execute(
-            "INSERT INTO contacts (name, phone, telegram, tags, consent, stopped,"
-            " notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
-            (item.get("name", ""), phone, normalize_telegram(item.get("telegram")),
+            "INSERT INTO contacts (name, call_name, phone, telegram, tags, consent,"
+            " stopped, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (item.get("name", ""), item.get("call_name", ""), phone, normalize_telegram(item.get("telegram")),
              join_tags(list(item.get("tags", [])) + list(extra_tags)),
              int(item.get("consent") or 0), int(item.get("stopped") or 0),
              notes, now(), now()))
@@ -261,9 +292,10 @@ def upsert_contact(db, item, extra_tags=()):
         return row[field] if value in (None, "") else value
 
     db.execute(
-        "UPDATE contacts SET name=?, phone=?, telegram=?, tags=?, consent=?,"
-        " stopped=?, notes=?, updated_at=? WHERE id=?",
-        (pick("name", item.get("name")), phone or row["phone"],
+        "UPDATE contacts SET name=?, call_name=?, phone=?, telegram=?, tags=?,"
+        " consent=?, stopped=?, notes=?, updated_at=? WHERE id=?",
+        (pick("name", item.get("name")), pick("call_name", item.get("call_name")),
+         phone or row["phone"],
          pick("telegram", normalize_telegram(item.get("telegram"))),
          join_tags(tags),
          int(pick("consent", item.get("consent"))),
@@ -317,7 +349,9 @@ def greeting(moment=None):
 
 def render(template, contact):
     name = (contact["name"] or "").strip()
-    first = name.split()[0] if name else ""
+    keys = contact.keys() if hasattr(contact, "keys") else ()
+    first = (contact["call_name"] if "call_name" in keys else "") \
+        or guess_first_name(name)
     return template.format_map(SafeDict(
         name=name, first_name=first, hello=greeting(),
         phone=contact["phone"] or "", notes=contact["notes"] or "",
@@ -485,13 +519,16 @@ def cmd_export(db, a):
     rows = select_contacts(db, split_tags(a.tag))
     with open(a.file, "w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f, delimiter=";")
-        w.writerow(["id", "name", "phone", "telegram", "tags", "consent",
-                    "stopped", "notes"])
+        w.writerow(["id", "name", "call_name", "phone", "telegram", "tags",
+                    "consent", "stopped", "notes"])
         for r in rows:
-            w.writerow([r["id"], r["name"], r["phone"], r["telegram"], r["tags"],
+            w.writerow([r["id"], r["name"],
+                        r["call_name"] or guess_first_name(r["name"]),
+                        r["phone"], r["telegram"], r["tags"],
                         r["consent"], r["stopped"], r["notes"]])
     print(f"Выгружено {len(rows)} контактов в {a.file}. Откройте в Excel, "
-          "заполните tags (через запятую), consent=1 у согласившихся, "
+          "заполните tags (через запятую), call_name (как обращаться), "
+          "consent=1 у согласившихся, "
           "сохраните и загрузите: python crm.py import " + a.file)
 
 
@@ -499,7 +536,8 @@ def cmd_list(db, a):
     rows = select_contacts(db, split_tags(a.tag), search=a.search or "")
     for r in rows:
         flags = ("" if r["consent"] else " [нет согласия]") + \
-                (" [СТОП]" if r["stopped"] else "")
+                (" [СТОП]" if r["stopped"] else "") + \
+                ("" if phone_ok(r["phone"]) else " [ОШИБКА В НОМЕРЕ]")
         tg = f" @{r['telegram']}" if r["telegram"] else ""
         print(f"{r['id']:>5}  {r['phone']:<14} {r['name'][:30]:<30} "
               f"{r['tags']}{tg}{flags}")
@@ -513,6 +551,40 @@ def cmd_tags(db, a):
             counts[t] = counts.get(t, 0) + 1
     for t, c in sorted(counts.items(), key=lambda x: -x[1]):
         print(f"{c:>6}  {t}")
+
+
+def cmd_words(db, a):
+    """Частые слова в именах — так видно, какими пометками вы подписывали людей."""
+    counts = {}
+    for r in db.execute("SELECT name FROM contacts"):
+        for w in set(re.findall(r"[A-Za-zА-Яа-яЁё]{3,}", r["name"] or "")):
+            w = w.lower()
+            counts[w] = counts.get(w, 0) + 1
+    top = sorted(counts.items(), key=lambda x: -x[1])[: a.top]
+    for w, c in top:
+        print(f"{c:>6}  {w}")
+
+
+def cmd_autotag(db, a):
+    """Всем, у кого в имени или заметке есть слово, добавить тег."""
+    words = [w.lower() for w in a.words.split(",") if w.strip()]
+    tag = a.tag.strip().lower()
+    n = 0
+    for r in db.execute("SELECT * FROM contacts").fetchall():
+        text = f"{r['name']} {r['notes']}".lower()
+        if not any(w.strip() in text for w in words):
+            continue
+        tags = split_tags(r["tags"])
+        if tag in tags:
+            continue
+        n += 1
+        if a.dry:
+            print(f"  {r['phone']:<14} {r['name']}")
+            continue
+        db.execute("UPDATE contacts SET tags=?, updated_at=? WHERE id=?",
+                   (join_tags(tags + [tag]), now(), r["id"]))
+    db.commit()
+    print(("Будет отмечено" if a.dry else "Отмечено") + f" тегом «{tag}»: {n}")
 
 
 def cmd_set(db, a):
@@ -606,7 +678,9 @@ def cmd_send(db, a):
     everyone = select_contacts(db, tags, exclude)
     stopped = [r for r in everyone if r["stopped"]]
     no_consent = [r for r in everyone if not r["stopped"] and not r["consent"]]
-    targets = [r for r in everyone if not r["stopped"] and r["consent"]]
+    bad_phone = [r for r in everyone if not phone_ok(r["phone"])]
+    targets = [r for r in everyone
+               if not r["stopped"] and r["consent"] and phone_ok(r["phone"])]
 
     campaign = db.execute("SELECT * FROM campaigns WHERE name=?", (a.name,)).fetchone()
     if campaign:
@@ -616,7 +690,8 @@ def cmd_send(db, a):
         targets = [r for r in targets if r["id"] not in done]
 
     print(f"Кампания «{a.name}»: подходит по тегам {len(everyone)}, "
-          f"отписались {len(stopped)}, без согласия {len(no_consent)} (пропущены), "
+          f"отписались {len(stopped)}, без согласия {len(no_consent)}, "
+          f"с ошибкой в номере {len(bad_phone)} (все они пропущены), "
           f"к отправке {len(targets)}. Каналы по порядку: {' → '.join(channels)}")
     if targets:
         print("\n--- пример сообщения для", targets[0]["name"] or targets[0]["phone"])
@@ -730,6 +805,16 @@ def build_parser():
 
     sub.add_parser("tags", help="категории и число людей в них") \
         .set_defaults(func=cmd_tags)
+
+    s = sub.add_parser("words", help="частые слова в именах контактов")
+    s.add_argument("--top", type=int, default=80)
+    s.set_defaults(func=cmd_words)
+
+    s = sub.add_parser("autotag", help="тег всем, у кого в имени есть слово")
+    s.add_argument("words", help="слово или несколько через запятую: покупат,купить")
+    s.add_argument("tag", help="какой тег поставить")
+    s.add_argument("--dry", action="store_true", help="только показать, кого отметит")
+    s.set_defaults(func=cmd_autotag)
 
     s = sub.add_parser("set", help="изменить контакт (по номеру или id)")
     s.add_argument("contact")
