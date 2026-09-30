@@ -83,6 +83,20 @@ class CrmTest(unittest.TestCase):
         self.assertEqual(r["tags"], "покупатель,москва")
         self.assertEqual(r["consent"], 1)
 
+    def test_chat_list_only_adds_to_existing_contact(self):
+        for it in crm.parse_vcf(VCF):
+            crm.upsert_contact(self.db, it, ["клиент"])
+        self.db.execute("UPDATE contacts SET consent=1")
+        path = self.dir / "chat.csv"
+        path.write_text("id;name;call_name;phone;telegram;tags;consent;stopped;notes\n"
+                        ";Ivan;;+79161234567;;чат-1;;;из чата\n", encoding="utf-8-sig")
+        crm.cmd_import(self.db, type("A", (), {"file": str(path), "tag": ""}))
+        r = self.db.execute("SELECT * FROM contacts WHERE phone='+79161234567'").fetchone()
+        self.assertEqual(r["name"], "Иван Петров")
+        self.assertEqual(r["tags"], "клиент,чат-1")
+        self.assertEqual(r["consent"], 1)
+        self.assertIn("из чата", r["notes"])
+
     def test_render(self):
         row = {"name": "Иван Петров", "phone": "+7", "notes": ""}
         self.assertIn("Иван!", crm.render("{hello}, {first_name}! {unknown}", row))

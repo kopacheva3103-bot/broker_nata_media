@@ -239,7 +239,10 @@ def parse_csv(path):
                 "consent": r.get("consent", ""),
                 "stopped": r.get("stopped", ""),
                 "notes": r.get("notes", ""),
-                "replace_tags": True,
+                # С id — файл из export: он главный. Без id — список со стороны
+                # (например, участники чата): только дополняет базу.
+                "replace_tags": bool(r.get("id")),
+                "add_only": not r.get("id"),
             })
         else:  # Google Контакты
             name = r.get("Name") or " ".join(
@@ -289,7 +292,13 @@ def upsert_contact(db, item, extra_tags=()):
     tags += list(extra_tags)
 
     def pick(field, value):
+        if item.get("add_only") and row[field] not in (None, ""):
+            return row[field]  # не затираем имя из телефонной книги и т.п.
         return row[field] if value in (None, "") else value
+
+    if item.get("add_only") and notes and notes not in (row["notes"] or ""):
+        notes = f"{row['notes']}; {notes}" if row["notes"] else notes
+        row = dict(row, notes="")  # чтобы pick взял склеенную заметку
 
     db.execute(
         "UPDATE contacts SET name=?, call_name=?, phone=?, telegram=?, tags=?,"
