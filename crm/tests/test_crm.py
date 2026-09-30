@@ -49,7 +49,8 @@ class CrmTest(unittest.TestCase):
         self.assertEqual(crm.guess_first_name("Галина Вайбер Зал"), "Галина")
         self.assertEqual(crm.guess_first_name("2ой Покупатель Снт Урал"), "")
         self.assertEqual(crm.guess_first_name("+7 (912) 083-27-79"), "")
-        self.assertEqual(crm.guess_first_name("Покупатель Иван"), "")
+        self.assertEqual(crm.guess_first_name("Покупатель Иван"), "Иван")
+        self.assertEqual(crm.guess_first_name("Покупатель Снт"), "")
 
     def test_autotag(self):
         for it in crm.parse_vcf(VCF):
@@ -70,18 +71,81 @@ class CrmTest(unittest.TestCase):
         self.assertEqual([r["phone"] for r in rows], ["+79031112233"])
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM contacts").fetchone()[0], 2)
 
+    def export(self, path, **kw):
+        args = crm.build_parser().parse_args(["export", str(path)])
+        for k, v in kw.items():
+            setattr(args, k, v)
+        crm.cmd_export(self.db, args)
+
     def test_export_edit_import_roundtrip(self):
         for it in crm.parse_vcf(VCF):
             crm.upsert_contact(self.db, it)
         path = self.dir / "c.csv"
-        crm.cmd_export(self.db, type("A", (), {"file": str(path), "tag": ""}))
-        text = path.read_text(encoding="utf-8-sig").replace(
-            "+79161234567;;;0;0", "+79161234567;;покупатель, москва;1;0")
-        path.write_text(text, encoding="utf-8-sig")
+        self.export(path)
+        import csv
+        rows = list(csv.reader(path.read_text(encoding="utf-8-sig").splitlines(),
+                               delimiter=";"))
+        self.assertEqual(rows[0][:3], ["id", "Телефон", "Имя в телефоне"])
+        for r in rows:
+            if r[1] == "+79161234567":
+                r[7], r[8], r[12] = "стройка", "покупатель, москва", "да"
+        with open(path, "w", encoding="utf-8-sig", newline="") as f:
+            csv.writer(f, delimiter=";").writerows(rows)
         crm.cmd_import(self.db, type("A", (), {"file": str(path), "tag": ""}))
         r = self.db.execute("SELECT * FROM contacts WHERE phone='+79161234567'").fetchone()
         self.assertEqual(r["tags"], "покупатель,москва")
+        self.assertEqual(r["sphere"], "стройка")
         self.assertEqual(r["consent"], 1)
+
+    def test_xlsx_roundtrip_and_overlap(self):
+        for it in crm.parse_vcf(VCF):
+            it["in_phonebook"] = 1
+            crm.upsert_contact(self.db, it)
+        crm.upsert_contact(self.db, {"phones": ["+79161234567"], "name": "Ivan",
+                                     "tags": ["чат-wlc"], "add_only": True})
+        crm.upsert_contact(self.db, {"phones": ["+79990001122"], "name": "Olga",
+                                     "tags": ["чат-premium-wlc"], "add_only": True})
+        path = self.dir / "c.xlsx"
+        self.export(path)
+        import openpyxl
+        ws = openpyxl.load_workbook(path).active
+        rows = {r[1]: r for r in ws.iter_rows(min_row=2, values_only=True)}
+        self.assertEqual(rows["+79161234567"][10], "телефон + WLC")
+        self.assertEqual(rows["+79161234567"][11], "да")
+        self.assertIsNone(rows["+79990001122"][11])  # только в чате
+        ws.cell(2, 8).value = "IT"
+        openpyxl.load_workbook(path)  # файл читается
+        items = crm.parse_table(path)
+        self.assertEqual(len(items), 3)
+        self.assertIn("чат-wlc", [t for i in items for t in i["tags"]])
+
+    def test_classify(self):
+        import classify
+        self.assertEqual(classify.guess_gender("", "Галина Вайбер Зал"), "ж")
+        self.assertEqual(classify.guess_gender("", "Кран Сергей"), "м")
+        self.assertEqual(classify.guess_gender("", "Polina"), "ж")
+        self.assertEqual(classify.guess_gender("", "Петрова р-р"), "ж")
+        self.assertEqual(classify.guess_gender("", "Иванов Покупатель"), "м")
+        self.assertEqual(classify.guess_gender("", "2ой Покупатель Снт Урал"), "")
+        self.assertEqual(classify.region_of("+66806757116"), ("Таиланд", ""))
+        self.assertEqual(classify.region_of("+77715017475"), ("Казахстан", ""))
+        reg = self.dir / "numbering"
+        reg.mkdir()
+        (reg / "DEF-9xx.csv").write_text(
+            "АВС/ DEF;От;До;Емкость;Оператор;Регион;ИНН\n"
+            "916;0000000;9999999;10000000;ПАО \"МТС\";г. Москва и Московская область;1\n",
+            encoding="utf-8")
+        num = classify.Numbering(reg)
+        self.assertEqual(classify.region_of("+79161234567", num),
+                         ("г. Москва и Московская область", 'ПАО "МТС"'))
+        rules = [("агент", ["р-р", "риелтор"]), ("wlc", ["wlc"]),
+                 ("премиум", ["#чат-premium-wlc"])]
+        self.assertEqual(classify.match_rules(rules, "Анна р-р", "", []), ["агент"])
+        self.assertEqual(classify.match_rules(rules, "Рома Wlc", "из чата WLC",
+                                              ["чат-premium-wlc"]), ["wlc", "премиум"])
+        self.assertEqual(classify.match_rules(rules, "Рома", "из чата WLC", []), [])
+        self.assertEqual(classify.match_rules([("агент", ["агент"])],
+                                              "ALIMAR турагент", "агентство", []), [])
 
     def test_chat_list_only_adds_to_existing_contact(self):
         for it in crm.parse_vcf(VCF):

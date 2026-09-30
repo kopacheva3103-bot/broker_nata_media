@@ -27,10 +27,13 @@ import time
 import urllib.parse
 from pathlib import Path
 
+import classify
+
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "crm.db"
 CONFIG_PATH = BASE_DIR / "config.ini"
+RULES_PATH = BASE_DIR / "categories.txt"
 CHANNELS = ("tg", "sms", "wa")
 
 SCHEMA = """
@@ -44,6 +47,11 @@ CREATE TABLE IF NOT EXISTS contacts (
     consent    INTEGER NOT NULL DEFAULT 0,
     stopped    INTEGER NOT NULL DEFAULT 0,
     notes      TEXT NOT NULL DEFAULT '',
+    gender     TEXT NOT NULL DEFAULT '',
+    region     TEXT NOT NULL DEFAULT '',
+    operator   TEXT NOT NULL DEFAULT '',
+    sphere     TEXT NOT NULL DEFAULT '',
+    in_phonebook INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -83,9 +91,16 @@ def connect(path=None):
     db = sqlite3.connect(path)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
+    # База, созданная прошлой версией: добавляем новые колонки.
     cols = {r["name"] for r in db.execute("PRAGMA table_info(contacts)")}
-    if "call_name" not in cols:  # база, созданная прошлой версией
-        db.execute("ALTER TABLE contacts ADD COLUMN call_name TEXT NOT NULL DEFAULT ''")
+    for col in ("call_name", "gender", "region", "operator", "sphere"):
+        if col not in cols:
+            db.execute(f"ALTER TABLE contacts ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
+    if "in_phonebook" not in cols:
+        db.execute("ALTER TABLE contacts ADD COLUMN in_phonebook INTEGER NOT NULL DEFAULT 0")
+        # Всё, что не пришло из списков чатов, загружено из телефона.
+        db.execute("UPDATE contacts SET in_phonebook=1 WHERE notes NOT LIKE 'из чата%'")
+    db.commit()
     return db
 
 
@@ -130,6 +145,9 @@ NOT_A_NAME = {"покупатель", "продавец", "собственни�
 def guess_first_name(name):
     """Имя для обращения: «. Светлана Владимировна» -> «Светлана»,
     «2ой Покупатель Снт» -> '' (лучше без имени, чем с ошибкой)."""
+    known = classify.find_first_name(name)
+    if known:
+        return known
     words = [w for w in (name or "").split() if re.search(r"\w", w)]
     if not words:
         return ""
@@ -219,30 +237,104 @@ def read_csv_text(path):
     return raw.decode("utf-8", "replace")
 
 
-def parse_csv(path):
-    """Наш формат (после export) или экспорт Google Контактов."""
+# Колонки таблицы export/import: (ключ, заголовок).
+COLUMNS = [
+    ("id", "id"),
+    ("phone", "Телефон"),
+    ("name", "Имя в телефоне"),
+    ("call_name", "Обращение"),
+    ("gender", "Пол"),
+    ("region", "Регион номера"),
+    ("operator", "Оператор"),
+    ("sphere", "Сфера деятельности"),
+    ("categories", "Категории"),
+    ("chats", "Чаты"),
+    ("sources", "Где есть"),
+    ("overlap", "Пересечение"),
+    ("consent", "Согласие"),
+    ("stopped", "СТОП"),
+    ("telegram", "Telegram"),
+    ("notes", "Заметки"),
+]
+HEADER_TO_KEY = {h.lower(): k for k, h in COLUMNS}
+HEADER_TO_KEY.update({k: k for k, _ in COLUMNS})
+HEADER_TO_KEY["tags"] = "categories"  # файлы прошлой версии
+
+CHAT_PREFIX = "чат-"
+CHAT_TITLES = {"чат-wlc": "WLC", "чат-premium-wlc": "Premium WLC"}
+
+
+def chat_title(tag):
+    return CHAT_TITLES.get(tag, tag[len(CHAT_PREFIX):])
+
+
+def chat_tag(title):
+    """«Premium WLC» -> «чат-premium-wlc»."""
+    t = title.strip().lower()
+    return t if t.startswith(CHAT_PREFIX) else CHAT_PREFIX + t.replace(" ", "-")
+
+
+def yes_no(value):
+    v = str(value or "").strip().lower()
+    if v in ("1", "да", "yes", "y", "+", "true", "1.0"):
+        return 1
+    if v in ("0", "нет", "no", "n", "-", "false", "0.0"):
+        return 0
+    return ""
+
+
+def read_table(path):
+    """Строки .csv или .xlsx как список словарей {заголовок: значение}."""
+    if str(path).lower().endswith(".xlsx"):
+        try:
+            import openpyxl
+        except ImportError:
+            sys.exit("Для .xlsx установите: python3 -m pip install --user openpyxl")
+        ws = openpyxl.load_workbook(path, read_only=True, data_only=True).active
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            return []
+        head = [str(h or "").strip() for h in rows[0]]
+        return [{h: ("" if v is None else str(v)) for h, v in zip(head, r)}
+                for r in rows[1:] if any(v not in (None, "") for v in r)]
     text = read_csv_text(path)
     first_line = text.split("\n", 1)[0]
     delimiter = ";" if first_line.count(";") > first_line.count(",") else ","
-    rows = list(csv.DictReader(io.StringIO(text), delimiter=delimiter))
+    return list(csv.DictReader(io.StringIO(text), delimiter=delimiter))
+
+
+def parse_table(path):
+    """Наша таблица (после export / списки чатов) или экспорт Google Контактов."""
     result = []
-    for r in rows:
-        r = {(k or "").strip(): (v or "").strip() for k, v in r.items()}
-        if "phone" in r:  # наш формат
+    for r in read_table(path):
+        r = {k.strip(): (v or "").strip() for k, v in r.items()
+             if isinstance(k, str) and isinstance(v, (str, type(None)))}
+        mine = {HEADER_TO_KEY[k.lower()]: v for k, v in r.items()
+                if k.lower() in HEADER_TO_KEY}
+        if "phone" in mine:
+            phone = mine.get("phone", "")
+            if re.fullmatch(r"\d{10,15}(\.0)?", phone):  # Excel съел плюс
+                phone = "+" + phone.split(".")[0]
+            has_id = bool(re.sub(r"\.0$", "", mine.get("id", "")))
             result.append({
-                "id": r.get("id", ""),
-                "name": r.get("name", ""),
-                "call_name": r.get("call_name", ""),
-                "phones": [r.get("phone", "")],
-                "telegram": r.get("telegram", ""),
-                "tags": split_tags(r.get("tags", "")),
-                "consent": r.get("consent", ""),
-                "stopped": r.get("stopped", ""),
-                "notes": r.get("notes", ""),
+                "id": re.sub(r"\.0$", "", mine.get("id", "")),
+                "phones": [phone],
+                "name": mine.get("name", ""),
+                "call_name": mine.get("call_name", ""),
+                "gender": classify.parse_gender(mine.get("gender")),
+                "region": mine.get("region", ""),
+                "operator": mine.get("operator", ""),
+                "sphere": mine.get("sphere", ""),
+                "telegram": mine.get("telegram", ""),
+                "tags": split_tags(mine.get("categories", "")) +
+                        [chat_tag(t) for t in split_tags(mine.get("chats", ""))],
+                "consent": yes_no(mine.get("consent")),
+                "stopped": yes_no(mine.get("stopped")),
+                "notes": mine.get("notes", ""),
                 # С id — файл из export: он главный. Без id — список со стороны
                 # (например, участники чата): только дополняет базу.
-                "replace_tags": bool(r.get("id")),
-                "add_only": not r.get("id"),
+                "replace_tags": has_id,
+                "add_only": not has_id,
             })
         else:  # Google Контакты
             name = r.get("Name") or " ".join(
@@ -254,8 +346,16 @@ def parse_csv(path):
             labels = [t for t in split_tags(r.get("Labels", "").replace(":::", ","))
                       if t not in ("* mycontacts", "* starred")]
             result.append({"name": name, "phones": phones, "tags": labels,
-                           "notes": r.get("Notes", "")})
+                           "notes": r.get("Notes", ""), "in_phonebook": 1})
     return result
+
+
+parse_csv = parse_table  # прежнее имя
+
+
+TEXT_FIELDS = ("name", "call_name", "telegram", "notes", "gender", "region",
+               "operator", "sphere")
+INT_FIELDS = ("consent", "stopped", "in_phonebook")
 
 
 def upsert_contact(db, item, extra_tags=()):
@@ -270,19 +370,22 @@ def upsert_contact(db, item, extra_tags=()):
     if row is None and not phone:
         return "skip"
 
+    values = dict(item)
+    values["telegram"] = normalize_telegram(item.get("telegram"))
     notes = item.get("notes", "")
     if len(phones) > 1:
         extra = "доп. номера: " + ", ".join(phones[1:])
         notes = f"{notes}; {extra}" if notes else extra
+    values["notes"] = notes
 
     if row is None:
+        fields = TEXT_FIELDS + INT_FIELDS
         db.execute(
-            "INSERT INTO contacts (name, call_name, phone, telegram, tags, consent,"
-            " stopped, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (item.get("name", ""), item.get("call_name", ""), phone, normalize_telegram(item.get("telegram")),
-             join_tags(list(item.get("tags", [])) + list(extra_tags)),
-             int(item.get("consent") or 0), int(item.get("stopped") or 0),
-             notes, now(), now()))
+            f"INSERT INTO contacts (phone, tags, {', '.join(fields)}, created_at,"
+            f" updated_at) VALUES ({','.join('?' * (len(fields) + 4))})",
+            (phone, join_tags(list(item.get("tags", [])) + list(extra_tags)),
+             *[values.get(f) or "" for f in TEXT_FIELDS],
+             *[int(values.get(f) or 0) for f in INT_FIELDS], now(), now()))
         return "new"
 
     if item.get("replace_tags"):  # файл из export — это «истина» для тегов
@@ -291,25 +394,30 @@ def upsert_contact(db, item, extra_tags=()):
         tags = split_tags(row["tags"]) + list(item.get("tags", []))
     tags += list(extra_tags)
 
-    def pick(field, value):
-        if item.get("add_only") and row[field] not in (None, ""):
-            return row[field]  # не затираем имя из телефонной книги и т.п.
-        return row[field] if value in (None, "") else value
+    add_only = item.get("add_only")
+    if add_only and notes and notes not in (row["notes"] or ""):
+        values["notes"] = f"{row['notes']}; {notes}" if row["notes"] else notes
+    elif add_only:
+        values["notes"] = ""
 
-    if item.get("add_only") and notes and notes not in (row["notes"] or ""):
-        notes = f"{row['notes']}; {notes}" if row["notes"] else notes
-        row = dict(row, notes="")  # чтобы pick взял склеенную заметку
-
+    new = {}
+    for f in TEXT_FIELDS + INT_FIELDS:
+        value, old = values.get(f), row[f]
+        if f == "notes" and add_only and value:
+            new[f] = value  # склеенная заметка
+        elif value in (None, "") or (add_only and old not in (None, "", 0)):
+            new[f] = old  # не затираем имя из телефонной книги и т.п.
+        else:
+            new[f] = value
+    new["in_phonebook"] = max(int(row["in_phonebook"] or 0),
+                              int(values.get("in_phonebook") or 0))
+    fields = list(new)
     db.execute(
-        "UPDATE contacts SET name=?, call_name=?, phone=?, telegram=?, tags=?,"
-        " consent=?, stopped=?, notes=?, updated_at=? WHERE id=?",
-        (pick("name", item.get("name")), pick("call_name", item.get("call_name")),
-         phone or row["phone"],
-         pick("telegram", normalize_telegram(item.get("telegram"))),
-         join_tags(tags),
-         int(pick("consent", item.get("consent"))),
-         int(pick("stopped", item.get("stopped"))),
-         pick("notes", notes), now(), row["id"]))
+        f"UPDATE contacts SET phone=?, tags=?, {', '.join(f + '=?' for f in fields)},"
+        " updated_at=? WHERE id=?",
+        (phone or row["phone"], join_tags(tags),
+         *[int(new[f] or 0) if f in INT_FIELDS else new[f] for f in fields],
+         now(), row["id"]))
     return "upd"
 
 
@@ -326,11 +434,17 @@ def find_contact(db, key):
     return row
 
 
-def select_contacts(db, tags=(), exclude=(), search=""):
+def select_contacts(db, tags=(), exclude=(), search="", gender="", region=""):
     rows = db.execute("SELECT * FROM contacts ORDER BY name").fetchall()
+    gender = classify.parse_gender(gender) if gender else ""
     out = []
     for r in rows:
-        ctags = set(split_tags(r["tags"]))
+        # Сфера деятельности тоже работает как категория в --tags.
+        ctags = set(split_tags(r["tags"])) | set(split_tags(r["sphere"]))
+        if gender and r["gender"] != gender:
+            continue
+        if region and region.lower() not in (r["region"] or "").lower():
+            continue
         if tags and not ctags & set(tags):
             continue
         if exclude and ctags & set(exclude):
@@ -512,10 +626,12 @@ def cmd_import(db, a):
         sys.exit(f"Файл не найден: {path}")
     if path.suffix.lower() == ".vcf":
         items = parse_vcf(path.read_text(encoding="utf-8", errors="replace"))
-    elif path.suffix.lower() == ".csv":
-        items = parse_csv(path)
+        for it in items:
+            it["in_phonebook"] = 1
+    elif path.suffix.lower() in (".csv", ".xlsx"):
+        items = parse_table(path)
     else:
-        sys.exit("Поддерживаются .vcf (из телефона) и .csv")
+        sys.exit("Поддерживаются .vcf (из телефона), .csv и .xlsx")
     stats = {"new": 0, "upd": 0, "skip": 0}
     for item in items:
         stats[upsert_contact(db, item, split_tags(a.tag))] += 1
@@ -524,31 +640,82 @@ def cmd_import(db, a):
           f"без номера (пропущено): {stats['skip']}")
 
 
+def contact_view(r):
+    """Строка таблицы для человека: теги делятся на категории и чаты."""
+    tags = split_tags(r["tags"])
+    chats = [chat_title(t) for t in tags if t.startswith(CHAT_PREFIX)]
+    sources = (["телефон"] if r["in_phonebook"] else []) + chats
+    return {
+        "id": r["id"], "phone": r["phone"], "name": r["name"],
+        "call_name": r["call_name"] or guess_first_name(r["name"]),
+        "gender": classify.GENDER_LABEL.get(r["gender"], ""),
+        "region": r["region"], "operator": r["operator"], "sphere": r["sphere"],
+        "categories": ", ".join(t for t in tags if not t.startswith(CHAT_PREFIX)),
+        "chats": ", ".join(chats),
+        "sources": " + ".join(sources),
+        # Пересечение — человек есть и у вас в телефоне, и в чате.
+        "overlap": "да" if r["in_phonebook"] and chats else "",
+        "consent": r["consent"], "stopped": r["stopped"],
+        "telegram": r["telegram"], "notes": r["notes"],
+    }
+
+
 def cmd_export(db, a):
-    rows = select_contacts(db, split_tags(a.tag))
-    with open(a.file, "w", encoding="utf-8-sig", newline="") as f:
-        w = csv.writer(f, delimiter=";")
-        w.writerow(["id", "name", "call_name", "phone", "telegram", "tags",
-                    "consent", "stopped", "notes"])
+    rows = [contact_view(r) for r in select_contacts(
+        db, split_tags(a.tag), gender=a.gender, region=a.region)]
+    if a.overlap:
+        rows = [r for r in rows if r["overlap"]]
+    head = [h for _, h in COLUMNS]
+    keys = [k for k, _ in COLUMNS]
+    if a.file.lower().endswith(".xlsx"):
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill
+        except ImportError:
+            sys.exit("Для .xlsx установите: python3 -m pip install --user openpyxl")
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Контакты"
+        ws.append(head)
         for r in rows:
-            w.writerow([r["id"], r["name"],
-                        r["call_name"] or guess_first_name(r["name"]),
-                        r["phone"], r["telegram"], r["tags"],
-                        r["consent"], r["stopped"], r["notes"]])
-    print(f"Выгружено {len(rows)} контактов в {a.file}. Откройте в Excel, "
-          "заполните tags (через запятую), call_name (как обращаться), "
-          "consent=1 у согласившихся, "
-          "сохраните и загрузите: python crm.py import " + a.file)
+            ws.append([r[k] for k in keys])
+        widths = {"id": 6, "phone": 15, "name": 32, "call_name": 14, "gender": 10,
+                  "region": 28, "operator": 20, "sphere": 22, "categories": 22,
+                  "chats": 22, "sources": 30, "overlap": 12, "consent": 10,
+                  "stopped": 7, "telegram": 16, "notes": 50}
+        for i, k in enumerate(keys, 1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = widths[k]
+            ws.cell(1, i).font = Font(bold=True)
+        fill = PatternFill("solid", fgColor="FFF2CC")
+        ov = keys.index("overlap") + 1
+        for row in ws.iter_rows(min_row=2):
+            if row[ov - 1].value:
+                for c in row:
+                    c.fill = fill  # пересечения подсвечены
+        ws.freeze_panes = "C2"
+        ws.auto_filter.ref = ws.dimensions
+        wb.save(a.file)
+    else:
+        with open(a.file, "w", encoding="utf-8-sig", newline="") as f:
+            w = csv.writer(f, delimiter=";")
+            w.writerow(head)
+            for r in rows:
+                w.writerow([r[k] for k in keys])
+    print(f"Выгружено {len(rows)} контактов в {a.file}. Можно править: Сфера "
+          "деятельности, Категории, Пол, Обращение, Согласие (1 — согласен). "
+          f"Потом загрузить обратно: python3 crm.py import {a.file}")
 
 
 def cmd_list(db, a):
-    rows = select_contacts(db, split_tags(a.tag), search=a.search or "")
+    rows = select_contacts(db, split_tags(a.tag), search=a.search or "",
+                           gender=a.gender, region=a.region)
     for r in rows:
         flags = ("" if r["consent"] else " [нет согласия]") + \
                 (" [СТОП]" if r["stopped"] else "") + \
                 ("" if phone_ok(r["phone"]) else " [ОШИБКА В НОМЕРЕ]")
         tg = f" @{r['telegram']}" if r["telegram"] else ""
-        print(f"{r['id']:>5}  {r['phone']:<14} {r['name'][:30]:<30} "
+        print(f"{r['id']:>5}  {r['phone']:<14} {r['name'][:28]:<28} "
+              f"{r['gender'] or '?'}  {r['region'][:18]:<18} "
               f"{r['tags']}{tg}{flags}")
     print(f"Итого: {len(rows)}")
 
@@ -594,6 +761,69 @@ def cmd_autotag(db, a):
                    (join_tags(tags + [tag]), now(), r["id"]))
     db.commit()
     print(("Будет отмечено" if a.dry else "Отмечено") + f" тегом «{tag}»: {n}")
+
+
+def cmd_regions(db, a):
+    folder = DATA_DIR / "numbering"
+    if a.dir:
+        import shutil
+        folder.mkdir(parents=True, exist_ok=True)
+        n = 0
+        for name in classify.REGISTRY_FILES:
+            src = Path(a.dir).expanduser() / name
+            if src.exists():
+                shutil.copy(src, folder / name)
+                n += 1
+        print(f"Скопировано файлов реестра: {n}")
+    else:
+        print("Скачиваю реестр номеров Минцифры (несколько минут)…")
+        n = classify.download_registry(folder)
+    if not classify.Numbering(folder):
+        sys.exit("Реестр не загружен. Скачайте в браузере файлы DEF-9xx.csv "
+                 f"(и ABC-3xx/4xx/8xx) со страницы {classify.REGISTRY_PAGE} "
+                 "и выполните: python3 crm.py regions --dir ~/Downloads")
+    print("Реестр готов. Теперь: python3 crm.py classify")
+
+
+def cmd_classify(db, a):
+    """Регион, пол, категории по пометкам — для всей базы."""
+    numbering = classify.Numbering(DATA_DIR / "numbering")
+    rules = classify.load_rules(RULES_PATH)
+    stats = {"region": 0, "gender": 0, "tags": 0}
+    for r in db.execute("SELECT * FROM contacts").fetchall():
+        region, operator = classify.region_of(r["phone"], numbering)
+        gender = r["gender"] or classify.guess_gender(r["call_name"], r["name"])
+        tags = split_tags(r["tags"])
+        added = [t for t in classify.match_rules(rules, r["name"], r["notes"], tags)
+                 if t not in tags]
+        if region and (region, operator) != (r["region"], r["operator"]):
+            stats["region"] += 1
+        else:
+            region, operator = r["region"], r["operator"]
+        stats["gender"] += gender != r["gender"]
+        stats["tags"] += bool(added)
+        db.execute("UPDATE contacts SET region=?, operator=?, gender=?, tags=?,"
+                   " updated_at=? WHERE id=?",
+                   (region, operator, gender, join_tags(tags + added), now(), r["id"]))
+    db.commit()
+
+    def count(sql, *args):
+        return db.execute(sql, args).fetchone()[0]
+
+    total = count("SELECT COUNT(*) FROM contacts")
+    print(f"Обновлено: регион у {stats['region']}, пол у {stats['gender']}, "
+          f"категории у {stats['tags']}.")
+    print(f"Всего {total}: женщин {count('SELECT COUNT(*) FROM contacts WHERE gender=?', 'ж')}, "
+          f"мужчин {count('SELECT COUNT(*) FROM contacts WHERE gender=?', 'м')}, "
+          f"пол не определён {count('SELECT COUNT(*) FROM contacts WHERE gender=?', '')}.")
+    if not numbering:
+        print("Регион по России пока общий («Россия»). Для точного региона "
+              "и оператора выполните: python3 crm.py regions")
+    print()
+    cmd_tags(db, a)
+    overlap = sum(1 for r in db.execute("SELECT * FROM contacts")
+                  if contact_view(r)["overlap"])
+    print(f"\nПересечений (есть и у вас в телефоне, и в чатах): {overlap}")
 
 
 def cmd_set(db, a):
@@ -684,7 +914,7 @@ def cmd_send(db, a):
         sys.exit(f"Неизвестный канал: {bad}. Доступны: {', '.join(CHANNELS)}")
     tags, exclude = split_tags(a.tags), split_tags(a.exclude_tags)
 
-    everyone = select_contacts(db, tags, exclude)
+    everyone = select_contacts(db, tags, exclude, gender=a.gender, region=a.region)
     stopped = [r for r in everyone if r["stopped"]]
     no_consent = [r for r in everyone if not r["stopped"] and not r["consent"]]
     bad_phone = [r for r in everyone if not phone_ok(r["phone"])]
@@ -802,18 +1032,31 @@ def build_parser():
     s.add_argument("--tag", default="", help="добавить всем этот тег(и)")
     s.set_defaults(func=cmd_import)
 
-    s = sub.add_parser("export", help="выгрузить контакты в .csv для Excel")
+    s = sub.add_parser("export", help="выгрузить контакты в .xlsx или .csv")
     s.add_argument("file")
     s.add_argument("--tag", default="")
+    s.add_argument("--gender", default="", help="ж или м")
+    s.add_argument("--region", default="", help="часть названия региона")
+    s.add_argument("--overlap", action="store_true",
+                   help="только те, кто есть и в телефоне, и в чатах")
     s.set_defaults(func=cmd_export)
 
     s = sub.add_parser("list", help="показать контакты")
     s.add_argument("--tag", default="")
+    s.add_argument("--gender", default="")
+    s.add_argument("--region", default="")
     s.add_argument("--search", default="")
     s.set_defaults(func=cmd_list)
 
     sub.add_parser("tags", help="категории и число людей в них") \
         .set_defaults(func=cmd_tags)
+
+    sub.add_parser("classify", help="регион, пол и категории для всей базы") \
+        .set_defaults(func=cmd_classify)
+
+    s = sub.add_parser("regions", help="загрузить реестр номеров (регион, оператор)")
+    s.add_argument("--dir", help="папка, куда вы сами скачали DEF-9xx.csv")
+    s.set_defaults(func=cmd_regions)
 
     s = sub.add_parser("words", help="частые слова в именах контактов")
     s.add_argument("--top", type=int, default=80)
@@ -842,7 +1085,10 @@ def build_parser():
     s = sub.add_parser("send", help="рассылка (по умолчанию — пробный прогон)")
     s.add_argument("--name", required=True, help="название кампании")
     s.add_argument("--template", required=True, help="файл с текстом")
-    s.add_argument("--tags", default="", help="кому: теги через запятую (любой)")
+    s.add_argument("--tags", default="",
+                   help="кому: категории или сферы через запятую (любая из них)")
+    s.add_argument("--gender", default="", help="ж или м")
+    s.add_argument("--region", default="", help="часть названия региона, напр. Москва")
     s.add_argument("--exclude-tags", default="")
     s.add_argument("--channels", default="tg,wa",
                    help="порядок каналов, напр. tg,sms,wa")
