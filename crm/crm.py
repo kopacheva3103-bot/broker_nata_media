@@ -255,7 +255,7 @@ COLUMNS = [
     ("operator", "Оператор"),
     ("sphere", "Сфера деятельности"),
     ("categories", "Категории"),
-    ("chats", "Чаты"),
+    ("chats", "Списки (чаты, мероприятия, сделки)"),
     ("sources", "Где есть"),
     ("overlap", "Пересечение"),
     ("consent", "Согласие"),
@@ -266,19 +266,29 @@ COLUMNS = [
 HEADER_TO_KEY = {h.lower(): k for k, h in COLUMNS}
 HEADER_TO_KEY.update({k: k for k, _ in COLUMNS})
 HEADER_TO_KEY["tags"] = "categories"  # файлы прошлой версии
+HEADER_TO_KEY["чаты"] = "chats"
 
 CHAT_PREFIX = "чат-"
+# Пометки-источники: откуда человек попал в базу, кроме телефона.
+SOURCE_PREFIXES = (CHAT_PREFIX, "мероприятие-", "сделки-")
 CHAT_TITLES = {"чат-wlc": "WLC", "чат-premium-wlc": "Premium WLC"}
 
 
+def is_source(tag):
+    return tag.startswith(SOURCE_PREFIXES)
+
+
 def chat_title(tag):
-    return CHAT_TITLES.get(tag, tag[len(CHAT_PREFIX):])
+    return CHAT_TITLES.get(tag, tag)
 
 
 def chat_tag(title):
-    """«Premium WLC» -> «чат-premium-wlc»."""
+    """«Premium WLC» -> «чат-premium-wlc»; «мероприятие-…» остаётся как есть."""
     t = title.strip().lower()
-    return t if t.startswith(CHAT_PREFIX) else CHAT_PREFIX + t.replace(" ", "-")
+    for tag, name in CHAT_TITLES.items():
+        if t == name.lower():
+            return tag
+    return t if is_source(t) else CHAT_PREFIX + t.replace(" ", "-")
 
 
 def yes_no(value):
@@ -766,17 +776,17 @@ def cmd_import(db, a):
 def contact_view(r):
     """Строка таблицы для человека: теги делятся на категории и чаты."""
     tags = split_tags(r["tags"])
-    chats = [chat_title(t) for t in tags if t.startswith(CHAT_PREFIX)]
+    chats = [chat_title(t) for t in tags if is_source(t)]
     sources = (["телефон"] if r["in_phonebook"] else []) + chats
     return {
         "id": r["id"], "phone": r["phone"], "name": r["name"],
         "call_name": r["call_name"] or guess_first_name(r["name"]),
         "gender": classify.GENDER_LABEL.get(r["gender"], ""),
         "region": r["region"], "operator": r["operator"], "sphere": r["sphere"],
-        "categories": ", ".join(t for t in tags if not t.startswith(CHAT_PREFIX)),
+        "categories": ", ".join(t for t in tags if not is_source(t)),
         "chats": ", ".join(chats),
         "sources": " + ".join(sources),
-        # Пересечение — человек есть и у вас в телефоне, и в чате.
+        # Пересечение — человек есть и у вас в телефоне, и в чате/списке.
         "overlap": "да" if r["in_phonebook"] and chats else "",
         "consent": r["consent"], "stopped": r["stopped"],
         "telegram": r["telegram"], "notes": r["notes"],
@@ -947,7 +957,7 @@ def cmd_classify(db, a):
     cmd_tags(db, a)
     overlap = sum(1 for r in db.execute("SELECT * FROM contacts")
                   if contact_view(r)["overlap"])
-    print(f"\nПересечений (есть и у вас в телефоне, и в чатах): {overlap}")
+    print(f"\nПересечений (есть и у вас в телефоне, и в чатах/списках): {overlap}")
 
 
 def cmd_set(db, a):

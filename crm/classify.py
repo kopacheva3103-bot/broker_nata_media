@@ -93,7 +93,7 @@ def find_first_name(text):
     """Первое известное имя в строке: «Покупатель Ирина» -> «Ирина»."""
     for w in _words(text):
         if known_name(w):
-            return w[0].upper() + w[1:].lower() if w.isupper() else w
+            return "-".join(x[:1].upper() + x[1:].lower() for x in w.split("-"))
     return ""
 
 
