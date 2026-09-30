@@ -323,12 +323,14 @@ def read_table(path):
 
 # Как называют колонки в чужих таблицах (списки с мероприятий и т.п.).
 GUESS_HEADERS = {  # порядок важен: «Телеграм» раньше, чем «тел»
+    "date": ("отметка времени", "дата", "время", "date", "time", "timestamp"),
     "telegram": ("telegram", "телеграм", "телега", "тг", "tg", "ник", "username",
                  "логин"),
     "phone": ("телефон", "phone", "номер", "тел", "mobile", "моб", "whatsapp",
               "ватсап", "сотов"),
     "name": ("фио", "имя", "name", "фамилия", "отчество", "контакт", "участник",
              "клиент", "гость"),
+    "request": ("запрос", "интерес", "что ищете", "цель", "вопрос"),
     "sphere": ("сфера", "деятельн", "компания", "должность", "ниша", "бизнес",
                "профессия", "занима", "отрасль", "работ", "company", "position"),
 }
@@ -359,7 +361,9 @@ def parse_any_sheet(rows):
         vals = [r[c] for r in body if c < len(r) and r[c]]
         if not vals or kinds[c]:
             continue
-        if sum(bool(normalize_phone(v)) for v in vals) > len(vals) / 2:
+        if sum(bool(normalize_phone(v)) and 10 <= len(re.sub(r"\D", "", v)) <= 12
+               and not re.search(r"\d{4}-\d\d-\d\d", v)
+               for v in vals) > len(vals) / 2:
             kinds[c] = "phone"
         elif sum(v.startswith("@") or "t.me/" in v for v in vals) > len(vals) / 2:
             kinds[c] = "telegram"
@@ -381,11 +385,21 @@ def parse_any_sheet(rows):
                 if normalize_phone(v) and not v.startswith("@"):
                     item["phones"].append(v)  # в колонке «ТГ» бывает номер
                 else:
-                    item["telegram"] = v.split()[0]
+                    nick = normalize_telegram(v.split()[0])
+                    # Ник Telegram: латиница, цифры, _, от 5 символов.
+                    if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{4,31}", nick):
+                        item["telegram"] = nick
             elif kind == "name":
                 names.append(v)
             elif kind == "sphere":
                 spheres.append(v)
+            elif kind == "date":
+                continue
+            elif kind == "request":
+                notes.append(f"Запрос: {v}")
+                if not re.fullmatch(r"[-–—.\s]*(нет|пока нет|no|не знаю|-)?[\s).!]*",
+                                    v.lower()):
+                    item["tags"].append("есть-запрос")
             else:
                 notes.append(f"{head[c]}: {v}" if head[c] else v)
         item["name"] = " ".join(names)

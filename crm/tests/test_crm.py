@@ -137,7 +137,7 @@ class CrmTest(unittest.TestCase):
         ws.append([2, "Петров Олег", 79031112233, "", "IT", ""])
         ws.append([3, "Только ник", "", "t.me/nick_only", "", ""])
         ws2 = wb.create_sheet("ники")
-        ws2.append(["@one"]); ws2.append(["@two"]); ws2.append(["@three"])
+        ws2.append(["@one_1"]); ws2.append(["@two_2"]); ws2.append(["@three_3"])
         path = self.dir / "event.xlsx"
         wb.save(path)
         crm.cmd_import(self.db, type("A", (), {"file": str(path), "tag": "мероприятие-мск"}))
@@ -148,7 +148,7 @@ class CrmTest(unittest.TestCase):
         self.assertIn("Email: m@x.ru", rows["maria_i"]["notes"])
         self.assertEqual(rows["+79031112233"]["name"], "Петров Олег")
         self.assertIsNone(rows["nick_only"]["phone"])
-        self.assertIn("two", rows)
+        self.assertIn("two_2", rows)
         self.assertEqual(len(rows), 6)
         self.assertTrue(all("мероприятие-мск" in r["tags"] for r in rows.values()))
         # повторная загрузка не плодит дублей
