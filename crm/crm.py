@@ -1308,6 +1308,22 @@ def cmd_tg_login(db, a):
     tg.client.disconnect()
 
 
+def cmd_shortcut(db, a):
+    """Значок «База контактов» на рабочем столе: двойной щелчок — запуск app."""
+    desktop = Path.home() / "Desktop"
+    if not desktop.exists():
+        desktop = Path.home()
+    path = desktop / "База контактов.command"
+    path.write_text(
+        "#!/bin/bash\n"
+        f'cd "{BASE_DIR}" || exit 1\n'
+        "echo 'Открываю базу контактов… Не закрывайте это окно, пока работаете.'\n"
+        "python3 crm.py app\n", encoding="utf-8")
+    path.chmod(0o755)
+    print(f"Готово: на рабочем столе значок «{path.stem}». "
+          "Двойной щелчок — откроется база в браузере.")
+
+
 def cmd_app(db, a):
     import webapp
     webapp.run(db, port=a.port, open_browser=not a.no_browser)
@@ -1390,6 +1406,9 @@ def build_parser():
                    help="максимум сообщений на канал за запуск")
     s.add_argument("--send", action="store_true", help="реально отправить")
     s.set_defaults(func=cmd_send)
+
+    sub.add_parser("shortcut", help="значок запуска на рабочем столе") \
+        .set_defaults(func=cmd_shortcut)
 
     s = sub.add_parser("tg-login", help="подключить ваш Telegram (один раз)")
     s.add_argument("--reset", action="store_true", help="ввести ключи заново")
