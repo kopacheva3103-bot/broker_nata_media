@@ -278,6 +278,11 @@ def _resolve_broll(p: dict) -> None:
             is_img = Path(src).suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".heic")
             sub = {"type": "image" if is_img else "video", "src": src, "duration": d, "mute": True,
                    "fit": br.get("fit", "fill"), "_grade": seg.get("_broll_grade", {})}
+            if br.get("beauty"):  # cutaways with a face can get the same skin smoothing
+                bty = br["beauty"] if isinstance(br["beauty"], dict) else (p.get("beauty") or {"skin_smooth": 0.17})
+                sub["_beauty"] = bty
+            if br.get("text"):  # a caption on the cutaway itself
+                sub["text"] = br["text"]
             if is_img:
                 sub["motion"] = br.get("motion", "zoom_in")
             else:

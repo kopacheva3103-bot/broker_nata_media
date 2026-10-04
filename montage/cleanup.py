@@ -155,7 +155,8 @@ def plan_cuts(words: list[Word], duration: float, cfg: dict, fps: int) -> tuple[
             cuts.append(Cut(wi[0], wj[0], "дубль/запинка", " ".join(words[k][2] for k in alive[i:j])))
     if cfg.get("cut_fillers", True):
         for k, w in enumerate(words):
-            if norm(w[2]) in FILLERS and not drop[k]:
+            # "МММ" (the pyramid) is a name, "ммм" is a filler: only lowercase tokens count
+            if norm(w[2]) in FILLERS and not w[2].strip(".,!?…").isupper() and not drop[k]:
                 drop[k] = True
                 cuts.append(Cut(w[0], w[1], "слово-паразит", w[2]))
 
