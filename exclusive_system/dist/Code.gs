@@ -163,7 +163,7 @@ function dictDefs_() {
         ['Нет ответа', 'NONE'], ['Интересно', 'YES'], ['Просят позже', 'LATER'], ['Не интересно', 'NO'], ['Переслали ЛПР', 'LATER'],
       ],
     },
-    { key: 'platforms', cols: ['Площадка'], values: [['Instagram'], ['Telegram'], ['Threads'], ['YouTube Shorts'], ['VK Клипы'], ['ЦИАН / Авито (видео)'], ['Другое'], ['ВКонтакте'], ['Max'], ['YouTube']] },
+    { key: 'platforms', cols: ['Площадка'], values: [['Instagram'], ['Telegram'], ['Threads'], ['YouTube Shorts'], ['VK Клипы'], ['ЦИАН / Авито (видео)'], ['Другое'], ['ВКонтакте'], ['Max'], ['YouTube'], ['Telegram (закрытый канал)']] },
     { key: 'content_formats', cols: ['Формат'], values: [['Рилс'], ['Пост'], ['Сторис'], ['Шортс'], ['Карусель'], ['Статья']] },
     { key: 'content_goals', cols: ['Цель контента'], values: [['Найти покупателя / арендатора'], ['Показать работу собственнику'], ['Бренд агентства'], ['Все три']] },
     {
@@ -182,9 +182,37 @@ function dictDefs_() {
     { key: 'lib_checklists', cols: ['Чек-листы (выбор)'], generated: true },
     // новые справочники — только в конец (столбцы листа 07 не должны сдвигаться)
     {
-      key: 'content_rubrics', cols: ['Рубрика'], values: [
-        ['Объекты на эксклюзиве'], ['Экспертиза и советы'], ['Рынок и аналитика'], ['Кейсы и сделки'], ['Районы и локации'],
-        ['Новостройки'], ['Загородная жизнь'], ['Коммерция и инвестиции'], ['Ипотека и финансы'], ['Отзывы клиентов'], ['Закулисье и личный бренд'],
+      // рубрики-хэштеги и нормы частоты — система из прежнего контент-плана SMM; «Частота» задаёт норму, по ней кабинет подсвечивает пропуски
+      key: 'content_rubrics', cols: ['Рубрика (хэштег)', 'Частота', 'Что публикуем', 'Где', 'Этап воронки'], values: [
+        ['#Эксклюзив', 'Каждую неделю', 'Объекты на эксклюзиве: обзор, видео, планировки, цена, показ', 'Все соцсети', 'Продажа / заявки'],
+        ['#Полезное', 'Каждую неделю', 'Советы, в т.ч. юридическая часть, ставки, риски сделки', 'Все соцсети', 'Охват / экспертность'],
+        ['#ОбзорЖК', 'Каждую неделю', 'Видеообзоры, спецпредложения, акции, планировки', 'Все соцсети', 'Охват / экспертность'],
+        ['#Отзывы', 'Каждую неделю', 'Видеоотзывы, скрины, отметки клиентов', 'Все соцсети', 'Прогрев / доверие'],
+        ['#НашиУслуги', 'Каждую неделю', 'Инвестиции, юридическое сопровождение, проведение сделок, акции', 'Все соцсети', 'Продажа / заявки'],
+        ['#Новости', 'Каждую неделю', 'Ставки, законодательство, изменения рынка', 'Все соцсети', 'Охват / экспертность'],
+        ['#Кейсы', 'Раз в 2 недели', 'Успешные сделки и разборы клиентских историй', 'Все соцсети', 'Прогрев / доверие'],
+        ['#Подборки', 'Раз в 2 недели', 'Подборки объектов и подборки из рубрики #Полезное', 'Все соцсети', 'Продажа / заявки'],
+        ['#ПодборкаДляСтудентов', 'Раз в 2 недели', 'Подборки жилья для студентов', 'Все соцсети', 'Охват / экспертность'],
+        ['#ОРаботеБрокера', 'Раз в 2 недели', 'Как работает брокер, закулисье, личный бренд', 'Все соцсети', 'Прогрев / доверие'],
+        ['#ВторичноеЖильё', 'Раз в 2 недели', 'Вторичный рынок: объекты, советы, цены', 'Все соцсети', 'Продажа / заявки'],
+        ['#КоммерческиеОбъекты', 'Раз в месяц', 'Коммерческая недвижимость, инвестиции в коммерцию', 'Все соцсети', 'Продажа / заявки'],
+        ['#АвторскийТур', 'Раз в месяц', 'Авторские туры и выезды на объекты', 'Все соцсети', 'Прогрев / доверие'],
+        ['#РекламаВакансии', 'Раз в месяц', 'Вакансии агентства', 'Все соцсети', 'Охват / экспертность'],
+        ['#СтартПродаж', 'По поводу', 'Старты продаж новостроек', 'Все соцсети', 'Продажа / заявки'],
+        ['#Поздравления', 'По поводу', 'Поздравления с праздниками', 'Все соцсети', 'Прогрев / доверие'],
+        ['#ЛичныеМероприятия', 'По поводу', 'Мероприятия агентства и личные события', 'Все соцсети', 'Прогрев / доверие'],
+        ['ЗК · Инвестпроект с расчётами', '2 раза в неделю', 'Спецпредложения: инвест-проект с расчётом доходности', 'Telegram (закрытый канал)', 'Продажа / заявки'],
+        ['ЗК · Кейсы', 'Каждую неделю', 'Успешные сделки', 'Telegram (закрытый канал)', 'Прогрев / доверие'],
+        ['ЗК · Подкаст / эфир', 'Раз в 2 недели', 'Подкаст или прямой эфир (1–2 раза в месяц)', 'Telegram (закрытый канал)', 'Прогрев / доверие'],
+        ['ЗК · Юмор', 'Раз в месяц', 'Юмор про рынок и сделки', 'Telegram (закрытый канал)', 'Охват / экспертность'],
+        ['ЗК · Анонсы мероприятий', 'По поводу', 'Анонсы закрытых мероприятий', 'Telegram (закрытый канал)', 'Прогрев / доверие'],
+        ['ЗК · Новости рынка', 'По поводу', 'Новости и сенсации рынка с мнением эксперта', 'Telegram (закрытый канал)', 'Охват / экспертность'],
+      ],
+    },
+    // воронка контента: целевые доли публикаций за период (прежний ИИ-контент-план: 30 / 40 / 30)
+    {
+      key: 'content_funnel', cols: ['Этап воронки', 'Цель, % публикаций'], values: [
+        ['Охват / экспертность', 30], ['Прогрев / доверие', 40], ['Продажа / заявки', 30],
       ],
     },
   ];
@@ -346,6 +374,10 @@ function sheetSpecs_() {
       F('comments', 'Комментарии', 'num', { fmt: '#,##0' }),
       F('shares', 'Репосты', 'num', { fmt: '#,##0' }),
       F('followers_gained', 'Подписки с публикации', 'num', { fmt: '#,##0' }),
+      F('funnel', 'Этап воронки', 'dd', { dict: 'content_funnel', d: 'Охват / прогрев / продажа: кабинет SMM сверяет доли с целью из 07_СПРАВОЧНИКИ (30 / 40 / 30).' }),
+      F('hook', 'Крючок / заголовок', 'text', { w: 220, d: 'Первая фраза или первые 3 секунды видео.' }),
+      F('cta', 'Призыв к действию (CTA)', 'text', { w: 200 }),
+      F('brief', 'ТЗ на съёмку', 'text', { w: 220, d: 'Фон, локация, ракурс, реквизит.' }),
     ],
   };
 
@@ -381,6 +413,9 @@ function sheetSpecs_() {
       F('note', 'Комментарий', 'text', { w: 220 }),
       F('created_at', 'Создано', 'sys', { helper: true, fmt: 'datetime' }),
       F('author', 'Автор', 'sys', { helper: true }),
+      // добавлено позже — только в конец листа
+      F('unfollows', 'Отписки за неделю', 'num', { fmt: '#,##0' }),
+      F('shares', 'Пересылки / репосты за неделю', 'num', { fmt: '#,##0' }),
     ],
   };
 
@@ -910,6 +945,7 @@ function runSetup_(log) {
   ['OBJ', 'TASK', 'BASE', 'CONT', 'LIB', 'HIST', 'ARCH', 'SOC'].forEach(code => { buildDataSheet_(code); log.push(SHEET_NAMES[code]); });
   headerGuard_.ok = {};
   try { const fx = repairObjShift_(); if (fx) log.push('Исправлено строк 01_ОБЪЕКТЫ после сдвига столбцов: ' + fx); } catch (e) { log.push('⚠ Проверка сдвига 01_ОБЪЕКТЫ: ' + e.message); }
+  try { const mr = migrateRubrics_(); if (mr) log.push('Рубрики контента переведены на хэштеги: ' + mr); } catch (e) { log.push('⚠ Перевод рубрик: ' + e.message); }
   SpreadsheetApp.flush();
   seedLibrary_();
   buildReportSheet_(); log.push(SHEET_NAMES.REP);
@@ -1419,6 +1455,24 @@ function installTriggers_() {
     if (t.getHandlerFunction() === 'onEditHandler') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('onEditHandler').forSpreadsheet(ss).onEdit().create();
+}
+
+/** Первые рубрики кабинета SMM → хэштег-рубрики прежнего контент-плана (только в публикациях со старым названием). */
+const OLD_RUBRICS = {
+  'Объекты на эксклюзиве': '#Эксклюзив', 'Экспертиза и советы': '#Полезное', 'Рынок и аналитика': '#Новости', 'Кейсы и сделки': '#Кейсы',
+  'Районы и локации': '#Полезное', 'Новостройки': '#ОбзорЖК', 'Загородная жизнь': '#Эксклюзив', 'Коммерция и инвестиции': '#КоммерческиеОбъекты',
+  'Ипотека и финансы': '#Полезное', 'Отзывы клиентов': '#Отзывы', 'Закулисье и личный бренд': '#ОРаботеБрокера',
+};
+
+function migrateRubrics_() {
+  const have = dictValues_('content_rubrics');
+  const t = readTable_('CONT');
+  let n = 0;
+  t.rows.forEach(r => {
+    const to = OLD_RUBRICS[r.rubric];
+    if (r.id && to && have.indexOf(r.rubric) < 0 && have.indexOf(to) >= 0) { writeFields_(t.sh, 'CONT', r._row, { rubric: to }); n++; }
+  });
+  return n;
 }
 
 /**
@@ -7231,18 +7285,18 @@ const WEB_TASK_KEYS = ['id', 'week', 'obj_id', 'block', 'task', 'owner', 'unit',
 const WEB_BASE_KEYS = ['id', 'obj_id', 'audience', 'company', 'site', 'contact', 'fit', 'fit_note', 'call_date', 'call_result', 'kp_date', 'kp_type',
   'response', 'response_date', 'next_step', 'next_date', 'to_crm', 'owner'];
 const WEB_CONT_KEYS = ['id', 'obj_id', 'topic', 'platform', 'format', 'goal', 'script', 'status', 'pub_date', 'link', 'views', 'reach', 'saves', 'leads', 'owner',
-  'rubric', 'likes', 'comments', 'shares', 'followers_gained'];
+  'rubric', 'likes', 'comments', 'shares', 'followers_gained', 'funnel', 'hook', 'cta', 'brief'];
 
 /** Что можно менять из кабинета и что можно указывать при создании записи. */
 const WEB_EDITABLE = {
   TASK: ['status', 'result', 'fact', 'deadline', 'owner', 'task', 'plan'],
   BASE: ['call_date', 'call_result', 'kp_date', 'kp_type', 'response', 'next_step', 'next_date', 'fit', 'fit_note', 'contact', 'site', 'audience', 'company', 'to_crm'],
-  CONT: ['obj_id', 'topic', 'platform', 'format', 'goal', 'script', 'status', 'pub_date', 'link', 'views', 'reach', 'saves', 'leads', 'owner', 'rubric', 'likes', 'comments', 'shares', 'followers_gained'],
+  CONT: ['obj_id', 'topic', 'platform', 'format', 'goal', 'script', 'status', 'pub_date', 'link', 'views', 'reach', 'saves', 'leads', 'owner', 'rubric', 'likes', 'comments', 'shares', 'followers_gained', 'funnel', 'hook', 'cta', 'brief'],
 };
 const WEB_CREATE = {
   TASK: ['obj_id', 'block', 'task', 'owner', 'unit', 'plan', 'deadline'],
   BASE: ['obj_id', 'audience', 'company', 'site', 'contact', 'fit_note', 'next_step', 'next_date'],
-  CONT: ['obj_id', 'topic', 'platform', 'format', 'goal', 'script', 'pub_date', 'owner', 'rubric', 'status'],
+  CONT: ['obj_id', 'topic', 'platform', 'format', 'goal', 'script', 'pub_date', 'owner', 'rubric', 'status', 'funnel', 'hook', 'cta', 'brief'],
 };
 
 function webObjects_(u) {
@@ -7274,7 +7328,9 @@ function webBootstrap() {
       people: dict('people'), task_blocks: dict('task_blocks'), units: dict('units'), task_status: statusRows('task_status'),
       responses: dict('responses'), kp_types: dict('kp_types'), fit: dict('fit'),
       platforms: dict('platforms'), content_rubrics: dict('content_rubrics'), content_formats: dict('content_formats'), content_goals: dict('content_goals'), content_status: statusRows('content_status'),
+      content_funnel: dict('content_funnel'),
     },
+    rubrics: smmRubrics_().map(x => ({ name: x.name, freq: x.freq, about: x.about, where: x.where, funnel: x.funnel })),
     sheetUrl: u.role === 'director' ? ss_().getUrl() : '',
   };
 }
@@ -7507,7 +7563,7 @@ header .t{font-weight:600;font-size:15px}header .me{margin-left:auto;font-size:1
 nav{display:flex;gap:4px;padding:8px 12px;background:#fff;border-bottom:1px solid var(--line);overflow-x:auto;position:sticky;top:44px;z-index:4}
 nav button{border:0;background:none;padding:8px 12px;border-radius:8px;font:inherit;color:var(--mut);cursor:pointer;white-space:nowrap}
 nav button.on{background:var(--acc2);color:var(--acc);font-weight:600}
-main{max-width:1100px;margin:0 auto;padding:14px 12px 60px}
+main{max-width:1320px;margin:0 auto;padding:14px 12px 60px}
 h2{font-size:17px;margin:18px 0 8px}h3{font-size:15px;margin:14px 0 6px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
@@ -7530,6 +7586,15 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:7px 6px;b
 #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#1f2933;color:#fff;padding:9px 14px;border-radius:10px;display:none;z-index:30;max-width:90%}
 #load{position:fixed;top:0;left:0;height:3px;width:100%;background:linear-gradient(90deg,var(--acc),#7fb3e6);display:none;z-index:40}
 .empty{color:var(--mut);padding:8px 0}.chk{width:auto}
+.wk{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin-bottom:12px}
+.day{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px;min-height:90px}.day.today{border-color:var(--acc)}.day.past{background:#fafbfc}.day.over{background:var(--acc2);border-color:var(--acc)}
+.day .dh{font-size:12px;color:var(--mut);display:flex;justify-content:space-between;margin-bottom:4px}
+.pc{border:1px solid var(--line);border-left:3px solid var(--acc);border-radius:8px;padding:5px 6px;margin-bottom:5px;font-size:12.5px;background:#fff;cursor:grab}
+.pc.idea{border-left-color:#b9c3cf;background:#fbfcfd}.pc.done{border-left-color:var(--grn)}.pc .t{font-weight:500;margin:2px 0;word-break:break-word}
+.pc .pl{font-size:11px;color:var(--acc);cursor:pointer;margin-right:4px;white-space:nowrap}.pc .ac{display:flex;gap:2px;margin-top:3px;flex-wrap:wrap}
+.pc .ac button{border:1px solid var(--line);background:#fff;border-radius:6px;font-size:11px;padding:1px 6px;cursor:pointer}
+.bar{display:inline-block;height:8px;border-radius:4px;background:var(--acc);vertical-align:middle}
+@media(max-width:760px){.wk{grid-template-columns:1fr}.day{min-height:0}}
 </style></head><body>
 <div id="load"></div>
 <header><div class="t">Маркетинг эксклюзивов</div><div class="me" id="me">Загрузка…</div></header>
@@ -7538,7 +7603,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:7px 6px;b
 <div id="modal"><div class="box" id="mbox"></div></div>
 <div id="toast"></div>
 <script>
-var B=null, S={ct:'plan',cf:{platform:'',rubric:'',obj:'',status:''},pf:'',pt:'',af:'',at:'',an:null,soc:null,view:'today',tasks:null,base:null,cont:null,obj:null,objTab:'tasks',taskScope:'mine',baseObj:'',baseToday:false,q:''};
+var B=null, S={nm:null,nmOpen:false,drag:null,ct:'plan',cf:{platform:'',rubric:'',obj:'',status:''},pf:'',pt:'',af:'',at:'',an:null,soc:null,view:'today',tasks:null,base:null,cont:null,obj:null,objTab:'tasks',taskScope:'mine',baseObj:'',baseToday:false,q:''};
 function h(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function el(id){return document.getElementById(id);}
 function load(on){el('load').style.display=on?'block':'none';}
@@ -7701,12 +7766,53 @@ function contFilter(list){var f=S.cf;return list.filter(function(x){return (!f.p
 function filtersBar(){var f=S.cf;function sel(k,list,label){return '<select style="max-width:190px" onchange="S.cf.'+k+'=this.value;renderContent()">'+opts(list,f[k],label)+'</select>';}
   return '<div class="row" style="margin-bottom:8px">'+sel('platform',B.dicts.platforms,'Все площадки')+sel('rubric',B.dicts.content_rubrics,'Все рубрики')+'<select style="max-width:220px" onchange="S.cf.obj=this.value;renderContent()"><option value="">Все объекты и общий</option>'+B.objects.map(function(o){return '<option value="'+h(o.id)+'"'+(String(o.id)===f.obj?' selected':'')+'>'+h(oname(o.id))+'</option>';}).join('')+'</select>'+sel('status',B.dicts.content_status,'Все статусы')+'</div>';}
 function periodBar(a,b,def1,def2,extra){if(!S[a]){S[a]=addD(B.today,def1);S[b]=addD(B.today,def2);}return '<div class="row" style="margin-bottom:8px"><input type="date" style="max-width:160px" value="'+S[a]+'" onchange="S.'+a+'=this.value"> — <input type="date" style="max-width:160px" value="'+S[b]+'" onchange="S.'+b+'=this.value">'+(extra||'')+'</div>';}
+function monOf(ds){var p=ds.split('-');var dt=new Date(+p[0],+p[1]-1,+p[2]);dt.setDate(dt.getDate()-((dt.getDay()+6)%7));return iso(dt);}
+function planDefault(){S.pf=monOf(B.today);S.pt=addD(S.pf,20);S.nm=null;}
+function planShift(n){S.pf=addD(monOf(S.pf),7*n);S.pt=addD(S.pf,20);S.nm=null;renderContent();}
+function funShort(f){if(!f)return '';var x=String(f).toLowerCase();return x.indexOf('охват')>=0?'охват':x.indexOf('прогрев')>=0?'прогрев':x.indexOf('продаж')>=0?'продажа':f;}
+function planGroups(list){var g={},order=[];list.forEach(function(x){var k=[String(x.topic).toLowerCase(),x.obj_id,x.pub_date||''].join('|');if(!g[k]){g[k]={k:k,items:[],date:x.pub_date||''};order.push(k);}g[k].items.push(x);});return order.map(function(k){return g[k];});}
+function planCard(gr){var x=gr.items[0],ids=gr.items.map(function(i){return i.id;}).join(',');
+  var done=gr.items.every(function(i){return i.cls==='DONE';}),idea=x.status==='Идея';
+  var s='<div class="pc'+(done?' done':idea?' idea':'')+'" draggable="true" ondragstart="S.drag=\''+h(ids)+'\'" title="Перетащите на другой день">';
+  s+='<div>'+(x.rubric?'<span class="pill acc">'+h(x.rubric)+'</span> ':'')+(x.funnel?'<span class="pill">'+h(funShort(x.funnel))+'</span> ':'')+(obj(x.obj_id)&&!obj(x.obj_id).service?'<span class="pill grn">'+h(oname(x.obj_id))+'</span>':'')+'</div>';
+  s+='<div class="t" onclick="editCont(\''+h(x.id)+'\')" style="cursor:pointer">'+h(x.topic)+'</div>';
+  if(x.hook)s+='<div class="mut">Крючок: '+h(x.hook)+'</div>';
+  s+='<div>'+gr.items.map(function(i){return '<span class="pl" onclick="editCont(\''+h(i.id)+'\')">'+h(i.platform||'—')+(i.cls==='DONE'?' ✓':'')+'</span>';}).join('')+'</div><div class="mut">'+h(x.status)+(x.format?' · '+h(x.format):'')+'</div>';
+  s+='<div class="ac">'+(gr.date?'<button title="На день раньше" onclick="mv(\''+h(ids)+'\',\''+addD(gr.date,-1)+'\')">‹</button><button title="На день позже" onclick="mv(\''+h(ids)+'\',\''+addD(gr.date,1)+'\')">›</button><button title="На неделю позже" onclick="mv(\''+h(ids)+'\',\''+addD(gr.date,7)+'\')">+7 дн</button>':'')+'<button title="Дублировать на другие площадки" onclick="xpost(\''+h(x.id)+'\')">⧉</button></div>';
+  return s+'</div>';}
+function mv(ids,date){api('webMoveContent',[ids.split(','),date],function(){toast('Перенесено на '+d(date));S.nm=null;S.an=null;reload(['cont'],render);});}
+function dropOn(e,date){e.preventDefault();e.currentTarget.classList.remove('over');if(S.drag){var ids=S.drag;S.drag=null;mv(ids,date);}}
+function xpost(id){var x=findIn('cont',id);if(!x)return;var have=S.cont.filter(function(i){return i.topic===x.topic&&String(i.obj_id)===String(x.obj_id)&&i.pub_date===x.pub_date;}).map(function(i){return i.platform;});
+  var rest=B.dicts.platforms.filter(function(p){return have.indexOf(p)<0;});
+  form('Дублировать «'+x.topic+'»',[{t:'info',v:'Уже есть: '+h(have.join(', '))+'. Копия получит ту же тему, рубрику, дату, сценарий и тексты — статистика по каждой площадке считается отдельно.'},{k:'platforms',l:'На какие площадки',t:'multi',o:rest,v:crossDef().filter(function(p){return rest.indexOf(p)>=0;})}],
+    function(v){if(!v.platforms.length)return toast('Отметьте площадки');api('webCrosspost',[id,v.platforms],function(r){toast('Добавлено: '+r.ids.length);closeM();S.nm=null;reload(['cont'],render);});});}
+function crossDef(){return ['Telegram','Instagram','ВКонтакте','YouTube'].filter(function(p){return B.dicts.platforms.indexOf(p)>=0;});}
+function planFill(){if(!confirm('Поставить заготовки тем по рубрикам, которых не хватает до нормы, на '+d(S.pf)+' – '+d(S.pt)+'? Прошедшие дни не трогаются, заготовки потом можно двигать и править.'))return;
+  api('webPlanFill',[S.pf,S.pt],function(r){toast(r.made?'Добавлено заготовок: '+r.made:'Все нормы рубрик уже закрыты');S.nm=null;reload(['cont'],render);});}
+function normsCard(){var N=S.nm;if(!N||N.from!==S.pf||N.to!==S.pt){api('webSmmNorms',[S.pf,S.pt],function(v){S.nm=v;renderContent();});return '<div class="card mut">Считаю нормы рубрик…</div>';}
+  var open=S.nmOpen;var miss=N.rubrics.filter(function(x){return x.gap>0;});
+  var s='<div class="card"><div class="row" style="cursor:pointer" onclick="S.nmOpen=!S.nmOpen;renderContent()"><b style="flex:1">Нормы рубрик и воронка · '+N.topics+' тем</b>'+(miss.length?'<span class="pill red">ниже нормы: '+miss.length+'</span>':'<span class="pill grn">нормы выполнены</span>')+' <span class="mut">'+(open?'свернуть ▲':'подробнее ▼')+'</span></div>';
+  s+='<div class="row" style="margin-top:6px">'+N.funnel.map(function(f){var c=!N.staged?'':Math.abs(f.diff)>=10?'amb':'grn';return '<span class="pill '+c+'">'+h(f.name)+': '+(N.staged?f.pct+'%':'—')+' / цель '+f.target+'%</span>';}).join(' ')+'</div>';
+  if(open){s+='<table style="margin-top:8px"><tr><th>Рубрика</th><th>Частота</th><th>План</th><th>Норма</th><th></th></tr>';
+    N.rubrics.filter(function(x){return x.need||x.fact;}).forEach(function(x){s+='<tr style="cursor:pointer" onclick="S.cf.rubric=\''+h(x.name)+'\';renderContent()"><td>'+h(x.name)+'<div class="mut">'+h(x.about)+'</div></td><td class="mut">'+h(x.freq)+'</td><td>'+x.fact+'</td><td>'+(x.need||'—')+'</td><td>'+(x.gap?'<span class="pill red">−'+x.gap+'</span>':'<span class="pill grn">✓</span>')+'</td></tr>';});
+    s+='</table>';N.tips.forEach(function(t){s+='<div class="mut">• '+h(t)+'</div>';});}
+  return s+'</div>';}
 function contPlan(){
-  var s=periodBar('pf','pt',-7,28,' <button class="b2" onclick="renderContent()">Показать</button>'+(smm()?' <button class="b2" onclick="planDoc()">Выгрузить контент-план</button>':''))+filtersBar();
-  var list=contFilter(S.cont).filter(function(x){return x.pub_date?(x.pub_date>=S.pf&&x.pub_date<=S.pt):x.cls!=='DONE';}).sort(function(a,b){return (a.pub_date||'9')<(b.pub_date||'9')?-1:1;});
-  var wk={};list.forEach(function(x){var k=x.pub_date?weekOf(x.pub_date):'Без даты';(wk[k]=wk[k]||[]).push(x);});
-  Object.keys(wk).forEach(function(k){s+='<h3>'+h(k)+' <span class="mut">('+wk[k].length+')</span></h3><div class="card">'+wk[k].map(contItem).join('')+'</div>';});
-  if(!list.length)s+='<div class="card empty">В плане на этот период пусто — добавьте публикации</div>';
+  if(!S.pf||S.pf.length!==10)planDefault();
+  var s='<div class="row" style="margin-bottom:8px"><button class="b2" onclick="planShift(-1)">◀ неделя</button><input type="date" style="max-width:150px" value="'+S.pf+'" onchange="S.pf=this.value;S.nm=null;renderContent()"> — <input type="date" style="max-width:150px" value="'+S.pt+'" onchange="S.pt=this.value;S.nm=null;renderContent()"><button class="b2" onclick="planShift(1)">неделя ▶</button><button class="b2" onclick="planDefault();renderContent()">Сейчас + 2 недели</button>'+(smm()?'<button class="b" onclick="planFill()">Заполнить по нормам</button><button class="b2" onclick="planDoc()">Выгрузить план</button>':'')+'</div>'+filtersBar();
+  if(smm())s+=normsCard();
+  var list=contFilter(S.cont).filter(function(x){return x.cls!=='CANCEL';});
+  var inP=list.filter(function(x){return x.pub_date&&x.pub_date>=S.pf&&x.pub_date<=S.pt;});
+  var groups=planGroups(inP),byDay={};groups.forEach(function(g){(byDay[g.date]=byDay[g.date]||[]).push(g);});
+  var DN=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+  for(var w=monOf(S.pf);w<=S.pt;w=addD(w,7)){
+    var cnt=0;for(var i=0;i<7;i++)cnt+=(byDay[addD(w,i)]||[]).length;
+    s+='<h3>'+h(weekOf(w))+(w===monOf(B.today)?' · текущая':'')+' <span class="mut">('+cnt+' тем)</span></h3><div class="wk">';
+    for(var j=0;j<7;j++){var ds=addD(w,j);var gs=byDay[ds]||[];
+      s+='<div class="day'+(ds===B.today?' today':ds<B.today?' past':'')+'" ondragover="event.preventDefault();this.classList.add(\'over\')" ondragleave="this.classList.remove(\'over\')" ondrop="dropOn(event,\''+ds+'\')"><div class="dh"><span>'+DN[j]+' '+d(ds).slice(0,5)+'</span><a class="lnk" style="cursor:pointer" title="Добавить на этот день" onclick="newCont(\'\',\''+ds+'\')">+</a></div>'+gs.map(planCard).join('')+'</div>';}
+    s+='</div>';}
+  var bank=planGroups(list.filter(function(x){return !x.pub_date&&x.cls!=='DONE';}));
+  s+='<h3>Банк идей без даты <span class="mut">('+bank.length+') — перетащите на день или укажите дату</span></h3><div class="card">'+(bank.length?'<div class="grid">'+bank.map(planCard).join('')+'</div>':'<div class="empty">Пусто. Идеи без даты попадают сюда.</div>')+'</div>';
   return s;
 }
 function weekOf(ds){var p=ds.split('-');var dt=new Date(+p[0],+p[1]-1,+p[2]);var wd=(dt.getDay()+6)%7;dt.setDate(dt.getDate()-wd);var e=new Date(dt);e.setDate(e.getDate()+6);return 'Неделя '+d(iso(dt))+' – '+d(iso(e));}
@@ -7722,9 +7828,9 @@ function contAn(){
   var t=A.totals;
   s+='<div class="mut">Период '+d(A.from)+' – '+d(A.to)+'</div><div class="kpis" style="margin-top:8px">'+kpi('Публикаций',t.posts)+kpi('Просмотры',num(t.views))+kpi('Охват',num(t.reach))+kpi('Вовлечённость',t.er===null?'—':t.er+'%')+kpi('Заявки',num(t.leads))+kpi('Подписки с публ.',num(t.followers_gained))+'</div>';
   if(A.insights.length)s+='<div class="card"><h3 style="margin-top:0">Выводы</h3>'+A.insights.map(function(x){return '<div style="padding:3px 0">• '+h(x)+'</div>';}).join('')+'</div>';
-  s+=tbl('Подписчики и аккаунты',['Площадка','Аккаунт','Было','Стало','Рост','Охват','Просмотры','Переходы','Заявки'],A.followers.map(function(x){return [x.platform,x.account,num(x.start),num(x.end),x.growth===null?'—':(x.growth>=0?'+':'')+num(x.growth),num(x.reach),num(x.views),num(x.visits),num(x.leads)];}));
+  s+=tbl('Подписчики и аккаунты',['Площадка','Аккаунт','Было','Стало','Рост','Отписки','Охват','Просмотры','Переходы','Заявки'],A.followers.map(function(x){return [x.platform,x.account,num(x.start),num(x.end),x.growth===null?'—':(x.growth>=0?'+':'')+num(x.growth),num(x.unfollows),num(x.reach),num(x.views),num(x.visits),num(x.leads)];}));
   var g=function(title,list){return tbl(title,['','Публ.','Охват ср.','Просм. ср.','Охват','Просмотры','ER, %','Заявки'],list.map(function(x){return [x.name,x.posts,num(x.avgReach),num(x.avgViews),num(x.reach),num(x.views),x.er===null?'—':x.er,num(x.leads)];}));};
-  s+=g('Рубрики — что приносит охваты',A.byRubric)+g('Площадки',A.byPlatform)+g('Форматы',A.byFormat)+g('Объекты и общий контент',A.byObject);
+  s+=g('Рубрики — что приносит охваты',A.byRubric)+g('Площадки',A.byPlatform)+g('Форматы',A.byFormat)+g('Этапы воронки — что даёт охват',A.byFunnel||[])+g('Объекты и общий контент',A.byObject);
   s+=tbl('Топ-10 публикаций',['Дата','Тема','Площадка','Рубрика','Просмотры','Охват','Ссылка'],A.top.map(function(x){return [x.date,x.topic,x.platform,x.rubric,num(x.views),num(x.reach),x.link];}));
   return s;
 }
@@ -7736,30 +7842,36 @@ function contSoc(){
   if(!S.soc){api('webSocial',[],function(v){S.soc=v;renderContent();});return '<div class="empty">Загружаю…</div>';}
   var s='<div class="row"><div class="mut" style="flex:1">Раз в неделю внесите цифры по каждой площадке (из статистики аккаунта) — по ним считаются рост подписчиков и охваты.</div><button class="b" onclick="socForm()">+ Внести неделю</button></div>';
   var rows=S.soc.slice().sort(function(a,b){return a.week<b.week?1:a.week>b.week?-1:(a.platform<b.platform?-1:1);});
-  s+='<div class="card" style="overflow-x:auto;margin-top:8px"><table><tr><th>Неделя</th><th>Площадка</th><th>Аккаунт</th><th>Подписчики</th><th>Охват</th><th>Просмотры</th><th>Переходы</th><th>Заявки</th><th>Комментарий</th></tr>';
-  rows.forEach(function(r){s+='<tr style="cursor:pointer" onclick="socForm(\''+h(r.week)+'\',\''+h(r.platform)+'\')"><td>'+h(r.week)+'</td><td>'+h(r.platform)+'</td><td>'+h(r.account)+'</td><td>'+num(r.followers)+'</td><td>'+num(r.reach)+'</td><td>'+num(r.views)+'</td><td>'+num(r.profile_visits)+'</td><td>'+num(r.leads)+'</td><td class="mut">'+h(r.note)+'</td></tr>';});
+  s+='<div class="card" style="overflow-x:auto;margin-top:8px"><table><tr><th>Неделя</th><th>Площадка</th><th>Аккаунт</th><th>Подписчики</th><th>Отписки</th><th>Охват</th><th>Просмотры</th><th>Пересылки</th><th>Переходы</th><th>Заявки</th><th>Комментарий</th></tr>';
+  rows.forEach(function(r){var pv=rows.filter(function(x){return x.platform===r.platform&&x.week<r.week&&x.followers!=='';})[0];var dl=pv&&r.followers!==''?Number(r.followers)-Number(pv.followers):null;
+    s+='<tr style="cursor:pointer" onclick="socForm(\''+h(r.week)+'\',\''+h(r.platform)+'\')"><td>'+h(r.week)+'</td><td>'+h(r.platform)+'</td><td>'+h(r.account)+'</td><td>'+num(r.followers)+(dl===null?'':' <span class="pill '+(dl>=0?'grn':'red')+'">'+(dl>=0?'+':'')+num(dl)+'</span>')+'</td><td>'+num(r.unfollows)+'</td><td>'+num(r.reach)+'</td><td>'+num(r.views)+'</td><td>'+num(r.shares)+'</td><td>'+num(r.profile_visits)+'</td><td>'+num(r.leads)+'</td><td class="mut">'+h(r.note)+'</td></tr>';});
   return s+'</table>'+(rows.length?'':'<div class="empty">Пока нет данных</div>')+'</div>';
 }
 function socForm(wk,pl){var r=(S.soc||[]).filter(function(x){return x.week===wk&&x.platform===pl;})[0]||{week:wk||B.week,platform:pl||''};
   var prev=(S.soc||[]).filter(function(x){return x.platform===r.platform&&x.account;}).pop();
   form('Статистика аккаунта за неделю',[{k:'week',l:'Неделя (ГГГГ-Wнн)',t:'text',v:r.week},{k:'platform',l:'Площадка',t:'select',o:B.dicts.platforms,v:r.platform},{k:'account',l:'Аккаунт / канал',t:'text',v:r.account||(prev?prev.account:'')},
-    {k:'followers',l:'Подписчики (на конец недели)',t:'number',v:r.followers},{k:'reach',l:'Охват за неделю',t:'number',v:r.reach},{k:'views',l:'Просмотры за неделю',t:'number',v:r.views},
+    {k:'followers',l:'Подписчики (на конец недели) — прирост к прошлой неделе посчитается сам',t:'number',v:r.followers},{k:'unfollows',l:'Отписки за неделю',t:'number',v:r.unfollows},{k:'shares',l:'Пересылки / репосты за неделю',t:'number',v:r.shares},{k:'reach',l:'Охват за неделю',t:'number',v:r.reach},{k:'views',l:'Просмотры за неделю',t:'number',v:r.views},
     {k:'profile_visits',l:'Переходы в профиль',t:'number',v:r.profile_visits},{k:'leads',l:'Заявки из соцсети',t:'number',v:r.leads},{k:'note',l:'Комментарий',t:'textarea',v:r.note}],
     function(v){api('webSocialSave',[v],function(){toast('Сохранено');closeM();S.soc=null;S.an=null;renderContent();});});}
-function contFields(x){x=x||{};var nw=!x.id;return [
-  {k:'obj_id',l:'Объект — привязка: публикация попадёт в отчёт собственнику и в карточку объекта. «Общий контент агентства» — только в отчёт SMM и руководителю',t:'obj',v:x.obj_id||agencyId(),code:'CONT'},{k:'rubric',l:'Рубрика',t:'select',o:B.dicts.content_rubrics,v:x.rubric,e:'—'},
-  {k:'topic',l:'Тема',t:'text',v:x.topic},
-  nw?{k:'platforms',l:'Площадки (одна тема — несколько площадок)',t:'multi',o:B.dicts.platforms,v:[]}:{k:'platform',l:'Площадка',t:'select',o:B.dicts.platforms,v:x.platform},
+function rubInfo(n){return (B.rubrics||[]).filter(function(r){return r.name===n;})[0];}
+function contFields(x){x=x||{};var nw=!x.id;var ri=rubInfo(x.rubric);return [
+  {k:'obj_id',l:'Объект — привязка: публикация попадёт в отчёт собственнику и в карточку объекта. «Общий контент агентства» — только в отчёт SMM и руководителю',t:'obj',v:x.obj_id||agencyId(),code:'CONT'},
+  {k:'rubric',l:'Рубрика'+(ri?' · '+ri.freq+' — '+ri.about:''),t:'select',o:B.dicts.content_rubrics,v:x.rubric,e:'—'},
+  {k:'funnel',l:'Этап воронки (пусто — возьмётся из рубрики)',t:'select',o:B.dicts.content_funnel,v:x.funnel,e:'—'},
+  {k:'topic',l:'Тема',t:'text',v:x.topic},{k:'hook',l:'Крючок / заголовок (первая фраза, первые 3 секунды видео)',t:'text',v:x.hook},
+  nw?{k:'platforms',l:'Площадки (одна тема — несколько площадок)',t:'multi',o:B.dicts.platforms,v:crossDef()}:{k:'platform',l:'Площадка',t:'select',o:B.dicts.platforms,v:x.platform},
   {k:'format',l:'Формат',t:'select',o:B.dicts.content_formats,v:x.format},{k:'goal',l:'Цель',t:'select',o:B.dicts.content_goals,v:x.goal,e:'—'},
-  {k:'status',l:'Статус',t:'select',o:B.dicts.content_status,v:x.status||''},{k:'pub_date',l:'Дата публикации',t:'date',v:x.pub_date},
-  {k:'owner',l:'Кто делает',t:'select',o:B.dicts.people,v:x.owner||B.me.name},{k:'script',l:'Сценарий (текст или ссылка)',t:'textarea',v:x.script},
+  {k:'status',l:'Статус',t:'select',o:B.dicts.content_status,v:x.status||''},{k:'pub_date',l:'Дата публикации (пусто — в банк идей)',t:'date',v:x.pub_date},
+  {k:'owner',l:'Кто делает',t:'select',o:B.dicts.people,v:x.owner||B.me.name},{k:'script',l:'Сценарий / текст (или ссылка)',t:'textarea',v:x.script},
+  {k:'cta',l:'Призыв к действию (CTA)',t:'text',v:x.cta},{k:'brief',l:'ТЗ на съёмку (фон, локация, ракурс)',t:'textarea',v:x.brief},
   nw?null:{k:'link',l:'Ссылка на публикацию',t:'text',v:x.link},
   nw?null:{k:'views',l:'Просмотры',t:'number',v:x.views},nw?null:{k:'reach',l:'Охват',t:'number',v:x.reach},nw?null:{k:'likes',l:'Лайки',t:'number',v:x.likes},
   nw?null:{k:'comments',l:'Комментарии',t:'number',v:x.comments},nw?null:{k:'saves',l:'Сохранения',t:'number',v:x.saves},nw?null:{k:'shares',l:'Репосты',t:'number',v:x.shares},
   nw?null:{k:'followers_gained',l:'Подписки с публикации',t:'number',v:x.followers_gained},nw?null:{k:'leads',l:'Заявки',t:'number',v:x.leads}];}
 function agencyId(){var a=B.objects.filter(function(o){return o.service;})[0];return a?a.id:'';}
-function editCont(id){var x=findIn('cont',id);if(!x)return;form('Публикация · '+oname(x.obj_id),contFields(x),function(v){if(String(v.obj_id)===String(x.obj_id))delete v.obj_id;api('webUpdate',['CONT',id,v],function(){toast('Сохранено');closeM();S.an=null;reload(['cont'],render);});});}
-function newCont(objId){form('Новая публикация',contFields({obj_id:objId||(S.obj&&S.obj.id)||''}),function(v){if(!v.platforms||!v.platforms.length)return toast('Отметьте хотя бы одну площадку');api('webCreateContent',[v],function(r){toast('Добавлено публикаций: '+r.ids.length);closeM();S.an=null;reload(['cont'],render);});});}
+function funDef(v){if(!v.funnel&&v.rubric){var r=rubInfo(v.rubric);if(r&&r.funnel)v.funnel=r.funnel;}return v;}
+function editCont(id){var x=findIn('cont',id);if(!x)return;form('Публикация · '+oname(x.obj_id),contFields(x),function(v){if(String(v.obj_id)===String(x.obj_id))delete v.obj_id;funDef(v);api('webUpdate',['CONT',id,v],function(){toast('Сохранено');closeM();S.an=null;S.nm=null;reload(['cont'],render);});});}
+function newCont(objId,date){form('Новая публикация',contFields({obj_id:objId||(S.obj&&S.obj.id)||'',pub_date:date||''}),function(v){funDef(v);if(!v.platforms||!v.platforms.length)return toast('Отметьте хотя бы одну площадку');api('webCreateContent',[v],function(r){toast('Добавлено публикаций: '+r.ids.length);closeM();S.an=null;S.nm=null;reload(['cont'],render);});});}
 
 /* ───────── Команда (директор) ───────── */
 function renderTeam(T){
@@ -7780,7 +7892,7 @@ function form(title,fields,onSave,rec){
   fields.forEach(function(f,i){var id='f'+i,v=f.v==null?'':f.v;
     if(f.t==='hide')return;
     if(f.t==='info'){s+='<div class="mut" style="margin-top:8px">'+v+'</div>';return;}
-    if(f.t==='multi'){s+='<label class="f">'+h(f.l)+'</label><div class="row">'+(f.o||[]).map(function(o,j){return '<label class="row" style="gap:4px;margin-right:8px"><input type="checkbox" class="chk" id="'+id+'_'+j+'" value="'+h(o)+'"> '+h(o)+'</label>';}).join('')+'</div>';return;}
+    if(f.t==='multi'){s+='<label class="f">'+h(f.l)+'</label><div class="row">'+(f.o||[]).map(function(o,j){return '<label class="row" style="gap:4px;margin-right:8px"><input type="checkbox" class="chk" id="'+id+'_'+j+'" value="'+h(o)+'"'+((f.v||[]).indexOf(o)>=0?' checked':'')+'> '+h(o)+'</label>';}).join('')+'</div>';return;}
     if(f.t==='check'){s+='<label class="row" style="margin-top:10px"><input type="checkbox" class="chk" id="'+id+'" '+(v?'checked':'')+(onSave?'':' disabled')+'> '+h(f.l)+'</label>';return;}
     s+='<label class="f">'+h(f.l)+'</label>';
     if(f.t==='ro'){s+='<div>'+h(v)+'</div>';return;}
@@ -7824,10 +7936,159 @@ function smmRange_(from, to) {
   return { from: f, to: t, fromWk: isoWeekKey_(f), toWk: isoWeekKey_(t) };
 }
 
+/** Норма рубрики в публикациях за неделю — по тексту «Частота» из 07_СПРАВОЧНИКИ. «По поводу» и пусто — без нормы. */
+function rubricPerWeek_(freq) {
+  const t = String(freq || '').toLowerCase().replace(/ё/g, 'е');
+  if (!t || /повод|по мере|реже/.test(t)) return 0;
+  const n = (/(\d+)\s*раз/.exec(t) || [])[1];
+  const k = n ? Number(n) : 1;
+  if (/недел/.test(t)) { const per = (/раз\s+в\s+(\d+)\s*недел/.exec(t) || [])[1]; return per ? 1 / Number(per) : k; }
+  if (/месяц/.test(t)) return k * 12 / 52;
+  if (/день|ежедневно/.test(t)) return 7 * k;
+  return 0;
+}
+
+/** Рубрики с нормами: [{name, freq, perWeek, about, where}]. */
+function smmRubrics_() {
+  try {
+    return dictRows_('content_rubrics').map(r => ({ name: String(r[0]), freq: String(r[1] || ''), perWeek: rubricPerWeek_(r[1]), about: String(r[2] || ''), where: String(r[3] || ''), funnel: String(r[4] || '') }));
+  } catch (e) { return []; }
+}
+
+function smmFunnel_() {
+  try { return dictRows_('content_funnel').map(r => ({ name: String(r[0]), target: Number(r[1]) || 0 })); } catch (e) { return []; }
+}
+
+/**
+ * Нормы рубрик и баланс воронки за период. Считаются темы, а не строки: одна тема на нескольких площадках (кросспостинг) — одна публикация.
+ * onlyDone: только опубликованное (для отчёта), иначе — весь план без отменённых.
+ */
+function smmNorms_(from, to, onlyDone) {
+  const R = smmRange_(from, to);
+  const cls = r => { try { return dictClassOf_('content_status', r.status); } catch (e) { return ''; } };
+  const rows = readTable_('CONT').rows.filter(r => r.id && r.pub_date instanceof Date && r.pub_date >= R.from && r.pub_date <= R.to &&
+    (onlyDone ? cls(r) === CLS.DONE : cls(r) !== CLS.CANCEL));
+  const topics = {};
+  rows.forEach(r => {
+    const k = [String(r.topic || r.id).trim().toLowerCase(), r.rubric || '', fmtDate_(r.pub_date, 'yyyy-MM-dd')].join('|');
+    if (!topics[k]) topics[k] = { rubric: r.rubric || '', funnel: r.funnel || '', platforms: {} };
+    topics[k].platforms[r.platform] = true;
+    if (!topics[k].funnel && r.funnel) topics[k].funnel = r.funnel;
+  });
+  const list = Object.keys(topics).map(k => topics[k]);
+  const weeks = Math.max(1, Math.round(((R.to - R.from) / 864e5 + 1) / 7 * 10) / 10);
+  const rubrics = smmRubrics_().map(x => {
+    const fact = list.filter(t => t.rubric === x.name).length;
+    const need = !x.perWeek ? 0 : x.perWeek >= 1 ? Math.floor(x.perWeek * weeks + 1e-9) : Math.max(0, Math.round(x.perWeek * weeks - 0.01));
+    return { name: x.name, freq: x.freq, where: x.where, about: x.about, need: need, fact: fact, gap: Math.max(0, need - fact) };
+  });
+  const known = {};
+  rubrics.forEach(x => { known[x.name] = true; });
+  const other = list.filter(t => t.rubric && !known[t.rubric]).length;
+  const noRubric = list.filter(t => !t.rubric).length;
+  const total = list.length;
+  const staged = list.filter(t => t.funnel).length;
+  const funnel = smmFunnel_().map(f => {
+    const n = list.filter(t => t.funnel === f.name).length;
+    const pct = staged ? Math.round(n / staged * 100) : 0;
+    return { name: f.name, target: f.target, count: n, pct: pct, diff: staged ? pct - f.target : 0 };
+  });
+  const tips = [];
+  const miss = rubrics.filter(x => x.gap > 0);
+  if (miss.length) tips.push('Ниже нормы: ' + miss.map(x => x.name + ' (' + x.fact + ' из ' + x.need + ')').join(', ') + '.');
+  if (staged >= 3) funnel.filter(f => Math.abs(f.diff) >= 10).forEach(f => tips.push('Воронка: «' + f.name + '» — ' + f.pct + '% при цели ' + f.target + '%' + (f.diff < 0 ? ', добавьте такие публикации.' : ', перекос — разбавьте другими этапами.')));
+  if (total - staged > 0) tips.push('У ' + (total - staged) + ' тем не указан этап воронки.');
+  if (noRubric) tips.push('У ' + noRubric + ' тем не указана рубрика.');
+  return { from: fmtDate_(R.from, 'yyyy-MM-dd'), to: fmtDate_(R.to, 'yyyy-MM-dd'), weeks: weeks, topics: total, rubrics: rubrics, other: other, noRubric: noRubric, funnel: funnel, staged: staged, tips: tips };
+}
+
+/** Основная площадка рубрики: закрытый канал — для рубрик «ЗК», иначе Telegram (с него раньше дублировали в остальные сети). */
+function rubricBasePlatform_(rub) {
+  const plats = dictValues_('platforms');
+  const closed = plats.filter(p => /закрыт/i.test(p))[0];
+  if (rub && /закрыт/i.test(rub.where) && closed) return closed;
+  return plats.indexOf('Telegram') >= 0 ? 'Telegram' : plats[0];
+}
+
+/**
+ * «Заполнить по нормам»: на период (обычно 2 недели вперёд) ставит заготовки тем по рубрикам, которых не хватает до нормы.
+ * Заготовка = статус «Идея», основная площадка, этап воронки из рубрики; дни — с меньшей загрузкой, прошедшие дни не трогаются.
+ */
+function webPlanFill(from, to) {
+  const u = webSmmUser_();
+  const R = smmRange_(from, to);
+  const N = smmNorms_(from, to, false);
+  const rubs = {};
+  smmRubrics_().forEach(x => { rubs[x.name] = x; });
+  const agency = objectById_(AGENCY_ID);
+  if (!agency) throw new Error('Нет служебного объекта «' + AGENCY_NAME + '» — запустите «Установить / обновить систему»');
+  const start = R.from < today_() ? today_() : R.from;
+  const days = [];
+  for (let dt = new Date(start); dt <= R.to; dt = addDays_(dt, 1)) if (dt.getDay() !== 0) days.push(new Date(dt)); // без воскресений
+  if (!days.length) throw new Error('В выбранном периоде не осталось будущих дней');
+  const key = dt => fmtDate_(dt, 'yyyy-MM-dd');
+  const load = {}, rubWeek = {};
+  readTable_('CONT').rows.forEach(r => {
+    if (!(r.pub_date instanceof Date) || r.pub_date < R.from || r.pub_date > R.to) return;
+    load[key(r.pub_date)] = (load[key(r.pub_date)] || 0) + 1;
+    const wk = r.rubric + '|' + isoWeekKey_(r.pub_date);
+    rubWeek[wk] = (rubWeek[wk] || 0) + 1;
+  });
+  const weeks = [];
+  days.forEach(dt => { const w = isoWeekKey_(dt); if (weeks.indexOf(w) < 0) weeks.push(w); });
+  const status = (dictRows_('content_status').find(x => x[0] === 'Идея') || dictRows_('content_status')[0] || [''])[0];
+  let made = 0;
+  N.rubrics.filter(x => x.gap > 0).forEach(x => {
+    const rub = rubs[x.name] || { name: x.name };
+    for (let i = 0; i < x.gap; i++) {
+      const wk = weeks.slice().sort((a, b) => (rubWeek[x.name + '|' + a] || 0) - (rubWeek[x.name + '|' + b] || 0) || (a < b ? -1 : 1))[0];
+      const day = days.filter(dt => isoWeekKey_(dt) === wk).sort((a, b) => (load[key(a)] || 0) - (load[key(b)] || 0) || a - b)[0];
+      if (!day) break;
+      webCreate('CONT', { obj_id: AGENCY_ID, rubric: x.name, topic: '✎ ' + (rub.about || x.name), platform: rubricBasePlatform_(rub), status: status,
+        funnel: rub.funnel || '', pub_date: key(day), owner: u.name });
+      load[key(day)] = (load[key(day)] || 0) + 1;
+      rubWeek[x.name + '|' + wk] = (rubWeek[x.name + '|' + wk] || 0) + 1;
+      made++;
+    }
+  });
+  return { ok: true, made: made };
+}
+
+/** Перенос публикаций (вся тема со всеми площадками) на другую дату. */
+function webMoveContent(ids, date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) throw new Error('Неверная дата');
+  (ids || []).forEach(id => webUpdate('CONT', id, { pub_date: date }));
+  return { ok: true };
+}
+
+/** Дублировать публикацию на другие площадки (кросспостинг): копия с теми же темой, рубрикой, датой, текстами. */
+function webCrosspost(id, platforms) {
+  webUser_();
+  const r = readTable_('CONT').rows.find(x => String(x.id) === String(id));
+  if (!r) throw new Error('Публикация не найдена');
+  const have = readTable_('CONT').rows.filter(x => x.topic === r.topic && String(x.obj_id) === String(r.obj_id) && x.pub_date instanceof Date && r.pub_date instanceof Date &&
+    isoWeekKey_(x.pub_date) === isoWeekKey_(r.pub_date)).map(x => x.platform);
+  const ids = [];
+  (platforms || []).filter(p => have.indexOf(p) < 0).forEach(p => {
+    const o = {};
+    WEB_CREATE.CONT.forEach(k => { const v = r[k]; o[k] = v instanceof Date ? fmtDate_(v, 'yyyy-MM-dd') : v; });
+    o.platform = p;
+    ids.push(webCreate('CONT', o).id);
+  });
+  return { ok: true, ids: ids };
+}
+
+/** Кабинет: нормы рубрик и воронка по контент-плану периода. */
+function webSmmNorms(from, to) {
+  webUser_();
+  return smmNorms_(from, to, false);
+}
+
 /** Несколько публикаций за раз — одна тема на несколько площадок (кросспостинг). */
 function webCreateContent(data) {
   const plats = (data && data.platforms && data.platforms.length ? data.platforms : [data && data.platform]).filter(Boolean);
   if (!plats.length) throw new Error('Выберите площадку');
+  if (data && !data.funnel && data.rubric) { const rb = smmRubrics_().find(x => x.name === data.rubric); if (rb && rb.funnel) data.funnel = rb.funnel; } // этап воронки по умолчанию — из рубрики
   const ids = plats.map(p => webCreate('CONT', Object.assign({}, data, { platform: p, platforms: undefined })).id);
   return { ok: true, ids: ids };
 }
@@ -7837,7 +8098,7 @@ function webSocial() {
   webSmmUser_();
   const from = isoWeekKey_(addDays_(today_(), -7 * 26));
   return readTable_('SOC').rows.filter(r => r.id && r.platform && String(r.week) >= from)
-    .map(r => webRow_(r, ['id', 'week', 'platform', 'account', 'followers', 'reach', 'views', 'profile_visits', 'leads', 'note']));
+    .map(r => webRow_(r, ['id', 'week', 'platform', 'account', 'followers', 'reach', 'views', 'profile_visits', 'leads', 'note', 'unfollows', 'shares']));
 }
 
 /** Сохранить неделю по площадке: есть строка (неделя + площадка) — обновить, нет — создать. */
@@ -7845,7 +8106,7 @@ function webSocialSave(rec) {
   const u = webSmmUser_();
   if (!rec || !rec.platform) throw new Error('Выберите площадку');
   const wk = rec.week || isoWeekKey_(today_());
-  const keys = ['account', 'followers', 'reach', 'views', 'profile_visits', 'leads', 'note'];
+  const keys = ['account', 'followers', 'reach', 'views', 'profile_visits', 'leads', 'note', 'unfollows', 'shares'];
   const lock = LockService.getDocumentLock();
   lock.waitLock(20000);
   try {
@@ -7892,9 +8153,9 @@ function smmAnalytics_(from, to) {
     s.er = rch ? Math.round(eng / rch * 1000) / 10 : null; // вовлечённость, % от охвата
     return s;
   };
-  const group = keyFn => {
+  const group = (keyFn, none) => {
     const g = {};
-    posts.forEach(r => { const k = keyFn(r) || '— без рубрики'; (g[k] = g[k] || []).push(r); });
+    posts.forEach(r => { const k = keyFn(r) || none || '— без рубрики'; (g[k] = g[k] || []).push(r); });
     return Object.keys(g).map(k => Object.assign({ name: k }, sum(g[k]))).sort((a, b) => b.avgReach - a.avgReach || b.avgViews - a.avgViews);
   };
   const objName = id => isServiceObject_(objs[String(id)] || {}) ? 'Общий контент агентства' : ((objs[String(id)] || {}).name || String(id));
@@ -7903,6 +8164,8 @@ function smmAnalytics_(from, to) {
   const byRubric = group(r => r.rubric);
   const byFormat = group(r => r.format);
   const byObject = group(r => objName(r.obj_id));
+  const byFunnel = group(r => r.funnel, '— этап не указан');
+  const norms = smmNorms_(from, to, true);
   const top = posts.slice().sort((a, b) => smmNum_(b.views) - smmNum_(a.views) || smmNum_(b.reach) - smmNum_(a.reach)).slice(0, 10)
     .map(r => ({ date: fmtDate_(r.pub_date, 'yyyy-MM-dd'), topic: r.topic, platform: r.platform, rubric: r.rubric || '', object: objName(r.obj_id),
       views: smmNum_(r.views), reach: smmNum_(r.reach), link: r.link || '' }));
@@ -7921,6 +8184,7 @@ function smmAnalytics_(from, to) {
       growth: start && end ? smmNum_(end.followers) - smmNum_(start.followers) : null,
       reach: inP.reduce((a, r) => a + smmNum_(r.reach), 0), views: inP.reduce((a, r) => a + smmNum_(r.views), 0),
       visits: inP.reduce((a, r) => a + smmNum_(r.profile_visits), 0), leads: inP.reduce((a, r) => a + smmNum_(r.leads), 0),
+      unfollows: inP.reduce((a, r) => a + smmNum_(r.unfollows), 0), shares: inP.reduce((a, r) => a + smmNum_(r.shares), 0),
     };
   }).sort((a, b) => (b.end || 0) - (a.end || 0));
   // выводы
@@ -7936,8 +8200,9 @@ function smmAnalytics_(from, to) {
   if (fm.length) ins.push('Лучший формат: ' + fm[0].name + ' (' + fm[0].avgReach.toLocaleString('ru-RU') + ' охвата в среднем).');
   const gr = followers.filter(f => f.growth !== null).sort((a, b) => b.growth - a.growth);
   if (gr.length) ins.push('Рост подписчиков: ' + gr.map(f => f.platform + ' ' + (f.growth >= 0 ? '+' : '') + f.growth).join(', ') + '.');
-  const noRub = posts.filter(r => !r.rubric).length;
-  if (noRub) ins.push('У ' + noRub + ' публикаций не указана рубрика — проставьте, чтобы аналитика по рубрикам была точной.');
+  const fun = byFunnel.filter(x => x.name !== '— этап не указан' && x.posts >= 2);
+  if (fun.length > 1) ins.push('Этап воронки с лучшим охватом: «' + fun[0].name + '» (' + fun[0].avgReach.toLocaleString('ru-RU') + ' в среднем).');
+  norms.tips.forEach(x => ins.push(x));
   const noStat = posts.filter(r => !smmNum_(r.views) && !smmNum_(r.reach)).length;
   if (noStat) ins.push('У ' + noStat + ' публикаций нет просмотров и охвата — внесите цифры (Instagram, Threads, Telegram, YouTube подтягиваются по ссылке сами).');
   const allPlats = dictValues_('platforms').filter(p => !/другое|циан/i.test(p));
@@ -7945,7 +8210,7 @@ function smmAnalytics_(from, to) {
   if (silent.length) ins.push('Не было публикаций за период: ' + silent.join(', ') + '.');
   return {
     from: fmtDate_(R.from, 'yyyy-MM-dd'), to: fmtDate_(R.to, 'yyyy-MM-dd'),
-    totals: totals, byPlatform: byPlatform, byRubric: byRubric, byFormat: byFormat, byObject: byObject, top: top, followers: followers, insights: ins,
+    totals: totals, byPlatform: byPlatform, byRubric: byRubric, byFormat: byFormat, byObject: byObject, byFunnel: byFunnel, norms: norms, top: top, followers: followers, insights: ins,
   };
 }
 
@@ -7991,8 +8256,9 @@ function webSmmReport(from, to) {
     A.insights.forEach(x => b.appendListItem(x));
   }
   b.appendParagraph('Подписчики и аккаунты').setHeading(H.HEADING1);
-  smmTable_(b, ['Площадка', 'Аккаунт', 'Было', 'Стало', 'Рост', 'Охват', 'Просмотры', 'Переходы', 'Заявки'],
-    A.followers.map(x => [x.platform, x.account, x.start, x.end, x.growth === null ? '—' : (x.growth >= 0 ? '+' : '') + x.growth, f(x.reach), f(x.views), f(x.visits), x.leads]));
+  smmTable_(b, ['Площадка', 'Аккаунт', 'Было', 'Стало', 'Рост', 'Отписки', 'Охват', 'Просмотры', 'Пересылки', 'Переходы', 'Заявки'],
+    A.followers.map(x => [x.platform, x.account, x.start, x.end, x.growth === null ? '—' : (x.growth >= 0 ? '+' : '') + x.growth, f(x.unfollows), f(x.reach), f(x.views), f(x.shares), f(x.visits), x.leads]));
+  smmNormsDoc_(b, A.norms);
   const g = (title, list) => {
     b.appendParagraph(title).setHeading(H.HEADING1);
     smmTable_(b, ['', 'Публ.', 'Охват ср.', 'Просм. ср.', 'Охват', 'Просмотры', 'ER, %', 'Заявки'],
@@ -8001,6 +8267,7 @@ function webSmmReport(from, to) {
   g('Рубрики (по среднему охвату)', A.byRubric);
   g('Площадки', A.byPlatform);
   g('Форматы', A.byFormat);
+  g('Этапы воронки', A.byFunnel);
   g('Объекты и общий контент', A.byObject);
   b.appendParagraph('Топ-10 публикаций').setHeading(H.HEADING1);
   smmTable_(b, ['Дата', 'Тема', 'Площадка', 'Рубрика', 'Просмотры', 'Охват', 'Ссылка'],
@@ -8027,9 +8294,23 @@ function webContentPlanDoc(from, to) {
   if (!rows.length) b.appendParagraph('В плане на этот период публикаций нет.');
   Object.keys(weeks).sort().forEach(k => {
     b.appendParagraph(weekPeriodLabel_(k) || k).setHeading(DocumentApp.ParagraphHeading.HEADING2);
-    smmTable_(b, ['Дата', 'Площадка', 'Формат', 'Рубрика', 'Объект', 'Тема', 'Статус', 'Кто'],
-      weeks[k].map(r => [fmtDate_(r.pub_date, 'dd.MM'), r.platform, r.format, r.rubric || '', isServiceObject_(objs[String(r.obj_id)] || {}) ? 'Общий' : ((objs[String(r.obj_id)] || {}).name || r.obj_id), r.topic, r.status, r.owner]));
+    smmTable_(b, ['Дата', 'Площадка', 'Формат', 'Рубрика', 'Воронка', 'Объект', 'Тема и крючок', 'CTA', 'Статус', 'Кто'],
+      weeks[k].map(r => [fmtDate_(r.pub_date, 'dd.MM'), r.platform, r.format, r.rubric || '', r.funnel || '', isServiceObject_(objs[String(r.obj_id)] || {}) ? 'Общий' : ((objs[String(r.obj_id)] || {}).name || r.obj_id),
+        r.topic + (r.hook ? '\nКрючок: ' + r.hook : ''), r.cta || '', r.status, r.owner]));
   });
+  smmNormsDoc_(b, smmNorms_(from, to, false));
   doc.saveAndClose();
   return { url: doc.getUrl(), word: wordExportUrl_(doc.getId()) };
+}
+
+/** Блок «Нормы рубрик и воронка» в документе. */
+function smmNormsDoc_(b, N) {
+  if (!N) return;
+  const H = DocumentApp.ParagraphHeading;
+  b.appendParagraph('Нормы рубрик (' + N.topics + ' тем за ' + N.weeks + ' нед.)').setHeading(H.HEADING1);
+  smmTable_(b, ['Рубрика', 'Частота', 'Где', 'Норма', 'Факт', 'Не хватает'],
+    N.rubrics.filter(x => x.need || x.fact).map(x => [x.name, x.freq, x.where, x.need || '—', x.fact, x.gap ? x.gap : '✓']));
+  b.appendParagraph('Воронка контента').setHeading(H.HEADING1);
+  smmTable_(b, ['Этап', 'Цель, %', 'Факт, %', 'Тем'], N.funnel.map(x => [x.name, x.target, N.staged ? x.pct : '—', x.count]));
+  N.tips.forEach(x => b.appendListItem(x));
 }

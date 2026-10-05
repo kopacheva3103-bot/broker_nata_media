@@ -91,6 +91,7 @@ function runSetup_(log) {
   ['OBJ', 'TASK', 'BASE', 'CONT', 'LIB', 'HIST', 'ARCH', 'SOC'].forEach(code => { buildDataSheet_(code); log.push(SHEET_NAMES[code]); });
   headerGuard_.ok = {};
   try { const fx = repairObjShift_(); if (fx) log.push('Исправлено строк 01_ОБЪЕКТЫ после сдвига столбцов: ' + fx); } catch (e) { log.push('⚠ Проверка сдвига 01_ОБЪЕКТЫ: ' + e.message); }
+  try { const mr = migrateRubrics_(); if (mr) log.push('Рубрики контента переведены на хэштеги: ' + mr); } catch (e) { log.push('⚠ Перевод рубрик: ' + e.message); }
   SpreadsheetApp.flush();
   seedLibrary_();
   buildReportSheet_(); log.push(SHEET_NAMES.REP);
@@ -600,6 +601,24 @@ function installTriggers_() {
     if (t.getHandlerFunction() === 'onEditHandler') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('onEditHandler').forSpreadsheet(ss).onEdit().create();
+}
+
+/** Первые рубрики кабинета SMM → хэштег-рубрики прежнего контент-плана (только в публикациях со старым названием). */
+const OLD_RUBRICS = {
+  'Объекты на эксклюзиве': '#Эксклюзив', 'Экспертиза и советы': '#Полезное', 'Рынок и аналитика': '#Новости', 'Кейсы и сделки': '#Кейсы',
+  'Районы и локации': '#Полезное', 'Новостройки': '#ОбзорЖК', 'Загородная жизнь': '#Эксклюзив', 'Коммерция и инвестиции': '#КоммерческиеОбъекты',
+  'Ипотека и финансы': '#Полезное', 'Отзывы клиентов': '#Отзывы', 'Закулисье и личный бренд': '#ОРаботеБрокера',
+};
+
+function migrateRubrics_() {
+  const have = dictValues_('content_rubrics');
+  const t = readTable_('CONT');
+  let n = 0;
+  t.rows.forEach(r => {
+    const to = OLD_RUBRICS[r.rubric];
+    if (r.id && to && have.indexOf(r.rubric) < 0 && have.indexOf(to) >= 0) { writeFields_(t.sh, 'CONT', r._row, { rubric: to }); n++; }
+  });
+  return n;
 }
 
 /**
