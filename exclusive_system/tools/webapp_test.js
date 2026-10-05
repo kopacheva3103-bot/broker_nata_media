@@ -93,6 +93,18 @@ ok('аналитика: общий контент отдельно', A.byObject.
 ok('выводы сформулированы', A.insights.length >= 2, A.insights[0]);
 const rep = X.webSmmReport('2026-09-21', '2026-10-05'), plan = X.webContentPlanDoc('2026-09-28', '2026-10-12');
 ok('отчёт SMM и контент-план выгружаются в документ', /docs/.test(rep.url) && /export\?format=docx/.test(rep.word) && /docs/.test(plan.url), DOCS.map(d => d.name).join(' | '));
+// привязка общего поста к объекту
+ME = 'smm@example.com';
+X.webUpdate('CONT', cc.ids[0], { obj_id: '2001' });
+ok('SMM привязала пост к объекту — он в карточке объекта', X.webContent('2001').some(x => x.id === cc.ids[0]));
+ok('общий пост без привязки остался общим', X.webContent(ag.id).some(x => x.id === cc.ids[1]));
+ok('история: смена объекта записана', X.readTable_('CONT').rows.find(r => r.id === cc.ids[0]).obj_id === '2001');
+ME = 'asst@example.com'; err = ''; try { X.webUpdate('CONT', X.webContent('1001')[0] ? X.webContent('1001')[0].id : cc.ids[1], { obj_id: '2001' }); } catch (e) { err = e.message; }
+ok('ассистент не может перепривязать контент на объект агента', /Нет прав/.test(err), err);
+ME = 'boss@example.com';
+const T2 = X.webTeam();
+ok('директор: блок SMM за неделю (по объектам и общий)', T2.smm && typeof T2.smm.general === 'number', JSON.stringify(T2.smm).slice(0, 120));
+ok('письмо руководителю: блок SMM', /SMM за неделю/.test(X.smmMailBlock_('2026-W40')), X.smmMailBlock_('2026-W40').slice(0, 120));
 ME = 'asst@example.com'; err = ''; try { X.webSmmAnalytics(); } catch (e) { err = e.message; }
 ok('аналитика SMM недоступна ассистенту', /SMM и директору/.test(err));
 console.log(fails ? 'FAILED: ' + fails : 'ALL OK');

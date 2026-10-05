@@ -132,7 +132,21 @@ function autoReportsMail_(state) {
   if (!to || !rows.length) return;
   const html = '<p>Еженедельные отчёты за ' + htmlEscape_(state.wk) + ' созданы. Проверьте и отправьте клиентам ссылки на отчёты.</p><ol>' +
     rows.map(r => '<li><b>' + htmlEscape_(r.name) + '</b>' + (r.pdf ? ' — <a href="' + r.pdf + '">отчёт</a>' : '') + '<br><span style="color:#5f6368">' + htmlEscape_(r.note || '') + '</span></li>').join('') +
-    '</ol><p>Поправить: откройте отчёт по ссылке и правьте прямо в нём — клиент по той же ссылке сразу видит исправленную версию.</p>' +
+    '</ol>' + smmMailBlock_(state.wk) + '<p>Поправить: откройте отчёт по ссылке и правьте прямо в нём — клиент по той же ссылке сразу видит исправленную версию.</p>' +
     '<p><a href="' + ss_().getUrl() + '">Открыть систему</a></p>';
   try { MailApp.sendEmail({ to: to, subject: 'Отчёты клиентам за ' + state.wk + ' готовы (' + rows.length + ')', htmlBody: html }); } catch (e) { Logger.log('Письмо: ' + e.message); }
+}
+
+/** Для руководителя: SMM за неделю — весь контент, включая общий (в отчёты клиентам идёт только контент их объекта). */
+function smmMailBlock_(wk) {
+  try {
+    const mon = mondayOfWeekKey_(wk);
+    if (!mon) return '';
+    const A = smmAnalytics_(fmtDate_(mon, 'yyyy-MM-dd'), fmtDate_(addDays_(mon, 6), 'yyyy-MM-dd'));
+    const t = A.totals, f = n => Number(n || 0).toLocaleString('ru-RU');
+    const general = A.byObject.filter(x => x.name === 'Общий контент агентства').reduce((a, x) => a + x.posts, 0);
+    return '<h3>SMM за неделю</h3><p>Публикаций: ' + t.posts + ' (по объектам — ' + (t.posts - general) + ', общий контент — ' + general + ') · просмотры ' + f(t.views) +
+      ' · охват ' + f(t.reach) + ' · заявки ' + f(t.leads) + (t.er !== null ? ' · вовлечённость ' + t.er + '%' : '') + '</p>' +
+      (A.insights.length ? '<ul>' + A.insights.slice(0, 4).map(x => '<li>' + htmlEscape_(x) + '</li>').join('') + '</ul>' : '');
+  } catch (e) { return ''; }
 }

@@ -85,7 +85,7 @@ const WEB_CONT_KEYS = ['id', 'obj_id', 'topic', 'platform', 'format', 'goal', 's
 const WEB_EDITABLE = {
   TASK: ['status', 'result', 'fact', 'deadline', 'owner', 'task', 'plan'],
   BASE: ['call_date', 'call_result', 'kp_date', 'kp_type', 'response', 'next_step', 'next_date', 'fit', 'fit_note', 'contact', 'site', 'audience', 'company', 'to_crm'],
-  CONT: ['topic', 'platform', 'format', 'goal', 'script', 'status', 'pub_date', 'link', 'views', 'reach', 'saves', 'leads', 'owner', 'rubric', 'likes', 'comments', 'shares', 'followers_gained'],
+  CONT: ['obj_id', 'topic', 'platform', 'format', 'goal', 'script', 'status', 'pub_date', 'link', 'views', 'reach', 'saves', 'leads', 'owner', 'rubric', 'likes', 'comments', 'shares', 'followers_gained'],
 };
 const WEB_CREATE = {
   TASK: ['obj_id', 'block', 'task', 'owner', 'unit', 'plan', 'deadline'],
@@ -231,7 +231,15 @@ function webTeam() {
       lastReport: webVal_(o.last_report_date), strategy: webVal_(o.strategy_pct),
     };
   });
-  return { team: team, objects: objs, week: wk };
+  let smm = null;
+  try {
+    const mon = mondayOfWeekKey_(wk);
+    const A = smmAnalytics_(fmtDate_(mon, 'yyyy-MM-dd'), fmtDate_(today, 'yyyy-MM-dd'));
+    const general = A.byObject.filter(x => x.name === 'Общий контент агентства').reduce((a, x) => a + x.posts, 0);
+    smm = { posts: A.totals.posts, general: general, linked: A.totals.posts - general, views: A.totals.views, reach: A.totals.reach, leads: A.totals.leads,
+      followers: A.followers.filter(f => f.growth !== null).map(f => f.platform + ' ' + (f.growth >= 0 ? '+' : '') + f.growth).join(', '), insights: A.insights.slice(0, 3) };
+  } catch (e) { smm = null; }
+  return { team: team, objects: objs, week: wk, smm: smm };
 }
 
 function webParse_(code, key, v) {
@@ -263,6 +271,10 @@ function webUpdate(code, id, changes) {
     Object.keys(changes || {}).forEach(k => {
       if (WEB_EDITABLE[code].indexOf(k) < 0) return;
       if (code === 'TASK' && k === 'owner' && u.role !== 'director') return;
+      if (k === 'obj_id') { // привязка публикации к объекту: она попадёт в отчёт клиенту и карточку объекта
+        const target = objectById_(changes[k]);
+        if (!target || !webCanEdit_(u, target, code)) throw new Error('Нет прав на выбранный объект');
+      }
       const nv = webParse_(code, k, changes[k]);
       const old = r[k];
       if (sameValue_(old, nv)) return;
