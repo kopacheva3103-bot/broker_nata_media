@@ -140,6 +140,7 @@ function webPlanFill(from, to) {
 
 /** Перенос публикаций (вся тема со всеми площадками) на другую дату. */
 function webMoveContent(ids, date) {
+  webSmmUser_();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) throw new Error('Неверная дата');
   (ids || []).forEach(id => webUpdate('CONT', id, { pub_date: date }));
   return { ok: true };
@@ -147,7 +148,7 @@ function webMoveContent(ids, date) {
 
 /** Дублировать публикацию на другие площадки (кросспостинг): копия с теми же темой, рубрикой, датой, текстами. */
 function webCrosspost(id, platforms) {
-  webUser_();
+  webSmmUser_();
   const r = readTable_('CONT').rows.find(x => String(x.id) === String(id));
   if (!r) throw new Error('Публикация не найдена');
   const have = readTable_('CONT').rows.filter(x => x.topic === r.topic && String(x.obj_id) === String(r.obj_id) && x.pub_date instanceof Date && r.pub_date instanceof Date &&
@@ -164,7 +165,7 @@ function webCrosspost(id, platforms) {
 
 /** Кабинет: нормы рубрик и воронка по контент-плану периода. */
 function webSmmNorms(from, to) {
-  webUser_();
+  webSmmUser_();
   return smmNorms_(from, to, false);
 }
 

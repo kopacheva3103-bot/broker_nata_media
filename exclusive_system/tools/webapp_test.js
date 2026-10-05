@@ -134,6 +134,13 @@ ok('соцсети: отписки и пересылки', X.webSocial().find(r 
 X.webSmmReport('2026-09-21', '2026-10-05'); X.webContentPlanDoc('2026-10-05', '2026-10-18');
 ME = 'asst@example.com'; err = ''; try { X.webPlanFill('2026-10-05', '2026-10-18'); } catch (e) { err = e.message; }
 ok('заполнение по нормам — только SMM и директор', /SMM и директору/.test(err));
+ME = 'asst@example.com';
+const ac = X.webContent('');
+ok('ассистент: только вышедшие публикации по своим объектам, без сценариев и плана', ac.every(x => x.cls === 'DONE' && x.script === undefined && x.hook === undefined && x.owner === undefined) && !ac.some(x => x.obj_id === 'АГЕНТСТВО'), JSON.stringify(ac[0] || {}).slice(0, 160));
+err = ''; try { X.webCreateContent({ obj_id: '1001', topic: 'x', platforms: ['Telegram'] }); } catch (e) { err = e.message; }
+ok('ассистент не создаёт контент', /Нет прав/.test(err), err);
+err = ''; try { X.webSmmNorms('2026-10-05', '2026-10-18'); } catch (e) { err = e.message; }
+ok('нормы рубрик — не для ассистента', /SMM и директору/.test(err));
 ME = 'asst@example.com'; err = ''; try { X.webSmmAnalytics(); } catch (e) { err = e.message; }
 ok('аналитика SMM недоступна ассистенту', /SMM и директору/.test(err));
 console.log(fails ? 'FAILED: ' + fails : 'ALL OK');

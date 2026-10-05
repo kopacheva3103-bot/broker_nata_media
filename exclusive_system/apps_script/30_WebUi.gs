@@ -72,7 +72,7 @@ function objOpts(val,filterCode){var s='';B.objects.forEach(function(o){if(filte
 function clsOf(dict,v){var r=(B.dicts[dict]||[]).filter(function(x){return x[0]===v;})[0];return r?r[1]:(v?'':'OPEN');}
 
 /* ───────── навигация ───────── */
-function views(){var v=[['today','Сегодня'],['objects','Объекты'],['tasks','Задачи']];if(!role('smm'))v.push(['base','База']);v.push(['content','Контент']);if(role('director'))v.push(['team','Команда']);return v;}
+function views(){var v=[['today','Сегодня'],['objects','Объекты'],['tasks','Задачи']];if(!role('smm'))v.push(['base','База']);v.push(['content',smm()?'Контент':'Результаты SMM']);if(role('director'))v.push(['team','Команда']);return v;}
 function nav(){var s='';views().forEach(function(v){s+='<button class="'+(S.view===v[0]?'on':'')+'" onclick="go(\''+v[0]+'\')">'+v[1]+'</button>';});if(B.sheetUrl)s+='<button onclick="window.open(\''+B.sheetUrl+'\')">Таблица ↗</button>';el('nav').innerHTML=s;}
 function go(v){S.view=v;S.obj=null;nav();render();window.scrollTo(0,0);}
 function render(){
@@ -132,12 +132,12 @@ function renderObj(){
   s+='<div class="row" style="margin:8px 0">'+[o.kind,o.deal,o.area?o.area+' м²':'',o.price?money(o.price):''].filter(Boolean).map(function(x){return '<span class="pill">'+h(x)+'</span>';}).join('')+'</div>';
   s+='<div class="mut">Ответственный: '+h(o.manager||'—')+' · Ассистент: '+h(o.assistant||'—')+' · SMM: '+h(o.smm||'—')+'</div>';
   s+='<div class="row" style="margin:10px 0">'+(o.folder_link?'<a class="lnk" target="_blank" href="'+h(o.folder_link)+'">Папка объекта ↗</a>':'')+(o.last_report_link?' · <a class="lnk" target="_blank" href="'+h(o.last_report_link)+'">Последний отчёт ↗</a>':'')+(role('director')&&o.tab_url&&B.sheetUrl?' · <a class="lnk" target="_blank" href="'+h(B.sheetUrl+o.tab_url)+'">Вкладка в таблице ↗</a>':'')+(o.crm_link?' · <a class="lnk" target="_blank" href="'+h(o.crm_link)+'">CRM ↗</a>':'')+'</div>';
-  var tabs=[['tasks','Задачи']];if(!role('smm'))tabs.push(['base','База']);tabs.push(['cont','Контент'],['strat','Стратегия'],['ad','Реклама'],['rep','Отчёты']);
+  var tabs=[['tasks','Задачи']];if(!role('smm'))tabs.push(['base','База']);tabs.push(['cont',smm()?'Контент':'Результаты SMM'],['strat','Стратегия'],['ad','Реклама'],['rep','Отчёты']);
   s+='<div class="tabs">'+tabs.map(function(t){return '<button class="'+(S.objTab===t[0]?'on':'')+'" onclick="S.objTab=\''+t[0]+'\';renderObj()">'+t[1]+'</button>';}).join('')+'</div>';
   var id=String(o.id), T=S.objTab;
   if(T==='tasks'){var ts=(S.tasks||[]).filter(function(x){return String(x.obj_id)===id;});s+=(can('TASK')?'<button class="b" onclick="newTask(\''+h(id)+'\')">+ Задача</button>':'')+'<div class="card" style="margin-top:8px">'+(ts.map(taskItem).join('')||'<div class="empty">Задач нет</div>')+'</div>';}
   if(T==='base'){var bs=(S.base||[]).filter(function(x){return String(x.obj_id)===id;});s+='<button class="b" onclick="newBase(\''+h(id)+'\')">+ Компания / контакт</button><div class="mut" style="margin-top:6px">Всего: '+bs.length+' · КП: '+bs.filter(function(r){return r.kp_date;}).length+' · интерес: '+bs.filter(function(r){return r.resp_cls==='YES';}).length+'</div><div class="card" style="margin-top:8px">'+(bs.map(baseItem).join('')||'<div class="empty">База пуста</div>')+'</div>';}
-  if(T==='cont'){var cs=(S.cont||[]).filter(function(x){return String(x.obj_id)===id;});s+='<button class="b" onclick="newCont(\''+h(id)+'\')">+ Публикация</button><div class="card" style="margin-top:8px">'+(cs.map(contItem).join('')||'<div class="empty">Контента нет</div>')+'</div>';}
+  if(T==='cont'){var cs=(S.cont||[]).filter(function(x){return String(x.obj_id)===id;});s+=smm()?'<button class="b" onclick="newCont(\''+h(id)+'\')">+ Публикация</button><div class="card" style="margin-top:8px">'+(cs.map(contItem).join('')||'<div class="empty">Контента нет</div>')+'</div>':resTable(cs,false);}
   if(T==='strat'){var D=S.obj.data;if(!D)s+='<div class="empty">Загружаю…</div>';else{var st=D.strategy,kv=st.kv;s+='<div class="card"><h3 style="margin-top:0">Цена и позиционирование</h3>'+line('Рекомендуемая цена',money(kv.rec_price))+line('Минимальная для торга',money(kv.min_price))+line('Медиана по аналогам, ₽/м²',money(kv.median))+line('Наша цена за м²',money(kv.our_m2))+line('Позиционирование',kv.positioning)+line('Вывод по цене',kv.price_note)+(kv.analysis_link?line('Анализ','<a class="lnk" target="_blank" href="'+h(kv.analysis_link)+'">открыть ↗</a>',1):'')+'</div>';
     s+=tbl('Целевые аудитории',['Аудитория','Кто','Портрет','Где искать','Приоритет'],st.aud)+tbl('Сценарии',['Сценарий','Чек-лист','Что проверить','Консультанты','Вывод','Статус'],st.scen)+tbl('КП и материалы',['Материал','Какое','Для кого','Ссылка','Готовность','Комментарий'],st.kp)+tbl('Каналы и партнёры',['Канал','Что делаем','Ответственный','Статус','Результат'],st.chan)+tbl('Выводы и решения',['Дата','Вывод / решение','Кто','Что дальше'],st.dec);}}
   if(T==='ad'){if(S.obj.ad===undefined){S.obj.ad=null;api('webAd',[id],function(v){S.obj.ad=v||false;renderObj();});s+='<div class="empty">Загружаю отчёт по рекламе…</div>';}else if(!S.obj.ad)s+='<div class="empty">'+(S.obj.ad===null?'Загружаю…':'Нет ссылки на отчёт по рекламе CRM (01_ОБЪЕКТЫ).')+'</div>';else{var a=S.obj.ad;s+='<div class="kpis">'+kpi('Просмотры',a.views)+kpi('В избранном',a.fav)+kpi('Обращения',a.appeals)+kpi('Показы',a.shows)+(a.spend!=null?kpi('Расходы, ₽',Number(a.spend).toLocaleString('ru-RU')):'')+'</div><div class="card"><div class="mut">В рекламе с '+d(a.since)+' · площадок: '+a.sites.length+'</div><div style="margin-top:6px">'+h(a.sites.join(', '))+'</div>'+(a.cian?'<div style="margin-top:8px"><a class="lnk" target="_blank" href="'+h(a.cian)+'">Объявление на ЦИАН ↗</a></div>':'')+'</div>';}}
@@ -202,7 +202,20 @@ function newBase(objId){form('Новая компания / контакт',[
 
 /* ───────── Контент (SMM) ───────── */
 function smm(){return role('smm')||role('director');}
+/* ассистент и агент: только вышедшие публикации по своим объектам и цифры */
+function resTable(list,withObj){list=list.slice().sort(function(a,b){return (b.pub_date||'')<(a.pub_date||'')?-1:1;});
+  if(!list.length)return '<div class="card empty">Публикаций пока не было</div>';
+  var sum=function(k){return list.reduce(function(a,x){return a+(Number(x[k])||0);},0);};
+  var s='<div class="kpis">'+kpi('Публикаций',list.length)+kpi('Просмотры',num(sum('views')))+kpi('Охват',num(sum('reach')))+kpi('Заявки',num(sum('leads')))+'</div>';
+  s+='<div class="card" style="overflow-x:auto;margin-top:8px"><table><tr><th>Дата</th>'+(withObj?'<th>Объект</th>':'')+'<th>Площадка</th><th>Публикация</th><th>Просмотры</th><th>Охват</th><th>Заявки</th></tr>';
+  list.forEach(function(x){s+='<tr><td>'+d(x.pub_date)+'</td>'+(withObj?'<td>'+h(oname(x.obj_id))+'</td>':'')+'<td>'+h(x.platform)+(x.format?' · '+h(x.format):'')+'</td><td>'+h(x.topic)+(x.link?' <a class="lnk" target="_blank" href="'+h(x.link)+'">открыть ↗</a>':'')+'</td><td>'+num(x.views)+'</td><td>'+num(x.reach)+'</td><td>'+num(x.leads)+'</td></tr>';});
+  return s+'</table></div>';}
+function renderResults(){
+  var s='<h2>Результаты SMM по вашим объектам</h2>'+periodBar('af','at',-29,0,' <button class="b2" onclick="renderContent()">Показать</button>')+'<div class="row" style="margin-bottom:8px"><select style="max-width:260px" onchange="S.cf.obj=this.value;renderContent()"><option value="">Все объекты</option>'+B.objects.filter(function(o){return !o.service;}).map(function(o){return '<option value="'+h(o.id)+'"'+(String(o.id)===S.cf.obj?' selected':'')+'>'+h(o.name)+'</option>';}).join('')+'</select></div>';
+  var list=(S.cont||[]).filter(function(x){return x.pub_date&&x.pub_date>=S.af&&x.pub_date<=S.at&&(!S.cf.obj||String(x.obj_id)===S.cf.obj);});
+  el('main').innerHTML=s+resTable(list,true);}
 function renderContent(){
+  if(!smm())return renderResults();
   var tabs=[['plan','Контент-план'],['pub','Опубликовано']];if(smm())tabs.push(['an','Аналитика'],['soc','Соцсети']);
   var s='<div class="row"><h2 style="flex:1">Контент</h2><button class="b" onclick="newCont(\'\')">+ Публикация</button></div><div class="tabs">'+tabs.map(function(t){return '<button class="'+(S.ct===t[0]?'on':'')+'" onclick="S.ct=\''+t[0]+'\';renderContent()">'+t[1]+'</button>';}).join('')+'</div>';
   if(S.ct==='plan')s+=contPlan();

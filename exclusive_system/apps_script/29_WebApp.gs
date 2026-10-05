@@ -59,8 +59,12 @@ function webCanSee_(u, o) {
 function webCanEdit_(u, o, code) {
   if (!webCanSee_(u, o)) return false;
   if (u.role === 'smm') return code === 'CONT';
+  if (code === 'CONT') return u.role === 'director'; // ассистент и агент контент не ведут — видят только результаты SMM
   return true;
 }
+
+/** Ассистент и агент: только вышедшие публикации по своим объектам и их результаты — без плана, сценариев и рабочих полей SMM. */
+const WEB_CONT_RESULT_KEYS = ['id', 'obj_id', 'topic', 'platform', 'format', 'pub_date', 'link', 'views', 'reach', 'likes', 'comments', 'saves', 'shares', 'leads'];
 
 function webVal_(v) {
   if (v instanceof Date) return fmtDate_(v, 'yyyy-MM-dd');
@@ -165,8 +169,11 @@ function webContent(objId) {
   const u = webUser_();
   const vis = {};
   webObjects_(u).forEach(o => { vis[String(o.id)] = o; });
+  const full = u.role === 'director' || u.role === 'smm';
   return readTable_('CONT').rows.filter(r => r.id && vis[String(r.obj_id)] && (!objId || String(r.obj_id) === String(objId)))
-    .map(r => { const x = webRow_(r, WEB_CONT_KEYS); x.cls = webClassOf_('content_status', r.status); return x; });
+    .map(r => ({ r: r, cls: webClassOf_('content_status', r.status) }))
+    .filter(x => full || (x.cls === CLS.DONE && !isServiceObject_(vis[String(x.r.obj_id)])))
+    .map(x => { const o = webRow_(x.r, full ? WEB_CONT_KEYS : WEB_CONT_RESULT_KEYS); o.cls = x.cls; return o; });
 }
 
 /** Карточка объекта: стратегия из вкладки и отчёты. */
