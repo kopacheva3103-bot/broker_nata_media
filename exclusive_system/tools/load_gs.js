@@ -13,7 +13,7 @@ function loadGs(overrides) {
   Object.assign(ctx, overrides || {});
   vm.createContext(ctx);
   // top-level const не попадают в глобальный объект — экспортируем их явно
-  const exportNames = [...src.matchAll(/^(?:const|function)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]);
+  const exportNames = [...src.replace(/String\.raw`[\s\S]*?`;/g, '').matchAll(/^(?:const|function)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]);
   vm.runInContext(src + '\n;globalThis.__x = {' + [...new Set(exportNames)].join(',') + '};', ctx, { filename: 'apps_script.js' });
   return ctx.__x;
 }

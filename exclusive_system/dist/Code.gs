@@ -4073,7 +4073,7 @@ function objectById_(id) {
   return t.rows.find(r => String(r.id) === String(id)) || null;
 }
 
-function toast_(msg, title, sec) { ss_().toast(msg, title || SYS.MENU, sec || 5); }
+function toast_(msg, title, sec) { try { ss_().toast(msg, title || SYS.MENU, sec || 5); } catch (e) { /* кабинет (веб-приложение) — всплывающих сообщений нет */ } }
 
 function htmlEscape_(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -4202,6 +4202,7 @@ function userLock_() {
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu(SYS.MENU)
+    .addItem('➜ Личные кабинеты (сайт)', 'webAppLink')
     .addItem('➜ Открыть вкладку объекта', 'openObjectTab')
     .addItem('➜ Разобрать папку «Входящие»', 'processInbox')
     .addItem('➜ Загрузить объекты списком', 'importObjects')
@@ -7098,3 +7099,579 @@ function closeAdLinkTasks_() {
   });
   return n;
 }
+
+// ═════════════ 29_WebApp.gs ═════════════
+/**
+ * 29_WebApp — личные кабинеты: веб-приложение (сайт) поверх таблицы.
+ * Таблица остаётся базой данных; сотрудники работают в кабинете, а не в листах.
+ *
+ * Кто есть кто — по Google-аккаунту и 07_СПРАВОЧНИКИ «Сотрудник / Роль / Email»:
+ *   Директор (роль «Руководитель» / «Директор» или владелец таблицы) — видит и меняет всё;
+ *   Ассистент — объекты директора (Ответственный пустой или директор) и объекты, где он указан ассистентом;
+ *   Агент — объекты, где он «Ответственный»;
+ *   SMM — все объекты (маркетинг компании): контент меняет, задачи — только свои, базу обзвона не видит.
+ * Правки из кабинета проходят через ту же автоматику, что и правки в таблице (ID, история, перенос задач, даты).
+ */
+
+const WEB_ROLE_TITLES = { director: 'Директор', assistant: 'Ассистент', agent: 'Агент', smm: 'SMM' };
+
+function doGet() {
+  return HtmlService.createHtmlOutput(WEB_HTML)
+    .setTitle('Кабинет — ' + SYS.TITLE)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function webRoleOf_(text) {
+  const t = String(text || '').toLowerCase();
+  if (/руковод|директор/.test(t)) return 'director';
+  if (/ассист/.test(t)) return 'assistant';
+  if (/smm|смм|маркет/.test(t)) return 'smm';
+  if (/агент|брокер|риэлт|риелт/.test(t)) return 'agent';
+  return '';
+}
+
+/** Текущий сотрудник: {email, name, role, roleTitle, directors}. Нет в справочнике — ошибка «нет доступа». */
+function webUser_() {
+  const email = String(userEmail_() || '').trim().toLowerCase();
+  if (!email) throw new Error('Не удалось определить ваш Google-аккаунт. Войдите в Google и откройте ссылку снова.');
+  const people = dictRows_('people');
+  const directors = people.filter(r => webRoleOf_(r[1]) === 'director').map(r => String(r[0]));
+  let owner = '';
+  try { owner = String(ss_().getOwner().getEmail() || '').toLowerCase(); } catch (e) { /* общий диск */ }
+  const row = people.find(r => String(r[2] || '').trim().toLowerCase() === email);
+  if (!row && email !== owner) {
+    throw new Error('Нет доступа для ' + email + '. Руководитель добавляет сотрудника в 07_СПРАВОЧНИКИ: имя, роль (Директор / Ассистент / Агент / SMM) и этот email.');
+  }
+  const role = email === owner ? 'director' : webRoleOf_(row[1]);
+  if (!role) throw new Error('У сотрудника ' + row[0] + ' в 07_СПРАВОЧНИКИ не указана роль: Директор, Ассистент, Агент или SMM.');
+  const name = row ? String(row[0]) : (directors[0] || 'Директор');
+  return { email: email, name: name, role: role, roleTitle: WEB_ROLE_TITLES[role], directors: directors };
+}
+
+function webCanSee_(u, o) {
+  if (!o) return false;
+  if (u.role === 'director' || u.role === 'smm') return true;
+  if (isServiceObject_(o)) return false;
+  const mgr = String(o.manager || '');
+  if (u.role === 'agent') return mgr === u.name;
+  if (u.role === 'assistant') return !mgr || u.directors.indexOf(mgr) >= 0 || String(o.assistant || '') === u.name;
+  return false;
+}
+
+/** Может ли менять записи листа code по объекту o. SMM — только контент. */
+function webCanEdit_(u, o, code) {
+  if (!webCanSee_(u, o)) return false;
+  if (u.role === 'smm') return code === 'CONT';
+  return true;
+}
+
+function webVal_(v) {
+  if (v instanceof Date) return fmtDate_(v, 'yyyy-MM-dd');
+  return v === null || v === undefined ? '' : v;
+}
+
+function webRow_(o, keys) {
+  const r = {};
+  keys.forEach(k => { r[k] = webVal_(o[k]); });
+  return r;
+}
+
+const WEB_OBJ_KEYS = ['id', 'name', 'kind', 'deal', 'address', 'area', 'price', 'status', 'manager', 'assistant', 'smm', 'strategy_pct',
+  'folder_link', 'crm_link', 'last_report_link', 'last_report_date', 'tab_url', 'in_work', 'idle_aud'];
+const WEB_TASK_KEYS = ['id', 'week', 'obj_id', 'block', 'task', 'owner', 'unit', 'plan', 'fact', 'fact_auto', 'deadline', 'status', 'result', 'source'];
+const WEB_BASE_KEYS = ['id', 'obj_id', 'audience', 'company', 'site', 'contact', 'fit', 'fit_note', 'call_date', 'call_result', 'kp_date', 'kp_type',
+  'response', 'response_date', 'next_step', 'next_date', 'to_crm', 'owner'];
+const WEB_CONT_KEYS = ['id', 'obj_id', 'topic', 'platform', 'format', 'goal', 'script', 'status', 'pub_date', 'link', 'views', 'reach', 'saves', 'leads', 'owner'];
+
+/** Что можно менять из кабинета и что можно указывать при создании записи. */
+const WEB_EDITABLE = {
+  TASK: ['status', 'result', 'fact', 'deadline', 'owner', 'task', 'plan'],
+  BASE: ['call_date', 'call_result', 'kp_date', 'kp_type', 'response', 'next_step', 'next_date', 'fit', 'fit_note', 'contact', 'site', 'audience', 'company', 'to_crm'],
+  CONT: ['topic', 'platform', 'format', 'goal', 'script', 'status', 'pub_date', 'link', 'views', 'reach', 'saves', 'leads', 'owner'],
+};
+const WEB_CREATE = {
+  TASK: ['obj_id', 'block', 'task', 'owner', 'unit', 'plan', 'deadline'],
+  BASE: ['obj_id', 'audience', 'company', 'site', 'contact', 'fit_note', 'next_step', 'next_date'],
+  CONT: ['obj_id', 'topic', 'platform', 'format', 'goal', 'script', 'pub_date', 'owner'],
+};
+
+function webObjects_(u) {
+  return readTable_('OBJ').rows.filter(o => o.id && o.name && webCanSee_(u, o));
+}
+
+function webClassOf_(dict, v) {
+  try { return v ? dictClassOf_(dict, v) : CLS.OPEN; } catch (e) { return ''; }
+}
+
+/** Стартовые данные кабинета. */
+function webBootstrap() {
+  const u = webUser_();
+  const objs = webObjects_(u).map(o => {
+    const r = webRow_(o, WEB_OBJ_KEYS);
+    r.service = isServiceObject_(o);
+    r.has_ad = !!o.crm_report_link;
+    if (u.role !== 'director') { delete r.crm_link; }
+    return r;
+  });
+  const dict = k => { try { return dictValues_(k); } catch (e) { return []; } };
+  const statusRows = k => { try { return dictRows_(k).map(r => [r[0], r[1]]); } catch (e) { return []; } };
+  const wk = isoWeekKey_(today_());
+  return {
+    me: { name: u.name, role: u.role, roleTitle: u.roleTitle, email: u.email },
+    today: fmtDate_(today_(), 'yyyy-MM-dd'), week: wk,
+    objects: objs,
+    dicts: {
+      people: dict('people'), task_blocks: dict('task_blocks'), units: dict('units'), task_status: statusRows('task_status'),
+      responses: dict('responses'), kp_types: dict('kp_types'), fit: dict('fit'),
+      platforms: dict('platforms'), content_formats: dict('content_formats'), content_goals: dict('content_goals'), content_status: statusRows('content_status'),
+    },
+    sheetUrl: u.role === 'director' ? ss_().getUrl() : '',
+  };
+}
+
+/** Задачи: по видимым объектам + свои по любому объекту. Открытые любой недели и все за эту и прошлую неделю. */
+function webTasks() {
+  const u = webUser_();
+  const vis = {};
+  webObjects_(u).forEach(o => { vis[String(o.id)] = o; });
+  const wk = isoWeekKey_(today_()), prev = isoWeekKey_(addDays_(today_(), -7));
+  return readTable_('TASK').rows.filter(t => t.id && t.task).filter(t => {
+    const mine = String(t.owner) === u.name;
+    const see = u.role === 'smm' ? mine : (mine || !!vis[String(t.obj_id)]);
+    if (!see) return false;
+    const cls = webClassOf_('task_status', t.status);
+    return cls === CLS.OPEN || t.week === wk || t.week === prev;
+  }).map(t => {
+    const r = webRow_(t, WEB_TASK_KEYS);
+    r.cls = webClassOf_('task_status', t.status);
+    r.mine = String(t.owner) === u.name;
+    r.can = u.role === 'director' || r.mine || webCanEdit_(u, vis[String(t.obj_id)], 'TASK');
+    return r;
+  });
+}
+
+/** База обзвона по видимым объектам (SMM — нет доступа). */
+function webBase(objId) {
+  const u = webUser_();
+  if (u.role === 'smm') return [];
+  const vis = {};
+  webObjects_(u).forEach(o => { vis[String(o.id)] = o; });
+  return readTable_('BASE').rows.filter(r => r.id && r.company && vis[String(r.obj_id)] && (!objId || String(r.obj_id) === String(objId)))
+    .map(r => { const x = webRow_(r, WEB_BASE_KEYS); x.resp_cls = webClassOf_('responses', r.response); return x; });
+}
+
+/** Контент по видимым объектам. */
+function webContent(objId) {
+  const u = webUser_();
+  const vis = {};
+  webObjects_(u).forEach(o => { vis[String(o.id)] = o; });
+  return readTable_('CONT').rows.filter(r => r.id && vis[String(r.obj_id)] && (!objId || String(r.obj_id) === String(objId)))
+    .map(r => { const x = webRow_(r, WEB_CONT_KEYS); x.cls = webClassOf_('content_status', r.status); return x; });
+}
+
+/** Карточка объекта: стратегия из вкладки и отчёты. */
+function webObject(objId) {
+  const u = webUser_();
+  const o = objectById_(objId);
+  if (!webCanSee_(u, o)) throw new Error('Нет доступа к объекту');
+  const out = { strategy: { kv: {}, aud: [], dec: [], chan: [], scen: [], kp: [] }, reports: [] };
+  try {
+    const tab = findObjectTab_(o);
+    if (tab) {
+      const d = readObjectTab_(tab);
+      const kv = d.kv || {};
+      ['rec_price', 'min_price', 'positioning', 'price_note', 'analysis_link', 'median', 'our_m2'].forEach(k => { out.strategy.kv[k] = webVal_(kv[k]); });
+      const t = (k, n) => (d.tables[k] || []).map(r => r.slice(0, n).map(webVal_));
+      out.strategy.aud = t('AUD', 5); out.strategy.dec = t('DEC', 4); out.strategy.chan = t('CHAN', 5); out.strategy.scen = t('SCEN', 6); out.strategy.kp = t('KP', 6);
+    }
+  } catch (e) { out.strategyError = e.message; }
+  out.reports = readTable_('ARCH').rows.filter(r => String(r.obj_id) === String(objId) && r.status !== REPORT_STATUS.REPLACED)
+    .map(r => ({ no: webVal_(r.report_no), week: r.week, period: r.period, link: r.doc_link || r.pdf_link, status: r.status })).reverse().slice(0, 12);
+  return out;
+}
+
+/** Реклама по объекту (из отчёта CRM). Расходы — только директору. */
+function webAd(objId) {
+  const u = webUser_();
+  const o = objectById_(objId);
+  if (!webCanSee_(u, o) || !o.crm_report_link) return null;
+  const a = fetchAdReport_(o.crm_report_link);
+  if (!a) return null;
+  return { since: a.since ? fmtDate_(a.since, 'yyyy-MM-dd') : '', sites: a.sites, views: a.views, fav: a.fav, appeals: a.appeals, shows: a.shows,
+    cian: a.cian, spend: u.role === 'director' ? a.spend : null };
+}
+
+/** Директор: команда и объекты за неделю. */
+function webTeam() {
+  const u = webUser_();
+  if (u.role !== 'director') throw new Error('Раздел доступен только директору');
+  const wk = isoWeekKey_(today_()), today = today_();
+  const tasks = readTable_('TASK').rows.filter(t => t.id && t.task);
+  const cls = t => webClassOf_('task_status', t.status);
+  const people = dictRows_('people').map(r => ({ name: String(r[0]), role: String(r[1] || '') }));
+  const team = people.map(p => {
+    const my = tasks.filter(t => String(t.owner) === p.name);
+    return {
+      name: p.name, role: p.role,
+      open: my.filter(t => cls(t) === CLS.OPEN).length,
+      overdue: my.filter(t => cls(t) === CLS.OPEN && t.deadline instanceof Date && t.deadline < today).length,
+      doneWeek: my.filter(t => t.week === wk && cls(t) === CLS.DONE).length,
+      week: my.filter(t => t.week === wk && cls(t) !== CLS.CANCEL).length,
+    };
+  });
+  const base = readTable_('BASE').rows;
+  const inWk = d => d instanceof Date && isoWeekKey_(d) === wk;
+  const objs = webObjects_(u).filter(o => !isServiceObject_(o)).map(o => {
+    const id = String(o.id);
+    const wt = tasks.filter(t => String(t.obj_id) === id && t.week === wk && cls(t) !== CLS.CANCEL);
+    const b = base.filter(r => String(r.obj_id) === id && r.company);
+    return {
+      id: id, name: o.name, manager: o.manager || '',
+      tasksWeek: wt.length, doneWeek: wt.filter(t => cls(t) === CLS.DONE).length,
+      callsWeek: b.filter(r => inWk(r.call_date)).length, kpWeek: b.filter(r => inWk(r.kp_date)).length,
+      baseTotal: b.length, interested: b.filter(r => webClassOf_('responses', r.response) === 'YES').length,
+      lastReport: webVal_(o.last_report_date), strategy: webVal_(o.strategy_pct),
+    };
+  });
+  return { team: team, objects: objs, week: wk };
+}
+
+function webParse_(code, key, v) {
+  const f = fieldOf_(code, key);
+  if (v === null || v === undefined) return '';
+  if (f.kind === 'date') {
+    if (!v) return '';
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v));
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : (parseRuDate_(String(v)) || '');
+  }
+  if (f.kind === 'num' || f.kind === 'money') { const n = Number(String(v).replace(/\s/g, '').replace(',', '.')); return v === '' || isNaN(n) ? '' : n; }
+  if (f.kind === 'cb') return v === true || v === 'true';
+  return String(v).trim();
+}
+
+/** Правка записи (TASK / BASE / CONT) из кабинета. Каждое поле — как правка одной ячейки в таблице. */
+function webUpdate(code, id, changes) {
+  const u = webUser_();
+  if (!WEB_EDITABLE[code]) throw new Error('Нельзя менять ' + code);
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(20000);
+  try {
+    const t = readTable_(code);
+    const r = t.rows.find(x => String(x.id) === String(id));
+    if (!r) throw new Error('Запись ' + id + ' не найдена — обновите страницу');
+    const o = objectById_(r.obj_id);
+    const ownTask = code === 'TASK' && String(r.owner) === u.name;
+    if (!(u.role === 'director' || ownTask || webCanEdit_(u, o, code))) throw new Error('Нет прав менять эту запись');
+    Object.keys(changes || {}).forEach(k => {
+      if (WEB_EDITABLE[code].indexOf(k) < 0) return;
+      if (code === 'TASK' && k === 'owner' && u.role !== 'director') return;
+      const nv = webParse_(code, k, changes[k]);
+      const old = r[k];
+      if (sameValue_(old, nv)) return;
+      const col = fieldIndex_(code, k);
+      writeFields_(t.sh, code, r._row, { [k]: nv });
+      r[k] = nv;
+      processEditedRows_(t.sh, t.spec, r._row, r._row, col, col, { oldValue: old instanceof Date ? fmtDate_(old) : old });
+    });
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Новая запись из кабинета. */
+function webCreate(code, data) {
+  const u = webUser_();
+  if (!WEB_CREATE[code]) throw new Error('Нельзя создавать ' + code);
+  const o = objectById_(data && data.obj_id);
+  if (!(webCanEdit_(u, o, code) || (u.role === 'director' && o))) throw new Error('Нет прав на этот объект');
+  const rec = {};
+  WEB_CREATE[code].forEach(k => { if (data[k] !== undefined && data[k] !== '') rec[k] = webParse_(code, k, data[k]); });
+  rec.obj_id = String(o.id);
+  if (code === 'TASK' && !rec.task) throw new Error('Напишите задачу');
+  if (code === 'BASE' && !rec.company) throw new Error('Укажите компанию');
+  if (code === 'CONT' && !rec.topic) throw new Error('Укажите тему');
+  if (!rec.owner && (code !== 'TASK' || u.role !== 'director')) rec.owner = u.name;
+  if (code === 'TASK' && rec.deadline instanceof Date) rec.week = isoWeekKey_(rec.deadline);
+  if (code === 'TASK') rec.source = 'Вручную';
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(20000);
+  try {
+    const t = readTable_(code);
+    const row = appendRow_(code, rec);
+    processEditedRows_(t.sh, t.spec, row, row, 1, t.spec.fields.length, {});
+    const id = t.sh.getRange(row, fieldIndex_(code, 'id')).getValue();
+    if (code === 'BASE') { try { refreshBaseAudienceLists_([rec.obj_id]); } catch (e) { /* утром */ } }
+    return { ok: true, id: id };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Меню: ссылка на личные кабинеты (или как их включить). */
+function webAppLink() {
+  const ui = SpreadsheetApp.getUi();
+  let url = '';
+  try { url = ScriptApp.getService().getUrl() || ''; } catch (e) { /* не развёрнуто */ }
+  if (url) {
+    showLinks_('Личные кабинеты', [{ label: 'Открыть кабинет', url: url }],
+      'Эту ссылку отправьте сотрудникам. Каждый входит своим Google-аккаунтом и видит свой кабинет. ' +
+      'Сотрудник должен быть в 07_СПРАВОЧНИКИ (имя, роль, email) и иметь доступ к таблице.');
+    return;
+  }
+  ui.alert('Личные кабинеты ещё не опубликованы',
+    'Один раз (делает руководитель):\n' +
+    '1) Расширения → Apps Script → кнопка «Начать развертывание» → «Новое развертывание».\n' +
+    '2) Тип (шестерёнка) — «Веб-приложение».\n' +
+    '3) «Запуск от имени» — «Пользователь, у которого есть доступ к веб-приложению».\n' +
+    '4) «У кого есть доступ» — «Все, у кого есть аккаунт Google».\n' +
+    '5) «Развернуть» → скопируйте ссылку «Веб-приложение» — это адрес кабинетов.\n\n' +
+    'После каждого обновления кода: «Начать развертывание» → «Управление развертываниями» → карандаш → «Версия: новая версия» → «Развернуть». Ссылка не меняется.',
+    ui.ButtonSet.OK);
+}
+
+// ═════════════ 30_WebUi.gs ═════════════
+/**
+ * 30_WebUi — страница личного кабинета (HTML + CSS + JS одним текстом, чтобы код оставался одним файлом Code.gs).
+ * Внутри нельзя использовать обратные кавычки и «доллар+фигурная скобка» — это строка String.raw.
+ */
+const WEB_HTML = String.raw`<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><base target="_top">
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--ink:#1f2933;--mut:#6b7785;--line:#e3e8ef;--acc:#1f5f99;--acc2:#e8f1fa;--red:#c0392b;--redbg:#fdecea;--grn:#1e7d4f;--grnbg:#e6f4ec;--amb:#9a6b00;--ambbg:#fff4d6}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 -apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:#14324f;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:5}
+header .t{font-weight:600;font-size:15px}header .me{margin-left:auto;font-size:13px;opacity:.9}
+nav{display:flex;gap:4px;padding:8px 12px;background:#fff;border-bottom:1px solid var(--line);overflow-x:auto;position:sticky;top:44px;z-index:4}
+nav button{border:0;background:none;padding:8px 12px;border-radius:8px;font:inherit;color:var(--mut);cursor:pointer;white-space:nowrap}
+nav button.on{background:var(--acc2);color:var(--acc);font-weight:600}
+main{max-width:1100px;margin:0 auto;padding:14px 12px 60px}
+h2{font-size:17px;margin:18px 0 8px}h3{font-size:15px;margin:14px 0 6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.obj{cursor:pointer}.obj:hover{border-color:var(--acc)}.obj .n{font-weight:600;margin-bottom:2px}
+.mut{color:var(--mut);font-size:12.5px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.item{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line);cursor:pointer}.item:first-child{border-top:0}
+.item .main{flex:1;min-width:0}.item .ttl{font-weight:500}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;background:#eef1f5;color:var(--mut);white-space:nowrap}
+.pill.red{background:var(--redbg);color:var(--red)}.pill.grn{background:var(--grnbg);color:var(--grn)}.pill.amb{background:var(--ambbg);color:var(--amb)}.pill.acc{background:var(--acc2);color:var(--acc)}
+button.b{border:1px solid var(--acc);background:var(--acc);color:#fff;border-radius:8px;padding:7px 12px;font:inherit;cursor:pointer}
+button.b2{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:7px 12px;font:inherit;cursor:pointer}
+a.lnk{color:var(--acc);text-decoration:none}a.lnk:hover{text-decoration:underline}
+input,select,textarea{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;width:100%;background:#fff}
+textarea{min-height:64px}label.f{display:block;margin:8px 0 3px;font-size:12.5px;color:var(--mut)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}.kpi .v{font-size:22px;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:7px 6px;border-top:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--mut);font-weight:500;border-top:0}
+.tabs{display:flex;gap:4px;margin:10px 0;flex-wrap:wrap}.tabs button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}.tabs button.on{border-color:var(--acc);color:var(--acc);font-weight:600}
+#modal{position:fixed;inset:0;background:rgba(15,25,40,.45);display:none;align-items:flex-start;justify-content:center;padding:30px 10px;z-index:20;overflow:auto}
+#modal .box{background:#fff;border-radius:14px;max-width:560px;width:100%;padding:16px 18px}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#1f2933;color:#fff;padding:9px 14px;border-radius:10px;display:none;z-index:30;max-width:90%}
+#load{position:fixed;top:0;left:0;height:3px;width:100%;background:linear-gradient(90deg,var(--acc),#7fb3e6);display:none;z-index:40}
+.empty{color:var(--mut);padding:8px 0}.chk{width:auto}
+</style></head><body>
+<div id="load"></div>
+<header><div class="t">Маркетинг эксклюзивов</div><div class="me" id="me">Загрузка…</div></header>
+<nav id="nav"></nav>
+<main id="main"><div class="empty">Загружаю кабинет…</div></main>
+<div id="modal"><div class="box" id="mbox"></div></div>
+<div id="toast"></div>
+<script>
+var B=null, S={view:'today',tasks:null,base:null,cont:null,obj:null,objTab:'tasks',taskScope:'mine',baseObj:'',baseToday:false,q:''};
+function h(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function el(id){return document.getElementById(id);}
+function load(on){el('load').style.display=on?'block':'none';}
+function toast(t){var x=el('toast');x.textContent=t;x.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(function(){x.style.display='none';},3500);}
+function api(fn,args,cb){load(true);var r=google.script.run.withSuccessHandler(function(v){load(false);cb&&cb(v);}).withFailureHandler(function(e){load(false);toast('Ошибка: '+(e&&e.message||e));});r[fn].apply(r,args||[]);}
+function d(s){if(!s)return '';var p=String(s).split('-');return p.length===3?p[2]+'.'+p[1]+'.'+p[0].slice(2):s;}
+function money(v){return v===''||v==null?'':Number(v).toLocaleString('ru-RU')+' ₽';}
+function obj(id){for(var i=0;i<B.objects.length;i++)if(String(B.objects[i].id)===String(id))return B.objects[i];return null;}
+function oname(id){var o=obj(id);return o?o.name:id;}
+function can(code){return B.me.role!=='smm'||code==='CONT';}
+function role(r){return B.me.role===r;}
+function opts(list,val,empty){var s=empty?'<option value="">'+h(empty)+'</option>':'';(list||[]).forEach(function(v){v=Array.isArray(v)?v[0]:v;s+='<option'+(String(v)===String(val)?' selected':'')+'>'+h(v)+'</option>';});return s;}
+function objOpts(val,filterCode){var s='';B.objects.forEach(function(o){if(filterCode&&!can(filterCode))return;s+='<option value="'+h(o.id)+'"'+(String(o.id)===String(val)?' selected':'')+'>'+h(o.name)+'</option>';});return s;}
+function clsOf(dict,v){var r=(B.dicts[dict]||[]).filter(function(x){return x[0]===v;})[0];return r?r[1]:(v?'':'OPEN');}
+
+/* ───────── навигация ───────── */
+function views(){var v=[['today','Сегодня'],['objects','Объекты'],['tasks','Задачи']];if(!role('smm'))v.push(['base','База']);v.push(['content','Контент']);if(role('director'))v.push(['team','Команда']);return v;}
+function nav(){var s='';views().forEach(function(v){s+='<button class="'+(S.view===v[0]?'on':'')+'" onclick="go(\''+v[0]+'\')">'+v[1]+'</button>';});if(B.sheetUrl)s+='<button onclick="window.open(\''+B.sheetUrl+'\')">Таблица ↗</button>';el('nav').innerHTML=s;}
+function go(v){S.view=v;S.obj=null;nav();render();window.scrollTo(0,0);}
+function render(){
+  if(S.obj)return renderObj();
+  if(S.view==='today')return renderToday();
+  if(S.view==='objects')return renderObjects();
+  if(S.view==='tasks')return need('tasks',renderTasks);
+  if(S.view==='base')return need('base',renderBase);
+  if(S.view==='content')return need('cont',renderContent);
+  if(S.view==='team')return api('webTeam',[],renderTeam);
+}
+function need(k,fn){if(S[k])return fn();var m={tasks:'webTasks',base:'webBase',cont:'webContent'}[k];api(m,k==='tasks'?[]:[''],function(v){S[k]=v;fn();});}
+function reload(keys,cb){var left=keys.length;if(!left)return cb&&cb();keys.forEach(function(k){var m={tasks:'webTasks',base:'webBase',cont:'webContent'}[k];api(m,k==='tasks'?[]:[''],function(v){S[k]=v;if(--left===0)cb&&cb();});});}
+
+/* ───────── Сегодня ───────── */
+function renderToday(){
+  var need2=['tasks'];if(!role('smm'))need2.push('base');if(role('smm')||role('director'))need2.push('cont');
+  var miss=need2.filter(function(k){return !S[k];});
+  if(miss.length)return reload(miss,renderToday);
+  var t=B.today, my=S.tasks.filter(function(x){return x.mine&&x.cls==='OPEN';});
+  var over=my.filter(function(x){return x.deadline&&x.deadline<t;}), td=my.filter(function(x){return x.deadline===t;}), wk=my.filter(function(x){return !x.deadline||x.deadline>t;});
+  var h2='<h2>Добрый день, '+h(B.me.name)+'</h2><div class="mut">'+h(B.me.roleTitle)+' · сегодня '+d(t)+'</div>';
+  var k='<div class="kpis" style="margin-top:12px">'+kpi('Просрочено',over.length,over.length?'red':'')+kpi('На сегодня',td.length)+kpi('Остальные мои',wk.length);
+  var calls=[];
+  if(S.base){calls=S.base.filter(function(r){return r.next_date&&r.next_date<=t;});k+=kpi('Звонки / контакты',calls.length,calls.length?'amb':'');}
+  k+='</div>';
+  var s=h2+k;
+  s+=block('Просроченные задачи',over.map(taskItem).join(''),'Нет — отлично');
+  s+=block('Задачи на сегодня',td.map(taskItem).join(''),'Нет задач со сроком сегодня');
+  s+=block('Мои задачи дальше',wk.slice(0,30).map(taskItem).join(''),'Нет');
+  if(S.base)s+=block('Звонки и повторные контакты на сегодня',calls.sort(function(a,b){return a.next_date<b.next_date?-1:1;}).map(baseItem).join(''),'Сегодня звонков нет');
+  if(S.cont){var c=S.cont.filter(function(x){return x.cls!=='DONE'&&(role('director')||x.owner===B.me.name);});s+=block('Контент в работе',c.map(contItem).join(''),'Нет');}
+  el('main').innerHTML=s;
+}
+function kpi(l,v,c){return '<div class="card kpi"><div class="mut">'+l+'</div><div class="v" style="color:'+(c==='red'?'var(--red)':c==='amb'?'var(--amb)':'inherit')+'">'+v+'</div></div>';}
+function block(title,inner,empty){return '<h3>'+title+'</h3><div class="card">'+(inner||'<div class="empty">'+empty+'</div>')+'</div>';}
+
+/* ───────── элементы списков ───────── */
+function taskPill(x){if(x.cls==='DONE')return '<span class="pill grn">'+h(x.status)+'</span>';if(x.cls==='CANCEL'||x.cls==='MOVED'||x.cls==='FAIL')return '<span class="pill">'+h(x.status)+'</span>';if(x.deadline&&x.deadline<B.today)return '<span class="pill red">просрочено '+d(x.deadline)+'</span>';return '<span class="pill acc">'+(x.deadline?'до '+d(x.deadline):h(x.status||'открыта'))+'</span>';}
+function taskItem(x){var done=x.cls==='DONE';return '<div class="item" onclick="editTask(\''+h(x.id)+'\')"><input type="checkbox" class="chk" '+(done?'checked ':'')+(x.can&&x.cls==='OPEN'?'':'disabled ')+'onclick="event.stopPropagation();quickDone(\''+h(x.id)+'\',this)"><div class="main"><div class="ttl">'+h(x.task)+'</div><div class="mut">'+h(oname(x.obj_id))+(x.owner?' · '+h(x.owner):'')+(x.plan?' · план '+h(x.plan)+(x.fact!==''?' / факт '+h(x.fact):x.fact_auto!==''?' / факт '+h(x.fact_auto):''):'')+(x.result?' · '+h(x.result):'')+'</div></div>'+taskPill(x)+'</div>';}
+function baseItem(r){var last=r.response?('ответ: '+r.response):r.kp_date?('КП '+d(r.kp_date)):r.call_date?('звонок '+d(r.call_date)):'новая';var nx=r.next_date?('<span class="pill '+(r.next_date<=B.today?'amb':'')+'">'+d(r.next_date)+'</span>'):'';return '<div class="item" onclick="editBase(\''+h(r.id)+'\')"><div class="main"><div class="ttl">'+h(r.company)+'</div><div class="mut">'+h(oname(r.obj_id))+(r.audience?' · '+h(r.audience):'')+' · '+h(last)+(r.next_step?' · дальше: '+h(r.next_step):'')+'</div>'+(r.contact?'<div class="mut">'+h(r.contact)+'</div>':'')+'</div>'+nx+'</div>';}
+function contItem(x){var p=x.cls==='DONE'?'grn':'acc';return '<div class="item" onclick="editCont(\''+h(x.id)+'\')"><div class="main"><div class="ttl">'+h(x.topic)+'</div><div class="mut">'+h(oname(x.obj_id))+' · '+h(x.platform)+' · '+h(x.format)+(x.owner?' · '+h(x.owner):'')+(x.views!==''?' · просмотры '+h(x.views):'')+'</div></div><span class="pill '+p+'">'+h(x.status)+(x.pub_date?' '+d(x.pub_date):'')+'</span></div>';}
+
+/* ───────── Объекты ───────── */
+function renderObjects(){
+  var q=S.q.toLowerCase();
+  var list=B.objects.filter(function(o){return !q||(o.name+' '+o.address+' '+o.id).toLowerCase().indexOf(q)>=0;});
+  var s='<div class="row"><h2 style="flex:1">Объекты ('+list.length+')</h2><input style="max-width:260px" placeholder="Поиск" value="'+h(S.q)+'" oninput="S.q=this.value;renderObjects();this.focus();this.setSelectionRange(this.value.length,this.value.length)"></div><div class="grid">';
+  list.forEach(function(o){s+='<div class="card obj" onclick="openObj(\''+h(o.id)+'\')"><div class="n">'+h(o.name)+'</div><div class="mut">'+h([o.kind,o.deal].filter(Boolean).join(' · '))+(o.price?' · '+money(o.price):'')+'</div><div class="mut">'+h(o.address)+'</div><div class="row" style="margin-top:6px">'+(o.manager?'<span class="pill">'+h(o.manager)+'</span>':'')+(o.status?'<span class="pill '+(o.in_work==='НЕТ'?'':'acc')+'">'+h(o.status)+'</span>':'')+(o.idle_aud?'<span class="pill amb">нет базы ★★★</span>':'')+'</div></div>';});
+  s+='</div>';if(!list.length)s+='<div class="empty">'+(role('agent')?'За вами пока нет объектов. Руководитель назначает вас «Ответственным» в 01_ОБЪЕКТЫ.':'Ничего не найдено')+'</div>';
+  el('main').innerHTML=s;
+}
+function openObj(id){S.obj={id:id,data:null,ad:undefined};S.objTab='tasks';var miss=['tasks','cont'];if(!role('smm'))miss.push('base');reload(miss.filter(function(k){return !S[k];}),function(){api('webObject',[id],function(v){S.obj.data=v;renderObj();});});renderObj();}
+function renderObj(){
+  var o=obj(S.obj.id);if(!o){S.obj=null;return render();}
+  var s='<button class="b2" onclick="S.obj=null;render()">← Назад</button><h2>'+h(o.name)+'</h2><div class="mut">'+h(o.address)+'</div>';
+  s+='<div class="row" style="margin:8px 0">'+[o.kind,o.deal,o.area?o.area+' м²':'',o.price?money(o.price):''].filter(Boolean).map(function(x){return '<span class="pill">'+h(x)+'</span>';}).join('')+'</div>';
+  s+='<div class="mut">Ответственный: '+h(o.manager||'—')+' · Ассистент: '+h(o.assistant||'—')+' · SMM: '+h(o.smm||'—')+'</div>';
+  s+='<div class="row" style="margin:10px 0">'+(o.folder_link?'<a class="lnk" target="_blank" href="'+h(o.folder_link)+'">Папка объекта ↗</a>':'')+(o.last_report_link?' · <a class="lnk" target="_blank" href="'+h(o.last_report_link)+'">Последний отчёт ↗</a>':'')+(role('director')&&o.tab_url&&B.sheetUrl?' · <a class="lnk" target="_blank" href="'+h(B.sheetUrl+o.tab_url)+'">Вкладка в таблице ↗</a>':'')+(o.crm_link?' · <a class="lnk" target="_blank" href="'+h(o.crm_link)+'">CRM ↗</a>':'')+'</div>';
+  var tabs=[['tasks','Задачи']];if(!role('smm'))tabs.push(['base','База']);tabs.push(['cont','Контент'],['strat','Стратегия'],['ad','Реклама'],['rep','Отчёты']);
+  s+='<div class="tabs">'+tabs.map(function(t){return '<button class="'+(S.objTab===t[0]?'on':'')+'" onclick="S.objTab=\''+t[0]+'\';renderObj()">'+t[1]+'</button>';}).join('')+'</div>';
+  var id=String(o.id), T=S.objTab;
+  if(T==='tasks'){var ts=(S.tasks||[]).filter(function(x){return String(x.obj_id)===id;});s+=(can('TASK')?'<button class="b" onclick="newTask(\''+h(id)+'\')">+ Задача</button>':'')+'<div class="card" style="margin-top:8px">'+(ts.map(taskItem).join('')||'<div class="empty">Задач нет</div>')+'</div>';}
+  if(T==='base'){var bs=(S.base||[]).filter(function(x){return String(x.obj_id)===id;});s+='<button class="b" onclick="newBase(\''+h(id)+'\')">+ Компания / контакт</button><div class="mut" style="margin-top:6px">Всего: '+bs.length+' · КП: '+bs.filter(function(r){return r.kp_date;}).length+' · интерес: '+bs.filter(function(r){return r.resp_cls==='YES';}).length+'</div><div class="card" style="margin-top:8px">'+(bs.map(baseItem).join('')||'<div class="empty">База пуста</div>')+'</div>';}
+  if(T==='cont'){var cs=(S.cont||[]).filter(function(x){return String(x.obj_id)===id;});s+='<button class="b" onclick="newCont(\''+h(id)+'\')">+ Публикация</button><div class="card" style="margin-top:8px">'+(cs.map(contItem).join('')||'<div class="empty">Контента нет</div>')+'</div>';}
+  if(T==='strat'){var D=S.obj.data;if(!D)s+='<div class="empty">Загружаю…</div>';else{var st=D.strategy,kv=st.kv;s+='<div class="card"><h3 style="margin-top:0">Цена и позиционирование</h3>'+line('Рекомендуемая цена',money(kv.rec_price))+line('Минимальная для торга',money(kv.min_price))+line('Медиана по аналогам, ₽/м²',money(kv.median))+line('Наша цена за м²',money(kv.our_m2))+line('Позиционирование',kv.positioning)+line('Вывод по цене',kv.price_note)+(kv.analysis_link?line('Анализ','<a class="lnk" target="_blank" href="'+h(kv.analysis_link)+'">открыть ↗</a>',1):'')+'</div>';
+    s+=tbl('Целевые аудитории',['Аудитория','Кто','Портрет','Где искать','Приоритет'],st.aud)+tbl('Сценарии',['Сценарий','Чек-лист','Что проверить','Консультанты','Вывод','Статус'],st.scen)+tbl('КП и материалы',['Материал','Какое','Для кого','Ссылка','Готовность','Комментарий'],st.kp)+tbl('Каналы и партнёры',['Канал','Что делаем','Ответственный','Статус','Результат'],st.chan)+tbl('Выводы и решения',['Дата','Вывод / решение','Кто','Что дальше'],st.dec);}}
+  if(T==='ad'){if(S.obj.ad===undefined){S.obj.ad=null;api('webAd',[id],function(v){S.obj.ad=v||false;renderObj();});s+='<div class="empty">Загружаю отчёт по рекламе…</div>';}else if(!S.obj.ad)s+='<div class="empty">'+(S.obj.ad===null?'Загружаю…':'Нет ссылки на отчёт по рекламе CRM (01_ОБЪЕКТЫ).')+'</div>';else{var a=S.obj.ad;s+='<div class="kpis">'+kpi('Просмотры',a.views)+kpi('В избранном',a.fav)+kpi('Обращения',a.appeals)+kpi('Показы',a.shows)+(a.spend!=null?kpi('Расходы, ₽',Number(a.spend).toLocaleString('ru-RU')):'')+'</div><div class="card"><div class="mut">В рекламе с '+d(a.since)+' · площадок: '+a.sites.length+'</div><div style="margin-top:6px">'+h(a.sites.join(', '))+'</div>'+(a.cian?'<div style="margin-top:8px"><a class="lnk" target="_blank" href="'+h(a.cian)+'">Объявление на ЦИАН ↗</a></div>':'')+'</div>';}}
+  if(T==='rep'){var D2=S.obj.data;s+='<div class="card">'+(!D2?'<div class="empty">Загружаю…</div>':(D2.reports.map(function(r){return '<div class="item" onclick="window.open(\''+h(r.link)+'\')"><div class="main"><div class="ttl">Отчёт № '+h(r.no)+' · '+h(r.period||r.week)+'</div><div class="mut">'+h(r.status)+'</div></div><span class="pill acc">открыть ↗</span></div>';}).join('')||'<div class="empty">Отчётов пока нет</div>'))+'</div>';}
+  el('main').innerHTML=s;
+}
+function line(l,v,raw){return v===''||v==null?'':'<div class="row" style="padding:4px 0;border-top:1px solid var(--line)"><div class="mut" style="width:190px">'+h(l)+'</div><div style="flex:1">'+(raw?v:h(v))+'</div></div>';}
+function tbl(t,cols,rows){if(!rows||!rows.length)return '';var s='<div class="card"><h3 style="margin-top:0">'+h(t)+'</h3><div style="overflow-x:auto"><table><tr>'+cols.map(function(c){return '<th>'+h(c)+'</th>';}).join('')+'</tr>';rows.forEach(function(r){s+='<tr>'+cols.map(function(c,i){var v=r[i];v=/^\d{4}-\d\d-\d\d$/.test(v)?d(v):v;return '<td>'+(/^https?:\/\//.test(v)?'<a class="lnk" target="_blank" href="'+h(v)+'">ссылка ↗</a>':h(v))+'</td>';}).join('')+'</tr>';});return s+'</table></div></div>';}
+
+/* ───────── Задачи ───────── */
+function renderTasks(){
+  var list=S.tasks.filter(function(x){return S.taskScope==='mine'?x.mine:true;});
+  var open=list.filter(function(x){return x.cls==='OPEN';}), closed=list.filter(function(x){return x.cls!=='OPEN';});
+  var s='<div class="row"><h2 style="flex:1">Задачи</h2>'+(role('smm')?'':'<select style="max-width:200px" onchange="S.taskScope=this.value;renderTasks()"><option value="mine"'+(S.taskScope==='mine'?' selected':'')+'>Мои</option><option value="all"'+(S.taskScope==='all'?' selected':'')+'>Все по моим объектам</option></select>')+(can('TASK')?'<button class="b" onclick="newTask(\'\')">+ Задача</button>':'')+'</div>';
+  var groups={};open.forEach(function(x){(groups[x.obj_id]=groups[x.obj_id]||[]).push(x);});
+  Object.keys(groups).forEach(function(k){s+='<h3>'+h(oname(k))+'</h3><div class="card">'+groups[k].sort(function(a,b){return (a.deadline||'9')<(b.deadline||'9')?-1:1;}).map(taskItem).join('')+'</div>';});
+  if(!open.length)s+='<div class="card empty">Открытых задач нет</div>';
+  if(closed.length)s+=block('Закрытые за эту и прошлую неделю',closed.map(taskItem).join(''),'');
+  el('main').innerHTML=s;
+}
+function findIn(k,id){return (S[k]||[]).filter(function(x){return String(x.id)===String(id);})[0];}
+function quickDone(id,cb){var done=(B.dicts.task_status.filter(function(r){return r[1]==='DONE';})[0]||['Выполнено'])[0];api('webUpdate',['TASK',id,{status:done}],function(){toast('Готово: задача выполнена');reload(['tasks'],render);});}
+function editTask(id){var x=findIn('tasks',id);if(!x)return;var ro=!x.can;
+  form('Задача · '+oname(x.obj_id),[
+    {k:'task',l:'Задача',t:role('director')?'textarea':'ro',v:x.task},
+    {k:'status',l:'Статус',t:'select',o:B.dicts.task_status,v:x.status},
+    {k:'deadline',l:'Срок',t:'date',v:x.deadline},
+    {k:'result',l:'Результат / комментарий (видит собственник в отчёте)',t:'textarea',v:x.result},
+    {k:'fact',l:'Факт (если план в штуках; звонки и КП считаются сами)',t:'number',v:x.fact},
+    role('director')?{k:'owner',l:'Исполнитель',t:'select',o:B.dicts.people,v:x.owner}:null
+  ],ro?null:function(v){api('webUpdate',['TASK',id,v],function(){toast('Сохранено'+(clsOf('task_status',v.status)==='MOVED'?' · задача перенесена на следующую неделю':''));closeM();reload(['tasks'],render);});},x);}
+function newTask(objId){form('Новая задача',[
+    {k:'obj_id',l:'Объект',t:'obj',v:objId||(S.obj&&S.obj.id)||''},
+    {k:'task',l:'Задача',t:'textarea'},{k:'block',l:'Блок',t:'select',o:B.dicts.task_blocks},
+    {k:'owner',l:'Исполнитель',t:'select',o:B.dicts.people,v:B.me.name},{k:'deadline',l:'Срок',t:'date'},
+    {k:'plan',l:'План (число, необязательно)',t:'number'},{k:'unit',l:'Единица',t:'select',o:B.dicts.units,e:'—'}
+  ],function(v){api('webCreate',['TASK',v],function(r){toast('Задача создана '+(r.id||''));closeM();reload(['tasks'],render);});});}
+
+/* ───────── База ───────── */
+function renderBase(){
+  var q=S.q.toLowerCase(), list=S.base.filter(function(r){return (!S.baseObj||String(r.obj_id)===S.baseObj)&&(!S.baseToday||(r.next_date&&r.next_date<=B.today))&&(!q||(r.company+' '+r.contact+' '+r.audience).toLowerCase().indexOf(q)>=0);});
+  var s='<div class="row"><h2 style="flex:1">База обзвона и КП ('+list.length+')</h2><button class="b" onclick="newBase(S.baseObj)">+ Компания</button></div><div class="row" style="margin-bottom:8px"><select style="max-width:260px" onchange="S.baseObj=this.value;renderBase()"><option value="">Все мои объекты</option>'+objOpts(S.baseObj,'BASE')+'</select><label class="row mut"><input type="checkbox" class="chk" '+(S.baseToday?'checked':'')+' onchange="S.baseToday=this.checked;renderBase()"> только на сегодня</label><input style="max-width:220px" placeholder="Поиск" value="'+h(S.q)+'" oninput="S.q=this.value;renderBase();this.focus();this.setSelectionRange(this.value.length,this.value.length)"></div>';
+  s+='<div class="card">'+(list.sort(function(a,b){return (a.next_date||'9')<(b.next_date||'9')?-1:1;}).map(baseItem).join('')||'<div class="empty">Нет записей</div>')+'</div>';
+  el('main').innerHTML=s;
+}
+function editBase(id){var r=findIn('base',id);if(!r)return;
+  form(r.company+' · '+oname(r.obj_id),[
+    {t:'info',v:[r.audience,r.contact,r.site,r.fit_note].filter(Boolean).join(' · ')+(r.call_date?'<br>Звонок '+d(r.call_date)+(r.call_result?': '+h(r.call_result):''):'')+(r.kp_date?'<br>КП '+d(r.kp_date)+' ('+h(r.kp_type)+')':'')+(r.response?'<br>Ответ: '+h(r.response)+' '+d(r.response_date):'')},
+    {k:'_call',l:'Позвонил(а) сегодня',t:'check'},{k:'call_result',l:'Итог звонка',t:'textarea',v:''},
+    {k:'_kp',l:'Отправил(а) КП сегодня',t:'check'},{k:'kp_type',l:'Какое КП',t:'select',o:B.dicts.kp_types,v:r.kp_type||''},
+    {k:'response',l:'Ответ',t:'select',o:B.dicts.responses,v:r.response,e:'—'},
+    {k:'next_step',l:'Следующий шаг',t:'text',v:r.next_step},{k:'next_date',l:'Когда',t:'date',v:r.next_date},
+    {k:'contact',l:'Контакт (ЛПР, телефон, email)',t:'text',v:r.contact},{k:'to_crm',l:'Передан в CRM (интерес — заведён в CRM)',t:'check',v:r.to_crm===true}
+  ],function(v){var c={};if(v._call){c.call_date=B.today;c.call_result=v.call_result;}else if(v.call_result)c.call_result=v.call_result;if(v._kp){c.kp_date=B.today;c.kp_type=v.kp_type;}
+    ['response','next_step','next_date','contact','to_crm'].forEach(function(k){c[k]=v[k];});
+    api('webUpdate',['BASE',id,c],function(){toast('Сохранено');closeM();reload(['base'],render);});});}
+function newBase(objId){form('Новая компания / контакт',[
+    {k:'obj_id',l:'Объект',t:'obj',v:objId||(S.obj&&S.obj.id)||'',code:'BASE'},{k:'audience',l:'Аудитория (как во вкладке объекта)',t:'text'},
+    {k:'company',l:'Компания',t:'text'},{k:'site',l:'Сайт',t:'text'},{k:'contact',l:'Контакт (ЛПР, должность, телефон, email)',t:'text'},
+    {k:'fit_note',l:'Почему подходит',t:'textarea'},{k:'next_step',l:'Следующий шаг',t:'text',v:'Позвонить ЛПР'},{k:'next_date',l:'Когда',t:'date',v:B.today}
+  ],function(v){api('webCreate',['BASE',v],function(){toast('Компания добавлена');closeM();reload(['base'],render);});});}
+
+/* ───────── Контент ───────── */
+function renderContent(){
+  var list=S.cont.slice().sort(function(a,b){return (b.pub_date||'')<(a.pub_date||'')?-1:1;});
+  var work=list.filter(function(x){return x.cls!=='DONE';}), done=list.filter(function(x){return x.cls==='DONE';});
+  var s='<div class="row"><h2 style="flex:1">Контент</h2><button class="b" onclick="newCont(\'\')">+ Публикация</button></div>';
+  s+=block('В работе',work.map(contItem).join(''),'Нет')+block('Опубликовано',done.slice(0,60).map(contItem).join(''),'Нет');
+  el('main').innerHTML=s;
+}
+function contFields(x){x=x||{};return [
+  {k:'obj_id',l:'Объект',t:x.id?'ro':'obj',v:x.id?oname(x.obj_id):(x.obj_id||'')},{k:'topic',l:'Тема',t:'text',v:x.topic},
+  {k:'platform',l:'Площадка',t:'select',o:B.dicts.platforms,v:x.platform},{k:'format',l:'Формат',t:'select',o:B.dicts.content_formats,v:x.format},
+  {k:'goal',l:'Цель',t:'select',o:B.dicts.content_goals,v:x.goal,e:'—'},{k:'status',l:'Статус',t:x.id?'select':'hide',o:B.dicts.content_status,v:x.status},
+  {k:'pub_date',l:'Дата публикации',t:'date',v:x.pub_date},{k:'link',l:'Ссылка на публикацию',t:x.id?'text':'hide',v:x.link},
+  {k:'views',l:'Просмотры',t:x.id?'number':'hide',v:x.views},{k:'reach',l:'Охват',t:x.id?'number':'hide',v:x.reach},{k:'saves',l:'Сохранения',t:x.id?'number':'hide',v:x.saves},{k:'leads',l:'Заявки',t:x.id?'number':'hide',v:x.leads},
+  {k:'owner',l:'Кто делает',t:'select',o:B.dicts.people,v:x.owner||B.me.name},{k:'script',l:'Сценарий (текст или ссылка)',t:'textarea',v:x.script}];}
+function editCont(id){var x=findIn('cont',id);if(!x)return;var o=obj(x.obj_id);form('Публикация · '+oname(x.obj_id),contFields(x),function(v){delete v.obj_id;api('webUpdate',['CONT',id,v],function(){toast('Сохранено');closeM();reload(['cont'],render);});});}
+function newCont(objId){form('Новая публикация',contFields({obj_id:objId||(S.obj&&S.obj.id)||''}),function(v){api('webCreate',['CONT',v],function(){toast('Добавлено');closeM();reload(['cont'],render);});});}
+
+/* ───────── Команда (директор) ───────── */
+function renderTeam(T){
+  var s='<h2>Команда · неделя '+h(T.week)+'</h2><div class="card" style="overflow-x:auto"><table><tr><th>Сотрудник</th><th>Роль</th><th>Неделя: сделано / всего</th><th>Открыто</th><th>Просрочено</th></tr>';
+  T.team.forEach(function(p){s+='<tr><td>'+h(p.name)+'</td><td class="mut">'+h(p.role)+'</td><td>'+p.doneWeek+' / '+p.week+'</td><td>'+p.open+'</td><td style="color:'+(p.overdue?'var(--red)':'inherit')+'">'+p.overdue+'</td></tr>';});
+  s+='</table></div><h2>Объекты · неделя</h2><div class="card" style="overflow-x:auto"><table><tr><th>Объект</th><th>Ответственный</th><th>Задачи</th><th>Звонки</th><th>КП</th><th>База</th><th>Интерес</th><th>Отчёт</th></tr>';
+  T.objects.forEach(function(o){s+='<tr style="cursor:pointer" onclick="openObj(\''+h(o.id)+'\')"><td>'+h(o.name)+'</td><td class="mut">'+h(o.manager)+'</td><td>'+o.doneWeek+' / '+o.tasksWeek+'</td><td>'+o.callsWeek+'</td><td>'+o.kpWeek+'</td><td>'+o.baseTotal+'</td><td>'+o.interested+'</td><td class="mut">'+d(o.lastReport)+'</td></tr>';});
+  el('main').innerHTML=s+'</table></div>';
+}
+
+/* ───────── формы ───────── */
+var M=null;
+function form(title,fields,onSave,rec){
+  fields=fields.filter(Boolean);M={fields:fields,onSave:onSave};
+  var s='<div class="row"><h3 style="flex:1;margin:0">'+h(title)+'</h3><button class="b2" onclick="closeM()">✕</button></div>';
+  fields.forEach(function(f,i){var id='f'+i,v=f.v==null?'':f.v;
+    if(f.t==='hide')return;
+    if(f.t==='info'){s+='<div class="mut" style="margin-top:8px">'+v+'</div>';return;}
+    if(f.t==='check'){s+='<label class="row" style="margin-top:10px"><input type="checkbox" class="chk" id="'+id+'" '+(v?'checked':'')+(onSave?'':' disabled')+'> '+h(f.l)+'</label>';return;}
+    s+='<label class="f">'+h(f.l)+'</label>';
+    if(f.t==='ro'){s+='<div>'+h(v)+'</div>';return;}
+    var dis=onSave?'':' disabled';
+    if(f.t==='select')s+='<select id="'+id+'"'+dis+'>'+opts(f.o,v,f.e||(v?'':'—'))+'</select>';
+    else if(f.t==='obj')s+='<select id="'+id+'"'+dis+'>'+objOpts(v,f.code)+'</select>';
+    else if(f.t==='textarea')s+='<textarea id="'+id+'"'+dis+'>'+h(v)+'</textarea>';
+    else s+='<input id="'+id+'" type="'+(f.t==='number'?'number':f.t==='date'?'date':'text')+'" value="'+h(v)+'"'+dis+'>';
+  });
+  s+='<div class="row" style="margin-top:14px">'+(onSave?'<button class="b" onclick="saveM()">Сохранить</button>':'<span class="mut">Только просмотр</span>')+'<button class="b2" onclick="closeM()">Отмена</button></div>';
+  el('mbox').innerHTML=s;el('modal').style.display='flex';
+}
+function saveM(){var v={};M.fields.forEach(function(f,i){if(!f.k||f.t==='ro'||f.t==='info')return;var x=el('f'+i);if(!x)return;v[f.k]=f.t==='check'?x.checked:x.value;});M.onSave(v);}
+function closeM(){el('modal').style.display='none';M=null;}
+el('modal').addEventListener('click',function(e){if(e.target===el('modal'))closeM();});
+
+/* ───────── старт ───────── */
+api('webBootstrap',[],function(b){B=b;el('me').textContent=b.me.name+' · '+b.me.roleTitle;nav();render();});
+</script></body></html>`;

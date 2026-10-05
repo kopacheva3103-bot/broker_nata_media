@@ -285,7 +285,7 @@ function objectById_(id) {
   return t.rows.find(r => String(r.id) === String(id)) || null;
 }
 
-function toast_(msg, title, sec) { ss_().toast(msg, title || SYS.MENU, sec || 5); }
+function toast_(msg, title, sec) { try { ss_().toast(msg, title || SYS.MENU, sec || 5); } catch (e) { /* кабинет (веб-приложение) — всплывающих сообщений нет */ } }
 
 function htmlEscape_(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

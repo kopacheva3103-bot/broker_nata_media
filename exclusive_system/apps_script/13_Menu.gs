@@ -5,6 +5,7 @@
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu(SYS.MENU)
+    .addItem('➜ Личные кабинеты (сайт)', 'webAppLink')
     .addItem('➜ Открыть вкладку объекта', 'openObjectTab')
     .addItem('➜ Разобрать папку «Входящие»', 'processInbox')
     .addItem('➜ Загрузить объекты списком', 'importObjects')
