@@ -326,9 +326,17 @@ function webAppLink() {
   let url = '';
   try { url = ScriptApp.getService().getUrl() || ''; } catch (e) { /* не развёрнуто */ }
   if (url) {
-    showLinks_('Личные кабинеты', [{ label: 'Открыть кабинет', url: url }],
-      'Эту ссылку отправьте сотрудникам. Каждый входит своим Google-аккаунтом и видит свой кабинет. ' +
-      'Сотрудник должен быть в 07_СПРАВОЧНИКИ (имя, роль, email) и иметь доступ к таблице.');
+    const dev = /\/dev(\?|$)/.test(url);
+    const html = HtmlService.createHtmlOutput(
+      '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5">' +
+      '<p><b>Ссылка на кабинеты</b> — отправьте её сотрудникам (каждый входит своей Google-почтой из 07_СПРАВОЧНИКИ):</p>' +
+      '<input id="u" readonly style="width:100%;padding:6px;font-size:13px" value="' + htmlEscape_(url) + '" onclick="this.select()">' +
+      '<p><button onclick="var i=document.getElementById(\'u\');i.select();document.execCommand(\'copy\');this.textContent=\'Скопировано ✓\'">Копировать</button> ' +
+      '<a href="' + htmlEscape_(url) + '" target="_blank">Открыть кабинет</a></p>' +
+      (dev ? '<p style="color:#c0392b">Это тестовая ссылка (/dev) — она работает только у редакторов скрипта. Возьмите ссылку, которая заканчивается на <b>/exec</b>: Apps Script → «Начать развертывание» → «Управление развертываниями» → URL.</p>' : '') +
+      '<p style="color:#555">«Не удалось открыть файл» — браузер вошёл в несколько Google-аккаунтов сразу. Откройте ссылку в режиме инкогнито (Ctrl+Shift+N) и войдите одной почтой — или выйдите из лишних аккаунтов.</p></div>')
+      .setWidth(560).setHeight(dev ? 330 : 270);
+    ui.showModalDialog(html, 'Личные кабинеты');
     return;
   }
   ui.alert('Личные кабинеты ещё не опубликованы',
