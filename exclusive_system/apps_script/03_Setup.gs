@@ -88,7 +88,7 @@ function runSetup_(log) {
   SHEET_ORDER.forEach(code => ensureSheet_(code));
   buildSettings_(); log.push(SHEET_NAMES.CFG);
   buildDict_(); log.push(SHEET_NAMES.DICT);
-  ['OBJ', 'TASK', 'BASE', 'CONT', 'LIB', 'HIST', 'ARCH'].forEach(code => { buildDataSheet_(code); log.push(SHEET_NAMES[code]); });
+  ['OBJ', 'TASK', 'BASE', 'CONT', 'LIB', 'HIST', 'ARCH', 'SOC'].forEach(code => { buildDataSheet_(code); log.push(SHEET_NAMES[code]); });
   headerGuard_.ok = {};
   try { const fx = repairObjShift_(); if (fx) log.push('Исправлено строк 01_ОБЪЕКТЫ после сдвига столбцов: ' + fx); } catch (e) { log.push('⚠ Проверка сдвига 01_ОБЪЕКТЫ: ' + e.message); }
   SpreadsheetApp.flush();

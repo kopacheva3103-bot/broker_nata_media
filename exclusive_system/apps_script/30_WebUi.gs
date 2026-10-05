@@ -43,20 +43,23 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:7px 6px;b
 <div id="modal"><div class="box" id="mbox"></div></div>
 <div id="toast"></div>
 <script>
-var B=null, S={view:'today',tasks:null,base:null,cont:null,obj:null,objTab:'tasks',taskScope:'mine',baseObj:'',baseToday:false,q:''};
+var B=null, S={ct:'plan',cf:{platform:'',rubric:'',obj:'',status:''},pf:'',pt:'',af:'',at:'',an:null,soc:null,view:'today',tasks:null,base:null,cont:null,obj:null,objTab:'tasks',taskScope:'mine',baseObj:'',baseToday:false,q:''};
 function h(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function el(id){return document.getElementById(id);}
 function load(on){el('load').style.display=on?'block':'none';}
 function toast(t){var x=el('toast');x.textContent=t;x.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(function(){x.style.display='none';},3500);}
 function api(fn,args,cb){load(true);var r=google.script.run.withSuccessHandler(function(v){load(false);cb&&cb(v);}).withFailureHandler(function(e){load(false);toast('Ошибка: '+(e&&e.message||e));});r[fn].apply(r,args||[]);}
 function d(s){if(!s)return '';var p=String(s).split('-');return p.length===3?p[2]+'.'+p[1]+'.'+p[0].slice(2):s;}
+function iso(dt){var z=function(n){return (n<10?'0':'')+n;};return dt.getFullYear()+'-'+z(dt.getMonth()+1)+'-'+z(dt.getDate());}
+function addD(s,n){var p=s.split('-');var dt=new Date(+p[0],+p[1]-1,+p[2]);dt.setDate(dt.getDate()+n);return iso(dt);}
+function num(v){return v===''||v==null?'':Number(v).toLocaleString('ru-RU');}
 function money(v){return v===''||v==null?'':Number(v).toLocaleString('ru-RU')+' ₽';}
 function obj(id){for(var i=0;i<B.objects.length;i++)if(String(B.objects[i].id)===String(id))return B.objects[i];return null;}
-function oname(id){var o=obj(id);return o?o.name:id;}
+function oname(id){var o=obj(id);return o?(o.service?'Общий контент агентства':o.name):id;}
 function can(code){return B.me.role!=='smm'||code==='CONT';}
 function role(r){return B.me.role===r;}
 function opts(list,val,empty){var s=empty?'<option value="">'+h(empty)+'</option>':'';(list||[]).forEach(function(v){v=Array.isArray(v)?v[0]:v;s+='<option'+(String(v)===String(val)?' selected':'')+'>'+h(v)+'</option>';});return s;}
-function objOpts(val,filterCode){var s='';B.objects.forEach(function(o){if(filterCode&&!can(filterCode))return;s+='<option value="'+h(o.id)+'"'+(String(o.id)===String(val)?' selected':'')+'>'+h(o.name)+'</option>';});return s;}
+function objOpts(val,filterCode){var s='';B.objects.forEach(function(o){if(filterCode&&!can(filterCode))return;s+='<option value="'+h(o.id)+'"'+(String(o.id)===String(val)?' selected':'')+'>'+h(oname(o.id))+'</option>';});return s;}
 function clsOf(dict,v){var r=(B.dicts[dict]||[]).filter(function(x){return x[0]===v;})[0];return r?r[1]:(v?'':'OPEN');}
 
 /* ───────── навигация ───────── */
@@ -102,7 +105,7 @@ function block(title,inner,empty){return '<h3>'+title+'</h3><div class="card">'+
 function taskPill(x){if(x.cls==='DONE')return '<span class="pill grn">'+h(x.status)+'</span>';if(x.cls==='CANCEL'||x.cls==='MOVED'||x.cls==='FAIL')return '<span class="pill">'+h(x.status)+'</span>';if(x.deadline&&x.deadline<B.today)return '<span class="pill red">просрочено '+d(x.deadline)+'</span>';return '<span class="pill acc">'+(x.deadline?'до '+d(x.deadline):h(x.status||'открыта'))+'</span>';}
 function taskItem(x){var done=x.cls==='DONE';return '<div class="item" onclick="editTask(\''+h(x.id)+'\')"><input type="checkbox" class="chk" '+(done?'checked ':'')+(x.can&&x.cls==='OPEN'?'':'disabled ')+'onclick="event.stopPropagation();quickDone(\''+h(x.id)+'\',this)"><div class="main"><div class="ttl">'+h(x.task)+'</div><div class="mut">'+h(oname(x.obj_id))+(x.owner?' · '+h(x.owner):'')+(x.plan?' · план '+h(x.plan)+(x.fact!==''?' / факт '+h(x.fact):x.fact_auto!==''?' / факт '+h(x.fact_auto):''):'')+(x.result?' · '+h(x.result):'')+'</div></div>'+taskPill(x)+'</div>';}
 function baseItem(r){var last=r.response?('ответ: '+r.response):r.kp_date?('КП '+d(r.kp_date)):r.call_date?('звонок '+d(r.call_date)):'новая';var nx=r.next_date?('<span class="pill '+(r.next_date<=B.today?'amb':'')+'">'+d(r.next_date)+'</span>'):'';return '<div class="item" onclick="editBase(\''+h(r.id)+'\')"><div class="main"><div class="ttl">'+h(r.company)+'</div><div class="mut">'+h(oname(r.obj_id))+(r.audience?' · '+h(r.audience):'')+' · '+h(last)+(r.next_step?' · дальше: '+h(r.next_step):'')+'</div>'+(r.contact?'<div class="mut">'+h(r.contact)+'</div>':'')+'</div>'+nx+'</div>';}
-function contItem(x){var p=x.cls==='DONE'?'grn':'acc';return '<div class="item" onclick="editCont(\''+h(x.id)+'\')"><div class="main"><div class="ttl">'+h(x.topic)+'</div><div class="mut">'+h(oname(x.obj_id))+' · '+h(x.platform)+' · '+h(x.format)+(x.owner?' · '+h(x.owner):'')+(x.views!==''?' · просмотры '+h(x.views):'')+'</div></div><span class="pill '+p+'">'+h(x.status)+(x.pub_date?' '+d(x.pub_date):'')+'</span></div>';}
+function contItem(x){var p=x.cls==='DONE'?'grn':'acc';return '<div class="item" onclick="editCont(\''+h(x.id)+'\')"><div class="main"><div class="ttl">'+h(x.topic)+'</div><div class="mut">'+(x.rubric?'<span class="pill acc">'+h(x.rubric)+'</span> ':'')+h(oname(x.obj_id))+' · '+h(x.platform)+' · '+h(x.format)+(x.owner?' · '+h(x.owner):'')+(x.views!==''?' · просмотры '+num(x.views):'')+(x.reach!==''?' · охват '+num(x.reach):'')+'</div></div><span class="pill '+p+'">'+h(x.status)+(x.pub_date?' '+d(x.pub_date):'')+'</span></div>';}
 
 /* ───────── Объекты ───────── */
 function renderObjects(){
@@ -188,23 +191,79 @@ function newBase(objId){form('Новая компания / контакт',[
     {k:'fit_note',l:'Почему подходит',t:'textarea'},{k:'next_step',l:'Следующий шаг',t:'text',v:'Позвонить ЛПР'},{k:'next_date',l:'Когда',t:'date',v:B.today}
   ],function(v){api('webCreate',['BASE',v],function(){toast('Компания добавлена');closeM();reload(['base'],render);});});}
 
-/* ───────── Контент ───────── */
+/* ───────── Контент (SMM) ───────── */
+function smm(){return role('smm')||role('director');}
 function renderContent(){
-  var list=S.cont.slice().sort(function(a,b){return (b.pub_date||'')<(a.pub_date||'')?-1:1;});
-  var work=list.filter(function(x){return x.cls!=='DONE';}), done=list.filter(function(x){return x.cls==='DONE';});
-  var s='<div class="row"><h2 style="flex:1">Контент</h2><button class="b" onclick="newCont(\'\')">+ Публикация</button></div>';
-  s+=block('В работе',work.map(contItem).join(''),'Нет')+block('Опубликовано',done.slice(0,60).map(contItem).join(''),'Нет');
+  var tabs=[['plan','Контент-план'],['pub','Опубликовано']];if(smm())tabs.push(['an','Аналитика'],['soc','Соцсети']);
+  var s='<div class="row"><h2 style="flex:1">Контент</h2><button class="b" onclick="newCont(\'\')">+ Публикация</button></div><div class="tabs">'+tabs.map(function(t){return '<button class="'+(S.ct===t[0]?'on':'')+'" onclick="S.ct=\''+t[0]+'\';renderContent()">'+t[1]+'</button>';}).join('')+'</div>';
+  if(S.ct==='plan')s+=contPlan();
+  if(S.ct==='pub')s+=contPub();
+  if(S.ct==='an')s+=contAn();
+  if(S.ct==='soc')s+=contSoc();
   el('main').innerHTML=s;
 }
-function contFields(x){x=x||{};return [
-  {k:'obj_id',l:'Объект',t:x.id?'ro':'obj',v:x.id?oname(x.obj_id):(x.obj_id||'')},{k:'topic',l:'Тема',t:'text',v:x.topic},
-  {k:'platform',l:'Площадка',t:'select',o:B.dicts.platforms,v:x.platform},{k:'format',l:'Формат',t:'select',o:B.dicts.content_formats,v:x.format},
-  {k:'goal',l:'Цель',t:'select',o:B.dicts.content_goals,v:x.goal,e:'—'},{k:'status',l:'Статус',t:x.id?'select':'hide',o:B.dicts.content_status,v:x.status},
-  {k:'pub_date',l:'Дата публикации',t:'date',v:x.pub_date},{k:'link',l:'Ссылка на публикацию',t:x.id?'text':'hide',v:x.link},
-  {k:'views',l:'Просмотры',t:x.id?'number':'hide',v:x.views},{k:'reach',l:'Охват',t:x.id?'number':'hide',v:x.reach},{k:'saves',l:'Сохранения',t:x.id?'number':'hide',v:x.saves},{k:'leads',l:'Заявки',t:x.id?'number':'hide',v:x.leads},
-  {k:'owner',l:'Кто делает',t:'select',o:B.dicts.people,v:x.owner||B.me.name},{k:'script',l:'Сценарий (текст или ссылка)',t:'textarea',v:x.script}];}
-function editCont(id){var x=findIn('cont',id);if(!x)return;var o=obj(x.obj_id);form('Публикация · '+oname(x.obj_id),contFields(x),function(v){delete v.obj_id;api('webUpdate',['CONT',id,v],function(){toast('Сохранено');closeM();reload(['cont'],render);});});}
-function newCont(objId){form('Новая публикация',contFields({obj_id:objId||(S.obj&&S.obj.id)||''}),function(v){api('webCreate',['CONT',v],function(){toast('Добавлено');closeM();reload(['cont'],render);});});}
+function contFilter(list){var f=S.cf;return list.filter(function(x){return (!f.platform||x.platform===f.platform)&&(!f.rubric||x.rubric===f.rubric)&&(!f.obj||String(x.obj_id)===f.obj)&&(!f.status||x.status===f.status);});}
+function filtersBar(){var f=S.cf;function sel(k,list,label){return '<select style="max-width:190px" onchange="S.cf.'+k+'=this.value;renderContent()">'+opts(list,f[k],label)+'</select>';}
+  return '<div class="row" style="margin-bottom:8px">'+sel('platform',B.dicts.platforms,'Все площадки')+sel('rubric',B.dicts.content_rubrics,'Все рубрики')+'<select style="max-width:220px" onchange="S.cf.obj=this.value;renderContent()"><option value="">Все объекты и общий</option>'+B.objects.map(function(o){return '<option value="'+h(o.id)+'"'+(String(o.id)===f.obj?' selected':'')+'>'+h(oname(o.id))+'</option>';}).join('')+'</select>'+sel('status',B.dicts.content_status,'Все статусы')+'</div>';}
+function periodBar(a,b,def1,def2,extra){if(!S[a]){S[a]=addD(B.today,def1);S[b]=addD(B.today,def2);}return '<div class="row" style="margin-bottom:8px"><input type="date" style="max-width:160px" value="'+S[a]+'" onchange="S.'+a+'=this.value"> — <input type="date" style="max-width:160px" value="'+S[b]+'" onchange="S.'+b+'=this.value">'+(extra||'')+'</div>';}
+function contPlan(){
+  var s=periodBar('pf','pt',-7,28,' <button class="b2" onclick="renderContent()">Показать</button>'+(smm()?' <button class="b2" onclick="planDoc()">Выгрузить контент-план</button>':''))+filtersBar();
+  var list=contFilter(S.cont).filter(function(x){return x.pub_date?(x.pub_date>=S.pf&&x.pub_date<=S.pt):x.cls!=='DONE';}).sort(function(a,b){return (a.pub_date||'9')<(b.pub_date||'9')?-1:1;});
+  var wk={};list.forEach(function(x){var k=x.pub_date?weekOf(x.pub_date):'Без даты';(wk[k]=wk[k]||[]).push(x);});
+  Object.keys(wk).forEach(function(k){s+='<h3>'+h(k)+' <span class="mut">('+wk[k].length+')</span></h3><div class="card">'+wk[k].map(contItem).join('')+'</div>';});
+  if(!list.length)s+='<div class="card empty">В плане на этот период пусто — добавьте публикации</div>';
+  return s;
+}
+function weekOf(ds){var p=ds.split('-');var dt=new Date(+p[0],+p[1]-1,+p[2]);var wd=(dt.getDay()+6)%7;dt.setDate(dt.getDate()-wd);var e=new Date(dt);e.setDate(e.getDate()+6);return 'Неделя '+d(iso(dt))+' – '+d(iso(e));}
+function contPub(){
+  var list=contFilter(S.cont).filter(function(x){return x.cls==='DONE';}).sort(function(a,b){return (b.pub_date||'')<(a.pub_date||'')?-1:1;});
+  var s=filtersBar()+'<div class="card" style="overflow-x:auto"><table><tr><th>Дата</th><th>Площадка</th><th>Рубрика</th><th>Тема</th><th>Просмотры</th><th>Охват</th><th>Лайки</th><th>Сохр.</th><th>Заявки</th></tr>';
+  list.slice(0,200).forEach(function(x){s+='<tr style="cursor:pointer" onclick="editCont(\''+h(x.id)+'\')"><td>'+d(x.pub_date)+'</td><td>'+h(x.platform)+'</td><td>'+h(x.rubric)+'</td><td>'+h(x.topic)+(x.link?' <a class="lnk" target="_blank" onclick="event.stopPropagation()" href="'+h(x.link)+'">↗</a>':'')+'</td><td>'+num(x.views)+'</td><td>'+num(x.reach)+'</td><td>'+num(x.likes)+'</td><td>'+num(x.saves)+'</td><td>'+num(x.leads)+'</td></tr>';});
+  return s+'</table>'+(list.length?'':'<div class="empty">Опубликованного пока нет</div>')+'</div>';
+}
+function contAn(){
+  var s=periodBar('af','at',-29,0,' <button class="b2" onclick="S.af=addD(B.today,-6);S.at=B.today;loadAn()">7 дней</button> <button class="b2" onclick="S.af=addD(B.today,-29);S.at=B.today;loadAn()">30 дней</button> <button class="b2" onclick="S.af=addD(B.today,-89);S.at=B.today;loadAn()">Квартал</button> <button class="b" onclick="loadAn()">Показать</button> <button class="b2" onclick="smmDoc()">Выгрузить отчёт</button>');
+  var A=S.an;if(!A){setTimeout(loadAn,0);return s+'<div class="empty">Считаю аналитику…</div>';}
+  var t=A.totals;
+  s+='<div class="mut">Период '+d(A.from)+' – '+d(A.to)+'</div><div class="kpis" style="margin-top:8px">'+kpi('Публикаций',t.posts)+kpi('Просмотры',num(t.views))+kpi('Охват',num(t.reach))+kpi('Вовлечённость',t.er===null?'—':t.er+'%')+kpi('Заявки',num(t.leads))+kpi('Подписки с публ.',num(t.followers_gained))+'</div>';
+  if(A.insights.length)s+='<div class="card"><h3 style="margin-top:0">Выводы</h3>'+A.insights.map(function(x){return '<div style="padding:3px 0">• '+h(x)+'</div>';}).join('')+'</div>';
+  s+=tbl('Подписчики и аккаунты',['Площадка','Аккаунт','Было','Стало','Рост','Охват','Просмотры','Переходы','Заявки'],A.followers.map(function(x){return [x.platform,x.account,num(x.start),num(x.end),x.growth===null?'—':(x.growth>=0?'+':'')+num(x.growth),num(x.reach),num(x.views),num(x.visits),num(x.leads)];}));
+  var g=function(title,list){return tbl(title,['','Публ.','Охват ср.','Просм. ср.','Охват','Просмотры','ER, %','Заявки'],list.map(function(x){return [x.name,x.posts,num(x.avgReach),num(x.avgViews),num(x.reach),num(x.views),x.er===null?'—':x.er,num(x.leads)];}));};
+  s+=g('Рубрики — что приносит охваты',A.byRubric)+g('Площадки',A.byPlatform)+g('Форматы',A.byFormat)+g('Объекты и общий контент',A.byObject);
+  s+=tbl('Топ-10 публикаций',['Дата','Тема','Площадка','Рубрика','Просмотры','Охват','Ссылка'],A.top.map(function(x){return [x.date,x.topic,x.platform,x.rubric,num(x.views),num(x.reach),x.link];}));
+  return s;
+}
+function loadAn(){api('webSmmAnalytics',[S.af,S.at],function(v){S.an=v;renderContent();});}
+function smmDoc(){api('webSmmReport',[S.af,S.at],function(r){links('Отчёт SMM готов',r);});}
+function planDoc(){api('webContentPlanDoc',[S.pf,S.pt],function(r){links('Контент-план выгружен',r);});}
+function links(t,r){form(t,[{t:'info',v:'<a class="lnk" target="_blank" href="'+h(r.url)+'">Открыть Google Документ ↗</a><br><br><a class="lnk" target="_blank" href="'+h(r.word)+'">Скачать в Word ↗</a><br><br><span class="mut">Файл сохранён в папке «05_СММ» системы (или в вашем Google Диске).</span>'}],null);}
+function contSoc(){
+  if(!S.soc){api('webSocial',[],function(v){S.soc=v;renderContent();});return '<div class="empty">Загружаю…</div>';}
+  var s='<div class="row"><div class="mut" style="flex:1">Раз в неделю внесите цифры по каждой площадке (из статистики аккаунта) — по ним считаются рост подписчиков и охваты.</div><button class="b" onclick="socForm()">+ Внести неделю</button></div>';
+  var rows=S.soc.slice().sort(function(a,b){return a.week<b.week?1:a.week>b.week?-1:(a.platform<b.platform?-1:1);});
+  s+='<div class="card" style="overflow-x:auto;margin-top:8px"><table><tr><th>Неделя</th><th>Площадка</th><th>Аккаунт</th><th>Подписчики</th><th>Охват</th><th>Просмотры</th><th>Переходы</th><th>Заявки</th><th>Комментарий</th></tr>';
+  rows.forEach(function(r){s+='<tr style="cursor:pointer" onclick="socForm(\''+h(r.week)+'\',\''+h(r.platform)+'\')"><td>'+h(r.week)+'</td><td>'+h(r.platform)+'</td><td>'+h(r.account)+'</td><td>'+num(r.followers)+'</td><td>'+num(r.reach)+'</td><td>'+num(r.views)+'</td><td>'+num(r.profile_visits)+'</td><td>'+num(r.leads)+'</td><td class="mut">'+h(r.note)+'</td></tr>';});
+  return s+'</table>'+(rows.length?'':'<div class="empty">Пока нет данных</div>')+'</div>';
+}
+function socForm(wk,pl){var r=(S.soc||[]).filter(function(x){return x.week===wk&&x.platform===pl;})[0]||{week:wk||B.week,platform:pl||''};
+  var prev=(S.soc||[]).filter(function(x){return x.platform===r.platform&&x.account;}).pop();
+  form('Статистика аккаунта за неделю',[{k:'week',l:'Неделя (ГГГГ-Wнн)',t:'text',v:r.week},{k:'platform',l:'Площадка',t:'select',o:B.dicts.platforms,v:r.platform},{k:'account',l:'Аккаунт / канал',t:'text',v:r.account||(prev?prev.account:'')},
+    {k:'followers',l:'Подписчики (на конец недели)',t:'number',v:r.followers},{k:'reach',l:'Охват за неделю',t:'number',v:r.reach},{k:'views',l:'Просмотры за неделю',t:'number',v:r.views},
+    {k:'profile_visits',l:'Переходы в профиль',t:'number',v:r.profile_visits},{k:'leads',l:'Заявки из соцсети',t:'number',v:r.leads},{k:'note',l:'Комментарий',t:'textarea',v:r.note}],
+    function(v){api('webSocialSave',[v],function(){toast('Сохранено');closeM();S.soc=null;S.an=null;renderContent();});});}
+function contFields(x){x=x||{};var nw=!x.id;return [
+  {k:'obj_id',l:'Объект (или «Общий контент агентства»)',t:nw?'obj':'ro',v:nw?(x.obj_id||''):oname(x.obj_id),code:'CONT'},{k:'rubric',l:'Рубрика',t:'select',o:B.dicts.content_rubrics,v:x.rubric,e:'—'},
+  {k:'topic',l:'Тема',t:'text',v:x.topic},
+  nw?{k:'platforms',l:'Площадки (одна тема — несколько площадок)',t:'multi',o:B.dicts.platforms,v:[]}:{k:'platform',l:'Площадка',t:'select',o:B.dicts.platforms,v:x.platform},
+  {k:'format',l:'Формат',t:'select',o:B.dicts.content_formats,v:x.format},{k:'goal',l:'Цель',t:'select',o:B.dicts.content_goals,v:x.goal,e:'—'},
+  {k:'status',l:'Статус',t:'select',o:B.dicts.content_status,v:x.status||''},{k:'pub_date',l:'Дата публикации',t:'date',v:x.pub_date},
+  {k:'owner',l:'Кто делает',t:'select',o:B.dicts.people,v:x.owner||B.me.name},{k:'script',l:'Сценарий (текст или ссылка)',t:'textarea',v:x.script},
+  nw?null:{k:'link',l:'Ссылка на публикацию',t:'text',v:x.link},
+  nw?null:{k:'views',l:'Просмотры',t:'number',v:x.views},nw?null:{k:'reach',l:'Охват',t:'number',v:x.reach},nw?null:{k:'likes',l:'Лайки',t:'number',v:x.likes},
+  nw?null:{k:'comments',l:'Комментарии',t:'number',v:x.comments},nw?null:{k:'saves',l:'Сохранения',t:'number',v:x.saves},nw?null:{k:'shares',l:'Репосты',t:'number',v:x.shares},
+  nw?null:{k:'followers_gained',l:'Подписки с публикации',t:'number',v:x.followers_gained},nw?null:{k:'leads',l:'Заявки',t:'number',v:x.leads}];}
+function editCont(id){var x=findIn('cont',id);if(!x)return;form('Публикация · '+oname(x.obj_id),contFields(x),function(v){delete v.obj_id;api('webUpdate',['CONT',id,v],function(){toast('Сохранено');closeM();S.an=null;reload(['cont'],render);});});}
+function newCont(objId){form('Новая публикация',contFields({obj_id:objId||(S.obj&&S.obj.id)||''}),function(v){if(!v.platforms||!v.platforms.length)return toast('Отметьте хотя бы одну площадку');api('webCreateContent',[v],function(r){toast('Добавлено публикаций: '+r.ids.length);closeM();S.an=null;reload(['cont'],render);});});}
 
 /* ───────── Команда (директор) ───────── */
 function renderTeam(T){
@@ -223,6 +282,7 @@ function form(title,fields,onSave,rec){
   fields.forEach(function(f,i){var id='f'+i,v=f.v==null?'':f.v;
     if(f.t==='hide')return;
     if(f.t==='info'){s+='<div class="mut" style="margin-top:8px">'+v+'</div>';return;}
+    if(f.t==='multi'){s+='<label class="f">'+h(f.l)+'</label><div class="row">'+(f.o||[]).map(function(o,j){return '<label class="row" style="gap:4px;margin-right:8px"><input type="checkbox" class="chk" id="'+id+'_'+j+'" value="'+h(o)+'"> '+h(o)+'</label>';}).join('')+'</div>';return;}
     if(f.t==='check'){s+='<label class="row" style="margin-top:10px"><input type="checkbox" class="chk" id="'+id+'" '+(v?'checked':'')+(onSave?'':' disabled')+'> '+h(f.l)+'</label>';return;}
     s+='<label class="f">'+h(f.l)+'</label>';
     if(f.t==='ro'){s+='<div>'+h(v)+'</div>';return;}
@@ -235,7 +295,7 @@ function form(title,fields,onSave,rec){
   s+='<div class="row" style="margin-top:14px">'+(onSave?'<button class="b" onclick="saveM()">Сохранить</button>':'<span class="mut">Только просмотр</span>')+'<button class="b2" onclick="closeM()">Отмена</button></div>';
   el('mbox').innerHTML=s;el('modal').style.display='flex';
 }
-function saveM(){var v={};M.fields.forEach(function(f,i){if(!f.k||f.t==='ro'||f.t==='info')return;var x=el('f'+i);if(!x)return;v[f.k]=f.t==='check'?x.checked:x.value;});M.onSave(v);}
+function saveM(){var v={};M.fields.forEach(function(f,i){if(!f.k||f.t==='ro'||f.t==='info')return;if(f.t==='multi'){v[f.k]=(f.o||[]).filter(function(o,j){var c=el('f'+i+'_'+j);return c&&c.checked;});return;}var x=el('f'+i);if(!x)return;v[f.k]=f.t==='check'?x.checked:x.value;});M.onSave(v);}
 function closeM(){el('modal').style.display='none';M=null;}
 el('modal').addEventListener('click',function(e){if(e.target===el('modal'))closeM();});
 

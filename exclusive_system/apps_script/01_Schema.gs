@@ -147,6 +147,12 @@ function sheetSpecs_() {
       F('status_class', 'Класс статуса', 'f', { helper: true, guard: 'status', f: 'IFERROR(VLOOKUP([[@status]],[[D.content_status:tbl]],2,FALSE),"")' }),
       F('created_at', 'Создано', 'sys', { helper: true, fmt: 'datetime' }),
       F('author', 'Автор', 'sys', { helper: true }),
+      // добавлено позже — только в конец листа
+      F('rubric', 'Рубрика', 'dd', { dict: 'content_rubrics', d: 'Рубрика контент-плана: по ней SMM-аналитика показывает, что приносит охваты.' }),
+      F('likes', 'Лайки', 'num', { fmt: '#,##0' }),
+      F('comments', 'Комментарии', 'num', { fmt: '#,##0' }),
+      F('shares', 'Репосты', 'num', { fmt: '#,##0' }),
+      F('followers_gained', 'Подписки с публикации', 'num', { fmt: '#,##0' }),
     ],
   };
 
@@ -162,6 +168,26 @@ function sheetSpecs_() {
       F('text', 'Содержание', 'text', { w: 620, track: true }),
       F('updated_at', 'Обновлено', 'sys', { fmt: 'datetime' }),
       F('author', 'Кто обновил', 'sys', { w: 160 }),
+    ],
+  };
+
+  // ───────────────────────── 11_СОЦСЕТИ ─────────────────────────
+  S.SOC = {
+    code: 'SOC', guard: 'platform', frozenCols: 3, idField: 'id', idPrefix: 'SOC-', idPad: 4,
+    about: 'Статистика аккаунтов по неделям: подписчики, охват, просмотры, переходы, заявки. Одна строка = площадка за неделю.',
+    fields: [
+      F('id', 'ID', 'id', { w: 80 }),
+      F('week', 'Неделя', 'dd', { list: 'D.weeks' }),
+      F('platform', 'Площадка', 'dd', { dict: 'platforms' }),
+      F('account', 'Аккаунт / канал', 'text', { w: 160 }),
+      F('followers', 'Подписчики (на конец недели)', 'num', { fmt: '#,##0' }),
+      F('reach', 'Охват за неделю', 'num', { fmt: '#,##0' }),
+      F('views', 'Просмотры за неделю', 'num', { fmt: '#,##0' }),
+      F('profile_visits', 'Переходы в профиль', 'num', { fmt: '#,##0' }),
+      F('leads', 'Заявки из соцсети', 'num', { fmt: '0' }),
+      F('note', 'Комментарий', 'text', { w: 220 }),
+      F('created_at', 'Создано', 'sys', { helper: true, fmt: 'datetime' }),
+      F('author', 'Автор', 'sys', { helper: true }),
     ],
   };
 

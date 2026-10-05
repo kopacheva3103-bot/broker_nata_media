@@ -78,18 +78,19 @@ const WEB_OBJ_KEYS = ['id', 'name', 'kind', 'deal', 'address', 'area', 'price', 
 const WEB_TASK_KEYS = ['id', 'week', 'obj_id', 'block', 'task', 'owner', 'unit', 'plan', 'fact', 'fact_auto', 'deadline', 'status', 'result', 'source'];
 const WEB_BASE_KEYS = ['id', 'obj_id', 'audience', 'company', 'site', 'contact', 'fit', 'fit_note', 'call_date', 'call_result', 'kp_date', 'kp_type',
   'response', 'response_date', 'next_step', 'next_date', 'to_crm', 'owner'];
-const WEB_CONT_KEYS = ['id', 'obj_id', 'topic', 'platform', 'format', 'goal', 'script', 'status', 'pub_date', 'link', 'views', 'reach', 'saves', 'leads', 'owner'];
+const WEB_CONT_KEYS = ['id', 'obj_id', 'topic', 'platform', 'format', 'goal', 'script', 'status', 'pub_date', 'link', 'views', 'reach', 'saves', 'leads', 'owner',
+  'rubric', 'likes', 'comments', 'shares', 'followers_gained'];
 
 /** Что можно менять из кабинета и что можно указывать при создании записи. */
 const WEB_EDITABLE = {
   TASK: ['status', 'result', 'fact', 'deadline', 'owner', 'task', 'plan'],
   BASE: ['call_date', 'call_result', 'kp_date', 'kp_type', 'response', 'next_step', 'next_date', 'fit', 'fit_note', 'contact', 'site', 'audience', 'company', 'to_crm'],
-  CONT: ['topic', 'platform', 'format', 'goal', 'script', 'status', 'pub_date', 'link', 'views', 'reach', 'saves', 'leads', 'owner'],
+  CONT: ['topic', 'platform', 'format', 'goal', 'script', 'status', 'pub_date', 'link', 'views', 'reach', 'saves', 'leads', 'owner', 'rubric', 'likes', 'comments', 'shares', 'followers_gained'],
 };
 const WEB_CREATE = {
   TASK: ['obj_id', 'block', 'task', 'owner', 'unit', 'plan', 'deadline'],
   BASE: ['obj_id', 'audience', 'company', 'site', 'contact', 'fit_note', 'next_step', 'next_date'],
-  CONT: ['obj_id', 'topic', 'platform', 'format', 'goal', 'script', 'pub_date', 'owner'],
+  CONT: ['obj_id', 'topic', 'platform', 'format', 'goal', 'script', 'pub_date', 'owner', 'rubric', 'status'],
 };
 
 function webObjects_(u) {
@@ -120,7 +121,7 @@ function webBootstrap() {
     dicts: {
       people: dict('people'), task_blocks: dict('task_blocks'), units: dict('units'), task_status: statusRows('task_status'),
       responses: dict('responses'), kp_types: dict('kp_types'), fit: dict('fit'),
-      platforms: dict('platforms'), content_formats: dict('content_formats'), content_goals: dict('content_goals'), content_status: statusRows('content_status'),
+      platforms: dict('platforms'), content_rubrics: dict('content_rubrics'), content_formats: dict('content_formats'), content_goals: dict('content_goals'), content_status: statusRows('content_status'),
     },
     sheetUrl: u.role === 'director' ? ss_().getUrl() : '',
   };

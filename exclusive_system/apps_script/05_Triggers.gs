@@ -211,6 +211,7 @@ function applyDefaults_(code, o, upd, isNew, user, editedKeys) {
     set('created_at', now);
     set('author', user);
   }
+  if (code === 'SOC' && isNew) { set('created_at', now); set('author', user); }
   if (code === 'BASE' && editedKeys.indexOf('response') >= 0 && o.response && !o.response_date) set('response_date', today);
   if (code === 'CONT' && editedKeys.indexOf('status') >= 0 && dictClassOf_('content_status', o.status) === CLS.DONE && !o.pub_date) set('pub_date', today);
   if (code === 'LIB') {

@@ -12,7 +12,11 @@ const X = loadGs({
   LockService: { getDocumentLock: () => ({ tryLock: () => true, waitLock: () => {}, releaseLock: () => {} }) },
   PropertiesService: { getScriptProperties: () => PROPS, getDocumentProperties: () => PROPS },
   Logger: { log: () => {} },
+  DocumentApp: { ParagraphHeading: { TITLE: 'T', HEADING1: 'H1', HEADING2: 'H2' }, create: name => { const paras = []; const P = t => { const p = { t, setText: x => { p.t = x; return p; }, setHeading: () => p }; paras.push(p); return p; };
+    const body = { getParagraphs: () => [paras[0] || P('')], appendParagraph: t => P(t), appendListItem: t => P('• ' + t), appendTable: rows => { paras.push({ t: 'TABLE ' + rows.length }); return { getRow: () => ({ getNumCells: () => 1, getCell: () => ({ editAsText: () => ({ setBold: () => {} }) }) }) }; }, findText: () => null };
+    DOCS.push({ name, paras }); return { getId: () => 'DOC' + DOCS.length, getBody: () => body, getUrl: () => 'https://docs/' + DOCS.length, saveAndClose: () => {} }; }, openById: () => ({ getBody: () => ({ findText: () => null }) }) },
 });
+const DOCS = [];
 let fails = 0;
 const ok = (n, c, i) => { console.log((c ? '✓ ' : '✗ ') + n + (i !== undefined ? ' — ' + i : '')); if (!c) fails++; };
 X.runSetup_([]);
@@ -67,5 +71,29 @@ ok('карточка объекта читается', !!X.webObject('1001').str
 ME = 'asst@example.com'; err = ''; try { X.webTeam(); } catch (e) { err = e.message; }
 ok('«Команда» только директору', /только директору/.test(err));
 ok('ассистент видит задачи по объектам директора', X.webTasks().some(x => x.obj_id === '1001'));
+// SMM: общий контент по рубрикам, кросспостинг, статистика аккаунтов, аналитика, выгрузка
+ME = 'smm@example.com';
+X.ensureAgencyObject_ && X.ensureAgencyObject_();
+const ag = X.webBootstrap().objects.find(o => o.service);
+ok('SMM видит «Общий контент агентства»', !!ag);
+const cc = X.webCreateContent({ obj_id: ag.id, topic: 'Как выбрать район', rubric: 'Районы и локации', platforms: ['Instagram', 'Telegram'], format: 'Рилс', pub_date: '2026-10-02' });
+ok('одна тема на 2 площадки — 2 публикации', cc.ids.length === 2);
+cc.ids.forEach((id, i) => X.webUpdate('CONT', id, { status: 'Опубликовано', views: String(1000 * (i + 1)), reach: String(800 * (i + 1)), likes: '50', saves: '10' }));
+const c2 = X.webCreateContent({ obj_id: '2001', topic: 'Обзор объекта', rubric: 'Объекты на эксклюзиве', platforms: ['ВКонтакте'], format: 'Пост', pub_date: '2026-10-03' });
+X.webUpdate('CONT', c2.ids[0], { status: 'Опубликовано', views: '300', reach: '200', leads: '2' });
+X.webSocialSave({ week: '2026-W38', platform: 'Telegram', account: '@channel', followers: '1000' });
+X.webSocialSave({ week: '2026-W40', platform: 'Telegram', followers: '1150', reach: '5000' });
+X.webSocialSave({ week: '2026-W40', platform: 'Telegram', followers: '1200' });
+ok('статистика недели: повторный ввод обновляет строку, а не дублирует', X.webSocial().filter(r => r.week === '2026-W40').length === 1);
+const A = X.webSmmAnalytics('2026-09-21', '2026-10-05');
+ok('аналитика: публикации и охват', A.totals.posts === 4 && A.totals.reach === 2600, A.totals.posts + ' / ' + A.totals.reach);
+ok('аналитика: рубрики по охвату', A.byRubric[0].name === 'Районы и локации' && A.byRubric[0].avgReach === 1200, A.byRubric.map(x => x.name + ':' + x.avgReach).join(', '));
+ok('аналитика: рост подписчиков', A.followers.find(f => f.platform === 'Telegram').growth === 200 && A.followers.find(f => f.platform === 'Telegram').account === '@channel', JSON.stringify(A.followers[0]));
+ok('аналитика: общий контент отдельно', A.byObject.some(x => x.name === 'Общий контент агентства'));
+ok('выводы сформулированы', A.insights.length >= 2, A.insights[0]);
+const rep = X.webSmmReport('2026-09-21', '2026-10-05'), plan = X.webContentPlanDoc('2026-09-28', '2026-10-12');
+ok('отчёт SMM и контент-план выгружаются в документ', /docs/.test(rep.url) && /export\?format=docx/.test(rep.word) && /docs/.test(plan.url), DOCS.map(d => d.name).join(' | '));
+ME = 'asst@example.com'; err = ''; try { X.webSmmAnalytics(); } catch (e) { err = e.message; }
+ok('аналитика SMM недоступна ассистенту', /SMM и директору/.test(err));
 console.log(fails ? 'FAILED: ' + fails : 'ALL OK');
 process.exit(fails ? 1 : 0);

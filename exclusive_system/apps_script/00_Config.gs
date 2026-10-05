@@ -47,13 +47,14 @@ const SHEET_NAMES = {
   CFG: '08_НАСТРОЙКИ',
   HIST: '09_ИСТОРИЯ',
   ARCH: '10_АРХИВ_ОТЧЁТОВ',
+  SOC: '11_СОЦСЕТИ',
 };
 
-const SHEET_ORDER = ['DASH', 'OBJ', 'TASK', 'BASE', 'CONT', 'REP', 'LIB', 'DICT', 'CFG', 'HIST', 'ARCH'];
+const SHEET_ORDER = ['DASH', 'OBJ', 'TASK', 'BASE', 'CONT', 'REP', 'LIB', 'DICT', 'CFG', 'HIST', 'ARCH', 'SOC'];
 
 const TAB_COLORS = {
   DASH: '#1565C0', OBJ: '#37474F', TASK: '#2E7D32', BASE: '#2E7D32', CONT: '#2E7D32', REP: '#6A1B9A',
-  LIB: '#EF6C00', DICT: '#9E9E9E', CFG: '#9E9E9E', HIST: '#9E9E9E', ARCH: '#6A1B9A', OBJTAB: '#00897B',
+  LIB: '#EF6C00', DICT: '#9E9E9E', CFG: '#9E9E9E', HIST: '#9E9E9E', ARCH: '#6A1B9A', SOC: '#2E7D32', OBJTAB: '#00897B',
 };
 
 const COLORS = {
@@ -159,7 +160,7 @@ function dictDefs_() {
         ['Нет ответа', 'NONE'], ['Интересно', 'YES'], ['Просят позже', 'LATER'], ['Не интересно', 'NO'], ['Переслали ЛПР', 'LATER'],
       ],
     },
-    { key: 'platforms', cols: ['Площадка'], values: [['Instagram'], ['Telegram'], ['Threads'], ['YouTube Shorts'], ['VK Клипы'], ['ЦИАН / Авито (видео)'], ['Другое']] },
+    { key: 'platforms', cols: ['Площадка'], values: [['Instagram'], ['Telegram'], ['Threads'], ['YouTube Shorts'], ['VK Клипы'], ['ЦИАН / Авито (видео)'], ['Другое'], ['ВКонтакте'], ['Max'], ['YouTube']] },
     { key: 'content_formats', cols: ['Формат'], values: [['Рилс'], ['Пост'], ['Сторис'], ['Шортс'], ['Карусель'], ['Статья']] },
     { key: 'content_goals', cols: ['Цель контента'], values: [['Найти покупателя / арендатора'], ['Показать работу собственнику'], ['Бренд агентства'], ['Все три']] },
     {
@@ -176,5 +177,12 @@ function dictDefs_() {
     { key: 'weeks', cols: ['Неделя', 'Понедельник', 'Воскресенье', 'Неделя (подпись)'], generated: true },
     { key: 'obj_labels', cols: ['Объект (выбор)'], generated: true },
     { key: 'lib_checklists', cols: ['Чек-листы (выбор)'], generated: true },
+    // новые справочники — только в конец (столбцы листа 07 не должны сдвигаться)
+    {
+      key: 'content_rubrics', cols: ['Рубрика'], values: [
+        ['Объекты на эксклюзиве'], ['Экспертиза и советы'], ['Рынок и аналитика'], ['Кейсы и сделки'], ['Районы и локации'],
+        ['Новостройки'], ['Загородная жизнь'], ['Коммерция и инвестиции'], ['Ипотека и финансы'], ['Отзывы клиентов'], ['Закулисье и личный бренд'],
+      ],
+    },
   ];
 }
