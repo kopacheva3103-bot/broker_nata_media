@@ -114,7 +114,7 @@ function block(title,inner,empty){return '<h3>'+title+'</h3><div class="card">'+
 function taskPill(x){if(x.cls==='DONE')return '<span class="pill grn">'+h(x.status)+'</span>';if(x.cls==='CANCEL'||x.cls==='MOVED'||x.cls==='FAIL')return '<span class="pill">'+h(x.status)+'</span>';if(x.deadline&&x.deadline<B.today)return '<span class="pill red">просрочено '+d(x.deadline)+'</span>';return '<span class="pill acc">'+(x.deadline?'до '+d(x.deadline):h(x.status||'открыта'))+'</span>';}
 function taskItem(x){var done=x.cls==='DONE';return '<div class="item" onclick="editTask(\''+h(x.id)+'\')"><input type="checkbox" class="chk" '+(done?'checked ':'')+(x.can&&x.cls==='OPEN'?'':'disabled ')+'onclick="event.stopPropagation();quickDone(\''+h(x.id)+'\',this)"><div class="main"><div class="ttl">'+h(x.task)+'</div><div class="mut">'+h(oname(x.obj_id))+(x.owner?' · '+h(x.owner):'')+(x.plan?' · план '+h(x.plan)+(x.fact!==''?' / факт '+h(x.fact):x.fact_auto!==''?' / факт '+h(x.fact_auto):''):'')+(x.result?' · '+h(x.result):'')+'</div></div>'+taskPill(x)+'</div>';}
 function baseItem(r){var last=r.response?('ответ: '+r.response):r.kp_date?('КП '+d(r.kp_date)):r.call_date?('звонок '+d(r.call_date)):'новая';var nx=r.next_date?('<span class="pill '+(r.next_date<=B.today?'amb':'')+'">'+d(r.next_date)+'</span>'):'';return '<div class="item" onclick="editBase(\''+h(r.id)+'\')"><div class="main"><div class="ttl">'+h(r.company)+'</div><div class="mut">'+h(oname(r.obj_id))+(r.audience?' · '+h(r.audience):'')+' · '+h(last)+(r.next_step?' · дальше: '+h(r.next_step):'')+'</div>'+(r.contact?'<div class="mut">'+h(r.contact)+'</div>':'')+'</div>'+nx+'</div>';}
-function contItem(x){var p=x.cls==='DONE'?'grn':'acc';return '<div class="item" onclick="editCont(\''+h(x.id)+'\')"><div class="main"><div class="ttl">'+h(x.topic)+'</div><div class="mut">'+(x.rubric?'<span class="pill acc">'+h(x.rubric)+'</span> ':'')+(obj(x.obj_id)&&obj(x.obj_id).service?'<span class="pill">общий</span> ':'<span class="pill grn">в отчёт: '+h(oname(x.obj_id))+'</span> ')+' · '+h(x.platform)+' · '+h(x.format)+(x.owner?' · '+h(x.owner):'')+(x.views!==''?' · просмотры '+num(x.views):'')+(x.reach!==''?' · охват '+num(x.reach):'')+'</div></div><span class="pill '+p+'">'+h(x.status)+(x.pub_date?' '+d(x.pub_date):'')+'</span></div>';}
+function contItem(x){var p=x.cls==='DONE'?'grn':'acc';return '<div class="item" onclick="editCont(\''+h(x.id)+'\')"><div class="main"><div class="ttl">'+h(x.topic)+'</div><div class="mut">'+(x.rubric?'<span class="pill acc">'+h(x.rubric)+'</span> ':'')+(obj(x.obj_id)&&obj(x.obj_id).service?'<span class="pill">общий</span> ':'<span class="pill grn">в отчёт: '+h(oname(x.obj_id))+'</span> ')+' · '+h(x.platform)+' · '+h(x.format)+(x.owner?' · '+h(x.owner):'')+(x.views!==''?' · просмотры '+num(x.views):'')+(x.reach!==''?' · охват '+num(x.reach):'')+scrLink(x)+'</div></div><span class="pill '+p+'">'+h(x.status)+(x.pub_date?' '+d(x.pub_date):'')+'</span></div>';}
 
 /* ───────── Объекты ───────── */
 function renderObjects(){
@@ -202,6 +202,7 @@ function newBase(objId){form('Новая компания / контакт',[
 
 /* ───────── Контент (SMM) ───────── */
 function smm(){return role('smm')||role('director');}
+function scrLink(x){var m=/https?:\/\/\S+/.exec(x.script||'');return m?' <a class="lnk" target="_blank" onclick="event.stopPropagation()" href="'+h(m[0])+'">📄 сценарий ↗</a>':'';}
 /* ассистент и агент: только вышедшие публикации по своим объектам и цифры */
 function resTable(list,withObj){list=list.slice().sort(function(a,b){return (b.pub_date||'')<(a.pub_date||'')?-1:1;});
   if(!list.length)return '<div class="card empty">Публикаций пока не было</div>';
@@ -239,6 +240,7 @@ function planCard(gr){var x=gr.items[0],ids=gr.items.map(function(i){return i.id
   s+='<div>'+(x.rubric?'<span class="pill acc">'+h(x.rubric)+'</span> ':'')+(x.funnel?'<span class="pill">'+h(funShort(x.funnel))+'</span> ':'')+(obj(x.obj_id)&&!obj(x.obj_id).service?'<span class="pill grn">'+h(oname(x.obj_id))+'</span>':'')+'</div>';
   s+='<div class="t" onclick="editCont(\''+h(x.id)+'\')" style="cursor:pointer">'+h(x.topic)+'</div>';
   if(x.hook)s+='<div class="mut">Крючок: '+h(x.hook)+'</div>';
+  s+=scrLink(x)?'<div>'+scrLink(x)+'</div>':'';
   s+='<div>'+gr.items.map(function(i){return '<span class="pl" onclick="editCont(\''+h(i.id)+'\')">'+h(i.platform||'—')+(i.cls==='DONE'?' ✓':'')+'</span>';}).join('')+'</div><div class="mut">'+h(x.status)+(x.format?' · '+h(x.format):'')+'</div>';
   s+='<div class="ac">'+(gr.date?'<button title="На день раньше" onclick="mv(\''+h(ids)+'\',\''+addD(gr.date,-1)+'\')">‹</button><button title="На день позже" onclick="mv(\''+h(ids)+'\',\''+addD(gr.date,1)+'\')">›</button><button title="На неделю позже" onclick="mv(\''+h(ids)+'\',\''+addD(gr.date,7)+'\')">+7 дн</button>':'')+'<button title="Дублировать на другие площадки" onclick="xpost(\''+h(x.id)+'\')">⧉</button></div>';
   return s+'</div>';}
