@@ -523,6 +523,11 @@ console.log('kp import:', X.previewStrategy('4801', '## Материалы\nПр
   console.log('cont preview:', X.previewStrategy('4801', ans).html.replace(/<[^>]+>/g, ' '));
   console.log(X.runStrategyImport('4801', ans));
   console.log('cont rows:', X.readTable_('CONT').rows.filter(r => /Ролик 1\/5/.test(r.topic)).map(r => [r.platform, r.format, r.goal, X.fmtDate_(r.pub_date), r.owner, r.status].join(' / ')).join(' ; '));
+  const ans2 = ['## Контент-план', 'Тема | Площадка | Формат | Цель | Дата | Кто делает | Сценарий | Рубрика | Этап воронки | Крючок | CTA | ТЗ | Статус',
+    'Выпуск 2/5: Дом до запрета | Instagram, ВКонтакте, Telegram | Рилс | Все три | 07.10.2026 | | doc | #Эксклюзив | охват | Этот дом достраивали… | Подписка | Фасад снизу вверх | Сценарий'].join('\n');
+  X.runStrategyImport('4801', ans2);
+  const r2 = X.readTable_('CONT').rows.filter(r => /Выпуск 2\/5/.test(r.topic));
+  console.log('cont ext:', r2.length === 3 && r2.every(r => r.rubric === '#Эксклюзив' && r.funnel === 'Охват / экспертность' && r.hook && r.cta === 'Подписка' && r.brief && r.status === 'Сценарий') ? 'OK' : 'FAIL ' + JSON.stringify(r2.map(r => [r.platform, r.rubric, r.funnel, r.status])));
 }
 {
   const before = X.readTable_('TASK').rows.filter(t => /Яндекс Диск/.test(t.task)).length;

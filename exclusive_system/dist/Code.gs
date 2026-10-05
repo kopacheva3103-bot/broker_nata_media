@@ -6342,7 +6342,10 @@ function strategyBaseRows_(obj, lines, plan) {
   return out;
 }
 
-/** «Тема | Площадка | Формат | Цель | Дата | Кто делает | Сценарий» → строки 04_КОНТЕНТ (без дублей: объект + тема + площадка). */
+/**
+ * «Тема | Площадка | Формат | Цель | Дата | Кто делает | Сценарий» → строки 04_КОНТЕНТ (без дублей: объект + тема + площадка).
+ * Необязательно дальше: Рубрика | Этап воронки | Крючок | CTA | ТЗ на съёмку | Статус. Площадок можно несколько через запятую.
+ */
 function strategyContentRows_(obj, lines, plan) {
   const norm = x => String(x || '').trim().toLowerCase();
   const pick = (dict, v, fallback) => {
@@ -6359,13 +6362,24 @@ function strategyContentRows_(obj, lines, plan) {
     if (line.indexOf('|') < 0 || /^\|?\s*:?-{2,}/.test(line)) return;
     const c = line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(x => x.trim().replace(/^\*\*|\*\*$/g, ''));
     if (!c[0] || /^(ролик|тема)$/i.test(c[0]) || /площадк/i.test(c[1] || '') && /^(ролик|тема)/i.test(c[0])) return;
-    const platform = pick('platforms', c[1], dictValues_('platforms').indexOf('Другое') >= 0 ? 'Другое' : '');
-    const key = norm(c[0]) + '|' + norm(platform);
-    if (have.indexOf(key) >= 0) { plan.skipped++; return; }
-    have.push(key);
-    const owner = people.map(p => p[0]).find(p => norm(p) === norm(c[5])) || smm;
-    out.push({ obj_id: String(obj.id), topic: c[0], platform: platform, format: pick('content_formats', c[2], 'Рилс'), goal: pick('content_goals', c[3], ''),
-      pub_date: parseRuDate_(c[4]) || '', owner: owner, script: c[6] || '', status: dictValues_('content_status')[0] || '' });
+    const plats = String(c[1] || '').split(/\s*[,;+]\s*/).filter(Boolean);
+    (plats.length ? plats : ['']).forEach(pl => {
+      const platform = pick('platforms', pl, dictValues_('platforms').indexOf('Другое') >= 0 ? 'Другое' : '');
+      const key = norm(c[0]) + '|' + norm(platform);
+      if (have.indexOf(key) >= 0) { plan.skipped++; return; }
+      have.push(key);
+      const owner = people.map(p => p[0]).find(p => norm(p) === norm(c[5])) || smm;
+      const row = { obj_id: String(obj.id), topic: c[0], platform: platform, format: pick('content_formats', c[2], 'Рилс'), goal: pick('content_goals', c[3], ''),
+        pub_date: parseRuDate_(c[4]) || '', owner: owner, script: c[6] || '', status: dictValues_('content_status')[0] || '' };
+      const exact = (dict, v) => { const n = norm(v); return n ? (dictValues_(dict).find(x => norm(x) === n) || dictValues_(dict).find(x => norm(x).indexOf(n) >= 0 || n.indexOf(norm(x)) >= 0) || '') : ''; };
+      row.rubric = exact('content_rubrics', c[7]);
+      row.funnel = exact('content_funnel', c[8]) || ((smmRubrics_().find(x => x.name === row.rubric) || {}).funnel || '');
+      if (c[9]) row.hook = c[9];
+      if (c[10]) row.cta = c[10];
+      if (c[11]) row.brief = c[11];
+      if (c[12]) row.status = exact('content_status', c[12]) || row.status;
+      out.push(row);
+    });
   });
   return out;
 }
