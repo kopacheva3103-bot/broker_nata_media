@@ -95,6 +95,8 @@ def normalise(p: dict) -> dict:
         except ValueError as e:
             raise ConfigError(f"{where}: {e}") from e
         bty = seg.get("beauty", p.get("beauty") if t != "slide" else None)
+        if bty is True:  # "beauty: true" on a segment means the project's beauty settings
+            bty = p.get("beauty") or {"skin_smooth": 0.17}
         seg["_beauty"] = {"skin_smooth": bty} if isinstance(bty, (int, float)) and not isinstance(bty, bool) else bty
         seg["_broll_grade"] = grading.merge(g) if g else {}
         tr = default_tr if p.get("uniform_transitions") else seg.get("transition", default_tr)
