@@ -168,7 +168,12 @@ def final(ctx: Ctx, files: list[Path], durations: list[float], transitions: list
         else:
             graph.append(f"[{acur}][mus]amix=inputs=2:duration=first:normalize=0[am]")
         acur = "am"
-    if audio.get("loudnorm", True):
+    mode = audio.get("loudnorm", True)
+    if mode == "static":
+        # no gain riding (dynamic loudnorm "pumps" the music in speech pauses);
+        # loudness is matched afterwards with one constant gain
+        graph.append(f"[{acur}]alimiter=limit=0.89:level=false,aresample=48000[aout]")
+    elif mode:
         lufs = float(audio.get("lufs", -14))
         graph.append(f"[{acur}]loudnorm=I={lufs}:TP=-1.5:LRA=11,aresample=48000[aout]")
     else:
@@ -180,4 +185,22 @@ def final(ctx: Ctx, files: list[Path], durations: list[float], transitions: list
          "-crf", str(enc.get("crf", ctx.extra.get("final_crf", 18))), "-profile:v", "high", "-pix_fmt", "yuv420p",
          "-r", str(ctx.fps), "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", str(out)],
         ctx.verbose)
+    if mode == "static":
+        _static_loudness(out, float(audio.get("lufs", -14)), ctx.verbose)
     return length
+
+
+def _static_loudness(out: Path, lufs: float, verbose: bool) -> None:
+    """Bring the whole mix to the target loudness with a single constant gain."""
+    import re
+    import subprocess
+    log = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(out), "-vn", "-af", "ebur128", "-f", "null", "-"],
+                         capture_output=True, text=True).stderr
+    m = re.findall(r"I:\s+(-?[\d.]+) LUFS", log)
+    if not m:
+        return
+    gain = lufs - float(m[-1])
+    tmp = out.with_name(out.stem + ".gain" + out.suffix)
+    run(["-i", str(out), "-map", "0", "-c:v", "copy", "-af", f"volume={gain:.2f}dB,alimiter=limit=0.89:level=false",
+         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", str(tmp)], verbose)
+    tmp.replace(out)
