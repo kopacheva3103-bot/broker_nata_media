@@ -107,6 +107,34 @@ styles:
     glow_opacity: 0.40
     glow_size: 5
     glow_blur: 12
+  cta:                         # кодовое слово в финале: золото, Montserrat Bold
+    position: 0.40
+    font: Montserrat
+    bold: true
+    italic: false
+    size: 66
+    color: "#E6B450"
+    outline: 0
+    shadow: 0
+    margin_x: 110
+    glow: true
+    glow_opacity: 0.45
+    glow_size: 6
+    glow_blur: 14
+  cta_small:                   # строка над кодовым словом («напишите в директ»)
+    position: 0.365
+    font: Montserrat SemiBold
+    bold: false
+    italic: false
+    size: 38
+    color: "#FFFFFF"
+    outline: 0
+    shadow: 0
+    margin_x: 110
+    glow: true
+    glow_opacity: 0.42
+    glow_size: 4
+    glow_blur: 10
   caption:                     # подписи-факты на кадре
     font: Montserrat SemiBold
     bold: false
