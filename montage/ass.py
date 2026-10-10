@@ -166,7 +166,8 @@ def caption_events(doc: AssDoc, seg: dict, duration: float) -> None:
             item = {"text": item}
         start = float(item.get("start", seg.get("text_start", 0.3)))
         end = float(item.get("end", seg.get("text_end", duration)))
-        pos = item.get("position", seg.get("text_position", "top"))
+        sty = item.get("style", seg.get("text_style", "caption"))
+        pos = item.get("position", seg.get("text_position", doc.style(sty).get("position", "top")))
         anim = item.get("animation", seg.get("text_animation", "pop"))
         tags = r"{\an5" + intro_tags(anim, doc.width // 2, doc.y_for(pos), doc.k) + "}"
         doc.add(start, min(end, duration), item.get("style", seg.get("text_style", "caption")),
