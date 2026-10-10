@@ -1,0 +1,124 @@
+# Стандарт монтажа: Premium Real Estate / Private Wealth / Architecture.
+# Подробно — montage/STANDARD.md. Подключается в проекте строкой `preset: premium`;
+# всё, что указано в самом проекте, важнее пресета.
+width: 1080
+height: 1920
+fps: 30
+fonts_dir: ../fonts            # Montserrat 600/700/800 лежат в репозитории
+font: Montserrat SemiBold
+speed: 1.1
+uniform_transitions: true
+transition: {type: fade, duration: 0.25}
+grade: {preset: natural}
+beauty: {skin_smooth: 0.17, skin_tone: 0.5}
+
+title:                         # первый кадр
+  start: 0
+  end: 3.5
+  y: 0.40                      # ниже верхней части кадра, ближе к титрам
+  line_gap: 92
+  darken: 0.55                 # мягкое затемнение, без цветных подложек
+  uppercase: true
+  animation: rise              # плавное проявление и лёгкое движение вверх
+  fit: true                    # длинная строка уменьшается, не сжимается
+  max_width: 0.84
+  # строки задаются в проекте: lines: [{text: ..., style: title}, {text: ..., style: accent}]
+
+subtitles:
+  model: large-v3
+  language: ru
+  position: 0.52               # по центру кадра
+  karaoke: false
+  lowercase: false             # формулировки не меняем
+  hide_during_title: true
+  max_words: 6
+  max_chars: 30                # длинная фраза переносится на две строки
+  animation: soft              # мягкое проявление без мигания
+
+styles:
+  title:                       # заголовок, строка 1: белый, ExtraBold 800, 64–76 px
+    font: Montserrat ExtraBold
+    bold: false
+    italic: false
+    size: 72
+    min_size: 60
+    char_width: 0.66
+    color: "#FFFFFF"
+    outline: 0
+    shadow: 0
+    margin_x: 90
+    glow: true                 # мягкая чёрная тень 35–45%
+    glow_opacity: 0.40
+    glow_size: 6
+    glow_blur: 14
+  accent:                      # заголовок, строка 2: золото #E6B450, Bold 700, 48–56 px
+    font: Montserrat
+    bold: true
+    italic: false
+    size: 52
+    min_size: 44
+    char_width: 0.64
+    color: "#E6B450"
+    outline: 0
+    shadow: 0
+    margin_x: 90
+    glow: true
+    glow_opacity: 0.40
+    glow_size: 5
+    glow_blur: 12
+  subtitle:                    # основные титры: SemiBold 600, 44–50 px
+    font: Montserrat SemiBold
+    bold: false
+    italic: false
+    size: 48
+    color: "#FFFFFF"
+    highlight: "#E6B450"
+    outline: 0
+    shadow: 0
+    margin_x: 110              # безопасные поля + иконки Reels справа
+    glow: true
+    glow_opacity: 0.42
+    glow_size: 5
+    glow_blur: 12
+  phrase:                      # короткие связки «А вы знали, что»: 36–40 px
+    font: Montserrat SemiBold
+    bold: false
+    italic: false
+    size: 38
+    color: "#FFFFFF"
+    outline: 0
+    shadow: 0
+    margin_x: 110
+    glow: true
+    glow_opacity: 0.40
+    glow_size: 4
+    glow_blur: 10
+  gold:                        # одно ключевое слово / строка золотом
+    font: Montserrat
+    bold: true
+    italic: false
+    size: 48
+    color: "#E6B450"
+    outline: 0
+    shadow: 0
+    margin_x: 110
+    glow: true
+    glow_opacity: 0.40
+    glow_size: 5
+    glow_blur: 12
+  caption:                     # подписи-факты на кадре
+    font: Montserrat SemiBold
+    bold: false
+    size: 44
+    color: "#FFFFFF"
+    outline: 0
+    shadow: 0
+    margin_x: 110
+    glow: true
+    glow_opacity: 0.40
+    glow_size: 5
+    glow_blur: 12
+
+audio:
+  music_volume: 0.18
+  duck: false

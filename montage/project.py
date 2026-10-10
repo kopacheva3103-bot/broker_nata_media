@@ -27,7 +27,34 @@ def load(path: str | Path) -> dict:
     else:
         data = json.loads(text)
     data["_base"] = str(path.parent)
-    return normalise(data)
+    return normalise(apply_preset(data))
+
+
+PRESETS = Path(__file__).parent / "presets"
+
+
+def _merge(base: dict, over: dict) -> dict:
+    out = dict(base)
+    for k, v in over.items():
+        out[k] = _merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+    return out
+
+
+def apply_preset(data: dict) -> dict:
+    """`preset: premium` pulls the brand standard from montage/presets/premium.yaml;
+    anything set in the project itself wins over the preset."""
+    name = data.get("preset")
+    if not name:
+        return data
+    f = PRESETS / f"{name}.yaml"
+    if not f.exists():
+        raise ConfigError(f"Пресет «{name}» не найден: {f}")
+    import yaml
+    preset = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    if preset.get("fonts_dir") and not data.get("fonts_dir"):
+        data["fonts_dir"] = str((PRESETS / preset.pop("fonts_dir")).resolve())
+    preset.pop("fonts_dir", None)
+    return _merge(preset, data)
 
 
 def _abs(base: Path, p: str | None) -> str | None:
@@ -301,6 +328,27 @@ def _resolve_broll(p: dict) -> None:
         seg["_broll"] = out
 
 
+def check_fonts(p: dict, styles: dict) -> None:
+    """Stop before rendering if a font is missing — libass would silently fall back to a system font."""
+    import subprocess
+    want = {st.get("font") for st in styles.values() if st.get("font")} | {p.get("font", "DejaVu Sans")}
+    have: set[str] = set()
+    files = sorted(Path(p["fonts_dir"]).glob("*.[ot]tf")) if p.get("fonts_dir") else []
+    for cmd in (["fc-list", ":", "family"], ["fc-scan", "--format", "%{family}\n", *map(str, files)] if files else None):
+        if not cmd:
+            continue
+        try:
+            outp = subprocess.run(cmd, capture_output=True, text=True, check=False).stdout
+        except FileNotFoundError:
+            return  # no fontconfig tools: cannot check
+        for line in outp.splitlines():
+            have |= {f.strip() for f in line.split(",") if f.strip()}
+    missing = sorted(f for f in want if f not in have)
+    if missing:
+        raise ConfigError("Шрифты не найдены: " + ", ".join(missing)
+                          + ". Положите файлы шрифтов в fonts_dir или установите их — иначе текст заменится системным шрифтом.")
+
+
 def render(p: dict, preview: bool = False, jobs: int | None = None, verbose: bool = False) -> Path:
     t0 = time.time()
     out = Path(p["output"])
@@ -312,6 +360,7 @@ def render(p: dict, preview: bool = False, jobs: int | None = None, verbose: boo
     styles = p.get("styles") or {}
     if p.get("subtitle_style"):
         styles = {**styles, "subtitle": {**styles.get("subtitle", {}), **p["subtitle_style"]}}
+    check_fonts(p, styles)
     ctx = segments.Ctx(
         width=int(p.get("width", 1080)), height=int(p.get("height", 1920)), fps=int(p.get("fps", 30)),
         workdir=work, font=p.get("font", "DejaVu Sans"), styles=styles,

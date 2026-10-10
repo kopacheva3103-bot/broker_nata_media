@@ -122,6 +122,10 @@ def intro_tags(animation: str, x: int, y: int, k: float) -> str:
         return rf"\move({x},{y + round(110 * k)},{x},{y},0,450)\fad(350,250)"
     if anim == "slide_down":
         return rf"\move({x},{y - round(110 * k)},{x},{y},0,450)\fad(350,250)"
+    if anim == "rise":  # premium: soft fade-in with a small upward drift
+        return rf"\move({x},{y + round(22 * k)},{x},{y},0,420)\fad(320,200)"
+    if anim == "soft":  # for subtitles that change every second: quick fade, tiny drift
+        return rf"\move({x},{y + round(10 * k)},{x},{y},0,260)\fad(160,100)"
     if anim == "pop":
         return rf"\pos({x},{y})\fscx60\fscy60\t(0,260,0.6,\fscx106\fscy106)\t(260,380,\fscx100\fscy100)\fad(150,250)"
     return rf"\pos({x},{y})\fad(450,300)"
@@ -306,7 +310,9 @@ def subtitle_events(doc: AssDoc, cues: list[Cue], cfg: dict) -> None:
         base = "{\\an" + str(an) + "}"
     else:
         y = doc.y_for({"bottom": 0.72, "middle": 0.55, "top": 0.2}.get(pos, pos) if isinstance(pos, str) else pos)
-        base = r"{\an5\pos(" + f"{doc.width // 2},{y}" + ")}"
+        anim = cfg.get("animation")
+        base = (r"{\an5" + intro_tags(anim, doc.width // 2, y, doc.k) + "}") if anim else \
+            (r"{\an5\pos(" + f"{doc.width // 2},{y}" + ")}")
     offset = float(cfg.get("offset", 0.0))
     chunks = chunk(cues, int(cfg.get("max_words", 4)), int(cfg.get("max_chars", 26)))
     for n, words in enumerate(chunks):
@@ -333,15 +339,31 @@ def subtitle_events(doc: AssDoc, cues: list[Cue], cfg: dict) -> None:
 
 
 def title_events(doc: AssDoc, cfg: dict) -> None:
-    """Big multi-line title, every line with its own style (e.g. white + gold italic)."""
+    """Big multi-line title, every line with its own style (e.g. white + gold).
+
+    A line that would not fit the frame width is scaled down (never squeezed or
+    stretched), and an optional `animation` (fade / rise) is applied per line.
+    """
     start, end = float(cfg.get("start", 0)), float(cfg.get("end", 3.5))
-    lines = cfg.get("lines") or []
+    lines = [{"text": x} if isinstance(x, str) else x for x in cfg.get("lines") or []]
     y0 = doc.y_for(cfg.get("y", 0.7))
     gap = float(cfg.get("line_gap", 130)) * doc.k
     top = y0 - gap * (len(lines) - 1) / 2
     fin, fout = int(cfg.get("fade_in", 0.35) * 1000), int(cfg.get("fade_out", 0.4) * 1000)
+    anim = cfg.get("animation")
+    avail = doc.width * float(cfg.get("max_width", 0.84))
     for i, line in enumerate(lines):
-        if isinstance(line, str):
-            line = {"text": line}
-        tag = r"{\an5\pos(" + f"{doc.width // 2},{round(top + i * gap)}" + r")\fad(" + f"{fin},{fout})" + "}"
-        doc.add(start, end, line.get("style", "title"), tag + clean(line["text"]))
+        st = doc.style(line.get("style", "title"))
+        text = str(line["text"])
+        if cfg.get("uppercase") or line.get("uppercase"):
+            text = text.upper()
+        size = float(line.get("size", st["size"])) * doc.k
+        est = len(text) * float(st.get("char_width", 0.6)) * size  # rough glyph width
+        if cfg.get("fit") and est > avail:
+            size = max(size * avail / est, float(st.get("min_size", 0)) * doc.k)
+        x, y = doc.width // 2, round(top + i * gap)
+        if anim:
+            pos = intro_tags(anim, x, y, doc.k).replace("\\fad(320,200)", f"\\fad({fin},{fout})")
+        else:
+            pos = rf"\pos({x},{y})\fad({fin},{fout})"
+        doc.add(start, end, line.get("style", "title"), r"{\an5" + pos + rf"\fs{round(size)}" + "}" + clean(text))
