@@ -31,9 +31,10 @@ subtitles:
   karaoke: false
   lowercase: false             # формулировки не меняем
   hide_during_title: true
-  max_words: 6
-  max_chars: 30                # длинная фраза переносится на две строки
+  max_words: 5
+  max_chars: 24                # короткие фразы, перенос на две строки
   animation: soft              # мягкое проявление без мигания
+  scrim: 0.42                  # мягкое затемнение полосы под титрами (не плашка)
 
 styles:
   title:                       # заголовок, строка 1: белый, ExtraBold 800, 64–76 px
@@ -66,20 +67,21 @@ styles:
     glow_opacity: 0.40
     glow_size: 5
     glow_blur: 12
-  subtitle:                    # основные титры: SemiBold 600, 44–50 px
+  subtitle:                    # основные титры: SemiBold 600, 60 px — крупно и читаемо с телефона
     font: Montserrat SemiBold
     bold: false
     italic: false
-    size: 48
+    size: 60
+    spacing: 0.6               # чуть свободнее межбуквенный интервал
     color: "#FFFFFF"
     highlight: "#E6B450"
     outline: 0
-    shadow: 0
+    shadow: 2                  # чёткая мягкая тень под буквами
     margin_x: 110              # безопасные поля + иконки Reels справа
     glow: true
-    glow_opacity: 0.42
-    glow_size: 5
-    glow_blur: 12
+    glow_opacity: 0.6
+    glow_size: 6
+    glow_blur: 9
   phrase:                      # короткие связки «А вы знали, что»: 36–40 px
     position: 0.468            # сразу над основными титрами, без большой щели
     font: Montserrat SemiBold

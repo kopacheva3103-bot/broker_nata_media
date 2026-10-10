@@ -88,6 +88,20 @@ def final(ctx: Ctx, files: list[Path], durations: list[float], transitions: list
         graph.append(f"[{vcur}][dk]overlay=0:H-h:eof_action=pass[vd]")
         vcur = "vd"
         n += 1
+    scrim = float((project.get("subtitles") or {}).get("scrim", 0) or 0)
+    if cues and scrim > 0:
+        # soft dark band behind the subtitles (no hard plate): fades out to the top and bottom
+        spos = (project.get("subtitles") or {}).get("position", 0.6)
+        spos = float(spos) if isinstance(spos, (int, float)) else {"middle": 0.55, "bottom": 0.72, "top": 0.2}.get(spos, 0.6)
+        bh = int(ctx.h * float((project.get("subtitles") or {}).get("scrim_height", 0.26))) // 2 * 2
+        y0 = max(0, int(ctx.h * spos) - bh // 2)
+        t_on = float(title.get("end", 3.5)) if title else 0.0
+        args += ["-f", "lavfi", "-i", f"color=c=black:s={ctx.w}x{bh}:r={ctx.fps}"]
+        graph.append(f"[{n}:v]format=rgba,geq=r=0:g=0:b=0:a='255*{scrim}*exp(-pow((Y-H/2)/(H/3.2),2))',"
+                     f"fade=t=in:st={max(t_on - 0.2, 0):.3f}:d=0.4:alpha=1[sc]")
+        graph.append(f"[{vcur}][sc]overlay=0:{y0}:shortest=1[vs]")
+        vcur = "vs"
+        n += 1
     if cues or title:
         doc = ass.AssDoc(ctx.width, ctx.height, ctx.font, ctx.styles)
         scfg = dict(project.get("subtitles") or {})
