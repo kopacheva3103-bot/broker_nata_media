@@ -3,7 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-function loadGs(overrides) {
+// opts.now — зафиксировать «сегодня» (строка ISO или число), чтобы тесты не зависели от текущей даты.
+function loadGs(overrides, opts) {
   const dir = path.join(__dirname, '..', 'apps_script');
   const files = fs.readdirSync(dir).filter(f => f.endsWith('.gs')).sort();
   const src = files.map(f => `// ==== ${f}\n` + fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
@@ -14,7 +15,11 @@ function loadGs(overrides) {
   vm.createContext(ctx);
   // top-level const не попадают в глобальный объект — экспортируем их явно
   const exportNames = [...src.replace(/String\.raw`[\s\S]*?`;/g, '').matchAll(/^(?:const|function)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]);
-  vm.runInContext(src + '\n;globalThis.__x = {' + [...new Set(exportNames)].join(',') + '};', ctx, { filename: 'apps_script.js' });
+  const clock = opts && opts.now !== undefined
+    ? `(() => { const R = Date, T = new R(${JSON.stringify(opts.now)}).getTime();
+        globalThis.Date = class extends R { constructor(...a) { super(...(a.length ? a : [T])); } static now() { return T; } }; })();\n`
+    : '';
+  vm.runInContext(clock + src + '\n;globalThis.__x = {' + [...new Set(exportNames)].join(',') + '};', ctx, { filename: 'apps_script.js' });
   return ctx.__x;
 }
 module.exports = { loadGs };

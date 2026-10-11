@@ -15,7 +15,7 @@ const X = loadGs({
   DocumentApp: { ParagraphHeading: { TITLE: 'T', HEADING1: 'H1', HEADING2: 'H2' }, create: name => { const paras = []; const P = t => { const p = { t, setText: x => { p.t = x; return p; }, setHeading: () => p }; paras.push(p); return p; };
     const body = { getParagraphs: () => [paras[0] || P('')], appendParagraph: t => P(t), appendListItem: t => P('• ' + t), appendTable: rows => { paras.push({ t: 'TABLE ' + rows.length }); return { getRow: () => ({ getNumCells: () => 1, getCell: () => ({ editAsText: () => ({ setBold: () => {} }) }) }) }; }, findText: () => null };
     DOCS.push({ name, paras }); return { getId: () => 'DOC' + DOCS.length, getBody: () => body, getUrl: () => 'https://docs/' + DOCS.length, saveAndClose: () => {} }; }, openById: () => ({ getBody: () => ({ findText: () => null }) }) },
-});
+}, { now: '2026-10-05T12:00:00+03:00' }); // «сегодня» зафиксировано: периоды проверок ниже рассчитаны на эту дату
 const DOCS = [];
 let fails = 0;
 const ok = (n, c, i) => { console.log((c ? '✓ ' : '✗ ') + n + (i !== undefined ? ' — ' + i : '')); if (!c) fails++; };
