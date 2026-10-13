@@ -175,7 +175,17 @@ class CrmTest(unittest.TestCase):
         self.assertIn("согласие", kinds)
         chk = app.send({"ids": [cid], "dry": True})
         self.assertEqual((chk["no_consent"], chk["stopped"]), (0, 0))
-        res = app.send({"ids": [cid], "channel": "wa", "text": "{hello}, {first_name}!"})
+        # отправка из окна приостановлена: ничего не уходит и не пишется в историю
+        with self.assertRaises(crm.StopChannel):
+            app.send({"ids": [cid], "channel": "wa", "text": "{hello}, {first_name}!"})
+        self.assertEqual(self.db.execute(
+            "SELECT COUNT(*) FROM interactions WHERE kind='сообщение'").fetchone()[0], 0)
+        # логика формирования ссылок не изменилась (проверка при снятой паузе)
+        webapp.WEB_SEND_PAUSED = False
+        try:
+            res = app.send({"ids": [cid], "channel": "wa", "text": "{hello}, {first_name}!"})
+        finally:
+            webapp.WEB_SEND_PAUSED = True
         self.assertTrue(res["results"][0]["link"].startswith("https://wa.me/79161234567?text="))
         self.assertIn("Иван", res["results"][0]["text"])
 

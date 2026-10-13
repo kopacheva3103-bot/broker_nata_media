@@ -20,6 +20,9 @@ import classify
 import crm
 
 PAGE = Path(__file__).resolve().parent / "webapp.html"
+# Отправка из окна приостановлена до проверки согласий и статуса «СТОП»
+# (аудит 11.10.2026: окно не проверяло согласие). Проверка «dry» работает.
+WEB_SEND_PAUSED = True
 EDITABLE = ("name", "call_name", "gender", "sphere", "telegram", "consent",
             "stopped", "notes", "tags")
 
@@ -160,6 +163,9 @@ class App:
             return {"total": len(ids), "first": first,
                     "no_consent": sum(1 for r in rows if not r["consent"]),
                     "stopped": sum(1 for r in rows if r["stopped"])}
+        if WEB_SEND_PAUSED:
+            raise crm.StopChannel("Отправка из окна приостановлена до проверки согласий "
+                                  "и статуса «СТОП». Ничего не отправлено.")
         channel, template = body["channel"], body["text"]
         auto = body.get("auto", True)
         results = []
