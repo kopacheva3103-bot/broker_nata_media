@@ -1093,6 +1093,33 @@ def cmd_set(db, a):
     cmd_history(db, argparse.Namespace(contact=a.contact))
 
 
+def cmd_consent_all(db, a):
+    """Массово отметить согласие (решение владельца): по умолчанию — пробный прогон.
+
+    «СТОП» не трогается и всегда важнее согласия. Каждому, кому ставится
+    отметка, в историю пишется основание и дата — чтобы было чем подтвердить.
+    """
+    if not a.basis.strip():
+        sys.exit("Укажите основание: --basis \"...\"")
+    want = set(split_tags(a.tags))
+    rows = [r for r in db.execute("SELECT id, tags, consent, stopped FROM contacts")
+            if not want or want & set(split_tags(r["tags"]))]
+    todo = [r for r in rows if not r["consent"] and not r["stopped"]]
+    stopped = sum(1 for r in rows if r["stopped"])
+    print(f"Под условие попадает: {len(rows)}; уже с согласием: "
+          f"{sum(1 for r in rows if r['consent'])}; со «СТОП» (не меняются): {stopped}; "
+          f"будет отмечено: {len(todo)}.")
+    if not a.apply:
+        print("Это пробный прогон, ничего не изменено. Чтобы отметить, добавьте --apply.")
+        return
+    text = f"Согласие отмечено массово. Основание: {a.basis.strip()}"
+    for r in todo:
+        db.execute("UPDATE contacts SET consent=1, updated_at=? WHERE id=?", (now(), r["id"]))
+        log_interaction(db, r["id"], "согласие", text)
+    db.commit()
+    print(f"Готово: согласие отмечено у {len(todo)}.")
+
+
 def cmd_history(db, a):
     r = find_contact(db, a.contact)
     print(f"{r['name']}  {r['phone'] or ('@' + r['telegram'])}  теги: {r['tags'] or '—'}  "
@@ -1406,6 +1433,12 @@ def build_parser():
                    help="максимум сообщений на канал за запуск")
     s.add_argument("--send", action="store_true", help="реально отправить")
     s.set_defaults(func=cmd_send)
+
+    s = sub.add_parser("consent-all", help="массово отметить согласие (с основанием)")
+    s.add_argument("--basis", required=True, help="основание, например «давали ранее, решение владельца»")
+    s.add_argument("--tags", default="", help="только эти категории (через запятую); пусто — все")
+    s.add_argument("--apply", action="store_true", help="записать (без него — пробный прогон)")
+    s.set_defaults(func=cmd_consent_all)
 
     sub.add_parser("shortcut", help="значок запуска на рабочем столе") \
         .set_defaults(func=cmd_shortcut)

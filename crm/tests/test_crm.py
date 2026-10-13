@@ -52,6 +52,21 @@ class CrmTest(unittest.TestCase):
         self.assertEqual(crm.guess_first_name("Покупатель Иван"), "Иван")
         self.assertEqual(crm.guess_first_name("Покупатель Снт"), "")
 
+    def test_consent_all_dry_by_default_skips_stop_and_logs_basis(self):
+        for it in crm.parse_vcf(VCF):
+            crm.upsert_contact(self.db, it)
+        self.db.execute("UPDATE contacts SET stopped=1 WHERE phone='+79031112233'")
+        args = lambda apply: type("A", (), {"basis": "давали ранее", "tags": "", "apply": apply})
+        crm.cmd_consent_all(self.db, args(False))
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM contacts WHERE consent=1").fetchone()[0], 0)
+        crm.cmd_consent_all(self.db, args(True))
+        rows = {r["phone"]: r["consent"] for r in self.db.execute("SELECT phone, consent FROM contacts")}
+        self.assertEqual(rows["+79161234567"], 1)
+        self.assertEqual(rows["+79031112233"], 0)  # «СТОП» важнее согласия
+        log = self.db.execute("SELECT text FROM interactions WHERE kind='согласие'").fetchall()
+        self.assertEqual(len(log), 1)
+        self.assertIn("давали ранее", log[0]["text"])
+
     def test_autotag(self):
         for it in crm.parse_vcf(VCF):
             crm.upsert_contact(self.db, it)
