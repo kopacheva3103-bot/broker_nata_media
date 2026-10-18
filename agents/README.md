@@ -75,7 +75,8 @@ python check_setup.py
 
 ```bash
 cd ~/Downloads/broker_nata_media-claude-eager-maxwell-rrsrje/agents
-bash setup_mac.sh          # установка; в конце откроется .env для ключей
+bash setup_mac.sh          # установка
+./run.sh keys              # ввести ключи: Терминал спросит, вставляешь ⌘V
 ./run.sh check             # проверка доступов
 ./run.sh begovaya all      # серия «Беговая, 5»: архив + генерация + статус
 ./run.sh begovaya animate  # оживление выбранных кадров
