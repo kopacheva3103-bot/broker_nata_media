@@ -34,12 +34,13 @@ def need(key):
 
 def kling():
     import agent2_animate
-    need("KLING_ACCESS_KEY"), need("KLING_SECRET_KEY")
+    if not env("KLING_API_KEY"):
+        need("KLING_ACCESS_KEY"), need("KLING_SECRET_KEY")
     k = agent2_animate.Kling()
     r = requests.get(f"{k.base}/v1/videos/image2video", params={"pageNum": 1, "pageSize": 1},
                      headers=k._headers(), timeout=30)
     if r.status_code == 401:
-        raise RuntimeError("Kling не принял ключи: проверь Access Key и Secret Key")
+        raise RuntimeError("Kling не принял ключ: проверь, что скопировала его целиком")
     r.raise_for_status()
     body = r.json()
     if body.get("code") != 0:

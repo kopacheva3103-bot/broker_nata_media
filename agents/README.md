@@ -33,7 +33,7 @@ Pexels и Unsplash разрешают бесплатно использоват�
 |---|---|---|---|
 | Google Cloud (Drive API) | папки для команды на Google Drive | бесплатно | `credentials.json` + `DRIVE_ROOT_FOLDER_ID` |
 | Replicate | генерация G-кадров, колоризация | ~0,04 $ за картинку, нужна карта | `REPLICATE_API_TOKEN` |
-| Kling API | оживление кадров | пакеты в кабинете API | `KLING_ACCESS_KEY`, `KLING_SECRET_KEY` |
+| Kling API | оживление кадров | пакеты в кабинете API | `KLING_API_KEY` (или пара `KLING_ACCESS_KEY` + `KLING_SECRET_KEY`) |
 | Pexels, Unsplash | только агент 1 со стоками | бесплатно | необязательно |
 
 Аккаунты лучше регистрировать на почту Натальи: ключи принадлежат бизнесу, а не исполнителю.
@@ -66,8 +66,9 @@ python check_setup.py
 ### Kling по шагам
 1. [app.klingai.com/global/dev](https://app.klingai.com/global/dev) → войти.
 2. Купить пакет **API** (он отдельный от подписки на сайте Kling).
-3. **API Keys** → Create → скопировать Access Key и Secret Key в `KLING_ACCESS_KEY` и `KLING_SECRET_KEY`.
-   Secret Key показывается один раз, его надо сразу сохранить.
+3. **API Keys** → Create → имя `nata-agents` → Confirm. Если кабинет выдал один ключ, он идёт в `KLING_API_KEY`.
+   Если выдал два (Access Key и Secret Key), они идут в `KLING_ACCESS_KEY` и `KLING_SECRET_KEY`.
+   Ключ показывается один раз, его надо сразу сохранить.
 4. Для серии поставить `KLING_MODE=pro`. Для первой пробы можно оставить `std`, так дешевле.
 
 ## Быстрый старт на Mac

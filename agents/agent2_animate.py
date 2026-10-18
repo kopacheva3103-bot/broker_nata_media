@@ -51,11 +51,16 @@ STYLES = {
 
 class Kling:
     def __init__(self):
-        self.ak = env("KLING_ACCESS_KEY", required=True)
-        self.sk = env("KLING_SECRET_KEY", required=True)
+        # Новый кабинет Kling выдаёт один API Key, старый — пару Access Key + Secret Key
+        self.api_key = env("KLING_API_KEY")
+        if not self.api_key:
+            self.ak = env("KLING_ACCESS_KEY", required=True)
+            self.sk = env("KLING_SECRET_KEY", required=True)
         self.base = env("KLING_API_BASE", "https://api-singapore.klingai.com").rstrip("/")
 
     def _headers(self):
+        if self.api_key:
+            return {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         now = int(time.time())
         token = jwt.encode({"iss": self.ak, "exp": now + 1800, "nbf": now - 5}, self.sk,
                            algorithm="HS256", headers={"alg": "HS256", "typ": "JWT"})
