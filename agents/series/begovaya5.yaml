@@ -1,0 +1,214 @@
+# Бриф серии «Дом с историей» — Беговая, 5.
+# Источник: Google Doc «ФИНАЛ — Беговая, 5: серия «Дом с историей» (тексты + ТЗ монтажёру)».
+# Коды А (архив) и G (генерация) совпадают с ТЗ, так монтажёр сразу находит нужный кадр.
+#
+# Поля кадра:
+#   find:      что искать. wiki — Wikimedia Commons (только свободные лицензии),
+#              pastvu — архив по адресу (place) или по номеру фото (cid), и годам (years)
+#   generate:  промт картинки для FLUX (3 варианта, 9:16)
+#   motion:    как оживить в Kling. Нет поля — кадр статичный, наезд делает монтажёр
+#   manual:    задача для ассистента руками (агент её только показывает в статусе)
+#   fallback:  чем заменить, если не нашли
+
+series: "Беговая5_Дом_с_историей"
+
+defaults:
+  variants: 3          # сколько вариантов генерировать на каждый G-кадр
+  candidates: 8        # сколько архивных кандидатов на каждый A-кадр
+  negative: >-
+    узнаваемые лица, крупные портреты, современные машины, современная одежда, яркие цвета,
+    деформация зданий, лишние конечности, текст, водяные знаки, резкие движения камеры
+
+places:
+  hippodrome: "Московский ипподром, Беговая улица, 22, Москва"
+  begovaya5: "Беговая улица, 5, Москва"
+  cheryomushki: "Новые Черёмушки, Москва"
+
+episodes:
+  1:
+    title: "Кони, которые пережили пожар"
+    shots:
+      A1:
+        what: "Бега на Ходынском поле, XIX век (гравюра, литография)"
+        timecode: "9–15"
+        find:
+          - {wiki: "Khodynka racing 19th century Moscow"}
+          - {wiki: "Moscow Hippodrome 19th century"}
+          - {pastvu: hippodrome, years: "1830-1900"}
+        manual: "goskatalog.ru: «бега Ходынское поле»"
+        fallback: G1
+      A2:
+        what: "Каменные трибуны с башенками (до пожара 1949)"
+        timecode: "21–26, 62–65"
+        find:
+          - {wiki: "Moscow Hippodrome grandstand 1900"}
+          - {wiki: "Москва Бега открытка"}
+          - {pastvu: hippodrome, years: "1890-1949"}
+        fallback: "открытка / G4 без огня"
+      A3:
+        what: "Кони на старом здании, скульптура крупно"
+        timecode: "33–36, 48–50"
+        find:
+          - {wiki: "Moscow Hippodrome horses sculpture Klodt"}
+          - {pastvu: hippodrome, years: "1900-1960"}
+        fallback: "С1 в сепии"
+      A4:
+        what: "Сергей Уточкин с аэропланом «Фарман», 1910"
+        timecode: "36–40"
+        find:
+          - {wiki: "Sergei Utochkin Farman"}
+          - {wiki: "Utochkin aeroplane 1910"}
+        motion: >-
+          Оживи архивную фотографию: пропеллер аэроплана начинает вращаться, лёгкий ветер,
+          едва заметный наезд камеры. Сохрани чёрно-белую плёночную фактуру, лица не меняй.
+        fallback: G3
+      A5:
+        what: "Здание Жолтовского в 1950-е"
+        timecode: "50–54"
+        find:
+          - {pastvu: hippodrome, years: "1951-1960"}
+          - {wiki: "Moscow Hippodrome Zholtovsky"}
+        fallback: "С4 в сепии"
+      A6:
+        what: "Скриншот заголовка СМИ об открытии ипподрома 17.09.2026"
+        timecode: "55–62"
+        manual: "m24.ru / iz.ru / rg.ru — скриншот заголовка с датой"
+      G1:
+        what: "1834, бега на открытом поле"
+        timecode: "15–19"
+        generate: >-
+          1834 Moscow, open field racetrack, spectators in 1830s clothing seen from behind,
+          trotter horses pulling light carriages, overcast sky, cinematic, 35mm film grain,
+          historically accurate, sepia tone, vertical 9:16
+        motion: "Медленная панорама вправо, рысаки бегут рысью, зрители слегка двигаются"
+      G2:
+        what: "Гроссбух и монеты"
+        timecode: "19–21"
+        generate: >-
+          19th century ledger book and a pile of Russian imperial gold and silver coins on a wooden
+          desk, candle light, cinematic, sepia, vertical 9:16
+        motion: "Монеты падают на раскрытую книгу, пламя свечи колышется"
+      G3:
+        what: "Биплан Уточкина над трибунами, 1910"
+        timecode: "40–43"
+        generate: >-
+          May 1910, early Farman biplane flying low over a Moscow hippodrome grandstand,
+          crowd in period clothing seen from behind looking up, sepia, cinematic, vertical 9:16
+        motion: "Биплан пересекает кадр, толпа машет руками"
+      G4:
+        what: "Пожар трибун, 1949"
+        timecode: "43–48"
+        generate: >-
+          Night fire at an old hippodrome grandstand with small towers, 1949 Moscow,
+          silhouettes of firefighters from behind, sparks, cinematic, sepia, vertical 9:16
+        motion: "Пламя колышется, искры поднимаются вверх, дым медленно идёт"
+
+  2:
+    title: "Как дом успели украсить до запрета"
+    shots:
+      A1:
+        what: "Текст / обложка постановления «Об устранении излишеств…» (4.11.1955)"
+        timecode: "10–14"
+        find:
+          - {wiki: "Об устранении излишеств в проектировании и строительстве"}
+        manual: "docs.historyrussia.org, rusneb.ru. Не нашли — заголовок машинописью + штамп «ИЗЛИШЕСТВО» (монтажёр)"
+      A2:
+        what: "Ранние хрущёвки (1957–1960)"
+        timecode: "18–26"
+        find:
+          - {wiki: "Khrushchyovka 1958"}
+          - {wiki: "Novye Cheryomushki 1958"}
+          - {pastvu: cheryomushki, years: "1956-1962"}
+        fallback: G2
+      A3:
+        what: "Беговая улица / дом 5 в прошлом"
+        timecode: "26–34"
+        find:
+          - {pastvu_cid: 1233085}
+          - {pastvu: begovaya5, years: "1955-1975"}
+      G1:
+        what: "Стол архитектора, штамп на чертеже"
+        timecode: "10–18"
+        generate: >-
+          1955 Soviet architect's desk, blueprint of a decorated Stalinist facade with ornaments,
+          a hand pressing a red stamp onto the drawing, dramatic warm lamp light, cinematic,
+          35mm film grain, sepia tone, vertical 9:16
+        motion: "Рука опускает штамп на чертёж, лёгкий наезд камеры"
+      G2:
+        what: "Стройка хрущёвок, 1958"
+        timecode: "18–26"
+        generate: >-
+          Moscow 1958, construction of simple five-storey prefab apartment blocks, cranes,
+          workers seen from afar, overcast day, sepia archival look, cinematic, vertical 9:16
+        motion: "Медленная панорама влево, краны поворачиваются"
+
+  3:
+    title: "Кинотеатр, который стал театром"
+    shots:
+      A1:
+        what: "Кинотеатр «Темп» на Беговой"
+        timecode: "4–8"
+        find:
+          - {pastvu_cid: 1233085}
+          - {pastvu: begovaya5, years: "1956-1990"}
+      A2:
+        what: "Зрители у советских кинотеатров 1950–60-х"
+        timecode: "11–15"
+        find:
+          - {wiki: "Moscow cinema 1960 queue"}
+          - {wiki: "Soviet cinema theatre 1950s Moscow"}
+        fallback: G1
+      A3:
+        what: "Фото Михаила Рощина"
+        timecode: "28–33"
+        find:
+          - {wiki: "Mikhail Roshchin playwright"}
+        fallback: "типографическая карточка «МИХАИЛ РОЩИН · драматург · 1933–2010»"
+      A4:
+        what: "Книга / сборник пьес Рощина"
+        timecode: "33–36,5"
+        manual: "сфотографировать физическую книгу"
+      G1:
+        what: "Очередь у кинотеатра «Темп», 1957"
+        timecode: "8–11"
+        generate: >-
+          Moscow 1957, evening, people in 1950s coats queuing at a cinema entrance on the ground
+          floor of a decorated Stalinist apartment building, seen from behind, neon sign "ТЕМП",
+          warm streetlights, cinematic, 35mm film grain, sepia tone, vertical 9:16
+        motion: "Медленный наезд, люди в очереди двигаются, неоновая вывеска мерцает"
+      G2:
+        what: "Советский кинозал, 1960-е"
+        timecode: "11–18"
+        generate: >-
+          Small Soviet cinema hall 1960s, audience silhouettes from behind, projector light beam
+          through smoke, black and white film on screen, cinematic, sepia tone, vertical 9:16
+        motion: "Луч проектора мерцает, дым медленно плывёт"
+      G3:
+        what: "Экран сменяется сценой, 1990"
+        timecode: "18–24"
+        generate: >-
+          The same small Soviet cinema hall, cinema screen being replaced by a red theatre curtain
+          and stage lights, 1990, cinematic, sepia tone, vertical 9:16
+        motion: "Занавес медленно открывается, зажигается свет сцены"
+
+  4:
+    title: "Внизу — спектакль. Здесь — тишина"
+    shots: {}   # весь ролик — съёмка в квартире и театре, агентам задач нет
+
+  5:
+    title: "Раньше её нельзя было купить"
+    shots:
+      A1:
+        what: "Ордер на квартиру 1950-х"
+        timecode: "0–4"
+        find:
+          - {wiki: "Soviet housing warrant order 1950s"}
+        manual: "goskatalog.ru: «ордер на жилую площадь», семейные архивы (с разрешения)"
+        fallback: "типографика: бланк ордера на старой бумаге + штамп (монтажёр)"
+      A2:
+        what: "Новосёлы у подъезда сталинки, 1950-е"
+        timecode: "4–7"
+        find:
+          - {wiki: "Moscow housewarming 1956"}
+          - {pastvu: begovaya5, years: "1955-1958"}
+        fallback: "фасад Беговой, 5 (С1 из выпуска 2) в сепии"

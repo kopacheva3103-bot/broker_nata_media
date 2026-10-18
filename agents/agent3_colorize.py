@@ -42,13 +42,21 @@ class Replicate:
     def colorize(self, image_path, prompt, dest):
         mime = mimetypes.guess_type(str(image_path))[0] or "image/jpeg"
         data_uri = f"data:{mime};base64,{base64.b64encode(Path(image_path).read_bytes()).decode()}"
-        payload = {"input": {
+        return self.run(self.model, {
             "prompt": prompt,
             "input_image": data_uri,
             "aspect_ratio": "match_input_image",
             "output_format": "jpg",
-        }}
-        r = requests.post(f"https://api.replicate.com/v1/models/{self.model}/predictions",
+        }, dest)
+
+    def generate(self, prompt, dest, aspect_ratio="9:16"):
+        """Новая картинка по текстовому промту (для G-кадров сценария)."""
+        model = env("GENERATE_MODEL", "black-forest-labs/flux-1.1-pro")
+        return self.run(model, {"prompt": prompt, "aspect_ratio": aspect_ratio, "output_format": "jpg"}, dest)
+
+    def run(self, model, model_input, dest):
+        payload = {"input": model_input}
+        r = requests.post(f"https://api.replicate.com/v1/models/{model}/predictions",
                           json=payload, headers={**self.headers, "Prefer": "wait"}, timeout=90)
         r.raise_for_status()
         pred = r.json()

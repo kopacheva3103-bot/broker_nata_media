@@ -139,6 +139,37 @@ def search_pastvu(geo, limit, years):
     } for p in r.json().get("result", {}).get("photos", [])]
 
 
+def pastvu_photo(cid):
+    """Одно фото PastVu по номеру из ссылки pastvu.com/p/<номер>."""
+    r = requests.get("https://pastvu.com/api2",
+                     params={"method": "photo.giveForPage", "params": json.dumps({"cid": int(cid)})},
+                     headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT)
+    r.raise_for_status()
+    p = r.json().get("result", {}).get("photo")
+    if not p:
+        return []
+    return [{
+        "source": "pastvu", "id": p["cid"],
+        "url": f"https://pastvu.com/_p/a/{p['file']}",
+        "author": p.get("author") or "см. страницу фото",
+        "page": f"https://pastvu.com/p/{p['cid']}",
+        "license": "проверить на странице фото",
+        "year": str(p.get("year", "")), "title": p.get("title", ""),
+    }]
+
+
+def geocode(place):
+    """Адрес → координаты через OpenStreetMap, чтобы не искать их вручную."""
+    r = requests.get("https://nominatim.openstreetmap.org/search",
+                     params={"q": place, "format": "json", "limit": 1},
+                     headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT)
+    r.raise_for_status()
+    found = r.json()
+    if not found:
+        raise RuntimeError(f"не нашёл координаты для «{place}» — укажи geo вручную")
+    return float(found[0]["lat"]), float(found[0]["lon"])
+
+
 def download(item, folder):
     path = folder / f"{item['source']}_{item['id']}.jpg"
     r = requests.get(item["url"], headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT)

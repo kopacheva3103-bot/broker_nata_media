@@ -78,8 +78,14 @@ class Drive:
         return self.api.files().create(body=meta, media_body=media, fields="id").execute()["id"]
 
     def list_images(self, parent):
-        q = f"'{parent}' in parents and trashed = false and mimeType contains 'image/'"
-        return self.api.files().list(q=q, fields="files(id, name)", pageSize=200).execute().get("files", [])
+        return self.list_files(parent, "image/")
+
+    def list_files(self, parent, mime_prefix=None):
+        q = f"'{parent}' in parents and trashed = false"
+        if mime_prefix:
+            q += f" and mimeType contains '{mime_prefix}'"
+        return self.api.files().list(q=q, fields="files(id, name, mimeType)",
+                                     pageSize=500).execute().get("files", [])
 
     def download(self, file_id, dest):
         from googleapiclient.http import MediaIoBaseDownload

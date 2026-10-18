@@ -87,15 +87,20 @@ class Kling:
         return self._check(r)
 
 
-def animate(jobs, kling, prompt, negative, duration, mode, model):
-    """jobs: список словарей с ключом 'image' (локальный путь). Добавляет 'video'."""
+def animate(jobs, kling, prompt, negative, duration, mode, model, out_dir=None):
+    """jobs: список словарей с ключом 'image' (локальный путь). Добавляет 'video'.
+
+    У задачи могут быть свои 'prompt' и 'negative' — тогда они важнее общих.
+    """
+    out_dir = out_dir or OUTPUT_DIR / FOLDER_EDIT
     for job in jobs:
         size = job["image"].stat().st_size
         if size > MAX_IMAGE_BYTES:
             job["error"] = f"файл больше 10 МБ ({size // 1024 // 1024} МБ), сожми его"
             continue
         try:
-            job["task_id"] = kling.submit(job["image"], prompt, negative, duration, mode, model)
+            job["task_id"] = kling.submit(job["image"], job.get("prompt", prompt),
+                                          job.get("negative", negative), duration, mode, model)
             print(f"  → отправлено в Kling: {job['image'].name}")
         except Exception as e:
             job["error"] = str(e)
@@ -113,7 +118,7 @@ def animate(jobs, kling, prompt, negative, duration, mode, model):
             state = data.get("task_status")
             if state == "succeed":
                 url = data["task_result"]["videos"][0]["url"]
-                video = OUTPUT_DIR / FOLDER_EDIT / f"{job['image'].stem}.mp4"
+                video = out_dir / f"{job.get('name', job['image'].stem)}.mp4"
                 video.parent.mkdir(parents=True, exist_ok=True)
                 video.write_bytes(requests.get(url, timeout=120).content)
                 job["video"] = video
