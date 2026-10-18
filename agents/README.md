@@ -25,9 +25,56 @@ Pexels и Unsplash разрешают бесплатно использоват�
 Ограничение одно: нельзя выдавать стоковое фото за фото конкретного объекта, который продаёшь.
 Стоковые кадры подходят для атмосферы, лайфстайла и видов города.
 
+## Доступы: что нужно и как проверить
+
+Для серии «Дом с историей» нужны три доступа. Всё остальное бесплатно и без ключей.
+
+| Сервис | Для чего | Стоимость | Ключ в `.env` |
+|---|---|---|---|
+| Google Cloud (Drive API) | папки для команды на Google Drive | бесплатно | `credentials.json` + `DRIVE_ROOT_FOLDER_ID` |
+| Replicate | генерация G-кадров, колоризация | ~0,04 $ за картинку, нужна карта | `REPLICATE_API_TOKEN` |
+| Kling API | оживление кадров | пакеты в кабинете API | `KLING_ACCESS_KEY`, `KLING_SECRET_KEY` |
+| Pexels, Unsplash | только агент 1 со стоками | бесплатно | необязательно |
+
+Аккаунты лучше регистрировать на почту Натальи: ключи принадлежат бизнесу, а не исполнителю.
+Ключи передавай ассистенту только лично или через менеджер паролей, не в общих чатах.
+
+После настройки запусти проверку, она ничего не тратит:
+```bash
+python check_setup.py
+```
+
+### Google Drive по шагам
+1. Открыть [console.cloud.google.com](https://console.cloud.google.com/) под почтой Натальи → вверху «Select a project» → **New project** → назвать `nata-agents` → Create.
+2. Меню → **APIs & Services → Library** → найти **Google Drive API** → **Enable**.
+3. **APIs & Services → OAuth consent screen** (или «Google Auth Platform») → Get started:
+   название `Nata agents`, почта поддержки — своя, Audience — **External**, контактная почта — своя → Create.
+4. В разделе **Audience** нажать **Publish app** (перевести в «In production»). Если оставить режим «Testing»,
+   вход будет слетать каждые 7 дней. При первом входе Google предупредит «приложение не проверено»:
+   это твоё собственное приложение, жми «Дополнительно → Перейти».
+5. **Clients** (или Credentials → Create credentials → OAuth client ID) → тип **Desktop app** → Create →
+   **Download JSON**. Переименовать файл в `credentials.json` и положить в папку `agents`.
+6. На Google Drive создать папку «Контент-агенты», открыть её и скопировать ID из адреса
+   (`drive.google.com/drive/folders/<ID>`) в `DRIVE_ROOT_FOLDER_ID`.
+7. Запустить `python check_setup.py`. Откроется браузер: войти почтой Натальи и разрешить доступ.
+
+### Replicate по шагам
+1. [replicate.com](https://replicate.com) → Sign in (через GitHub или Google).
+2. **Account → Billing** → привязать карту. Без карты модели FLUX не запускаются.
+3. **Account → API tokens** → Create token → скопировать в `REPLICATE_API_TOKEN`.
+
+### Kling по шагам
+1. [app.klingai.com/global/dev](https://app.klingai.com/global/dev) → войти.
+2. Купить пакет **API** (он отдельный от подписки на сайте Kling).
+3. **API Keys** → Create → скопировать Access Key и Secret Key в `KLING_ACCESS_KEY` и `KLING_SECRET_KEY`.
+   Secret Key показывается один раз, его надо сразу сохранить.
+4. Для серии поставить `KLING_MODE=pro`. Для первой пробы можно оставить `std`, так дешевле.
+
 ## Настройка (один раз)
 
-1. **Python 3.10+**, затем в папке `agents`:
+1. **Python 3.10+** с [python.org](https://www.python.org/downloads/). На Windows при установке
+   отметить галочку «Add python.exe to PATH». Скачать код: [архив ветки](https://github.com/kopacheva3103-bot/broker_nata_media/archive/refs/heads/claude/eager-maxwell-rrsrje.zip)
+   → распаковать → открыть терминал в папке `agents`:
    ```bash
    pip install -r requirements.txt
    cp .env.example .env

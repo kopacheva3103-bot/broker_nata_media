@@ -36,6 +36,7 @@ class Drive:
     """Минимальная обёртка над Google Drive API."""
 
     def __init__(self):
+        from google.auth.exceptions import RefreshError
         from google.auth.transport.requests import Request
         from google.oauth2.credentials import Credentials
         from google_auth_oauthlib.flow import InstalledAppFlow
@@ -45,15 +46,18 @@ class Drive:
         creds = None
         if token_path.exists():
             creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
+        if creds and not creds.valid and creds.expired and creds.refresh_token:
+            try:
                 creds.refresh(Request())
-            else:
-                secrets = AGENTS_DIR / env("GOOGLE_CREDENTIALS_FILE", "credentials.json")
-                if not secrets.exists():
-                    raise SystemExit(f"Нет файла {secrets}. Как его получить — в agents/README.md")
-                creds = InstalledAppFlow.from_client_secrets_file(str(secrets), SCOPES).run_local_server(port=0)
-            token_path.write_text(creds.to_json())
+            except RefreshError:
+                # Вход протух (у приложения в режиме «Testing» — раз в 7 дней): войти заново
+                creds = None
+        if not creds or not creds.valid:
+            secrets = AGENTS_DIR / env("GOOGLE_CREDENTIALS_FILE", "credentials.json")
+            if not secrets.exists():
+                raise SystemExit(f"Нет файла {secrets}. Как его получить — в agents/README.md")
+            creds = InstalledAppFlow.from_client_secrets_file(str(secrets), SCOPES).run_local_server(port=0)
+        token_path.write_text(creds.to_json())
         self.api = build("drive", "v3", credentials=creds)
         self.root = env("DRIVE_ROOT_FOLDER_ID", required=True)
 
