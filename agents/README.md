@@ -70,6 +70,17 @@ python check_setup.py
    Secret Key показывается один раз, его надо сразу сохранить.
 4. Для серии поставить `KLING_MODE=pro`. Для первой пробы можно оставить `std`, так дешевле.
 
+## Быстрый старт на Mac
+
+```bash
+cd ~/Downloads/broker_nata_media-claude-eager-maxwell-rrsrje/agents
+bash setup_mac.sh          # установка; в конце откроется .env для ключей
+./run.sh check             # проверка доступов
+./run.sh begovaya all      # серия «Беговая, 5»: архив + генерация + статус
+./run.sh begovaya animate  # оживление выбранных кадров
+./run.sh begovaya status   # таблица статуса
+```
+
 ## Настройка (один раз)
 
 1. **Python 3.10+** с [python.org](https://www.python.org/downloads/). На Windows при установке
