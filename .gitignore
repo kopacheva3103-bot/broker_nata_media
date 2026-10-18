@@ -1,0 +1,13 @@
+# Секреты и ключи — НИКОГДА не коммитить
+.env
+*.env
+credentials.json
+token.json
+*client_secret*.json
+*service_account*.json
+
+# Рабочие файлы агентов
+output/
+__pycache__/
+*.pyc
+.venv/

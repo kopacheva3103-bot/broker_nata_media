@@ -1,0 +1,7 @@
+# Промты для агента 1 — по одному на строку. Строки с # пропускаются.
+# Совет: на английском стоки находят больше и точнее.
+luxury penthouse living room panoramic windows city view
+Moscow city skyline at night
+modern premium residential complex exterior
+elegant marble bathroom interior
+private terrace with city view sunset
