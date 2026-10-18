@@ -7,6 +7,7 @@
     python agent2_animate.py
     python agent2_animate.py -p "медленный облёт камеры вокруг дома, закат"
     python agent2_animate.py --input ./мои_фото --no-drive
+    python agent2_animate.py --style history      # старые фото Москвы
 """
 import argparse
 import base64
@@ -22,6 +23,22 @@ from common import FOLDER_EDIT, FOLDER_TO_ANIMATE, IMAGE_EXT, OUTPUT_DIR, Drive,
 POLL_EVERY = 15        # секунд между проверками статуса
 MAX_WAIT = 20 * 60     # максимум ждём одно видео
 MAX_IMAGE_BYTES = 10 * 1024 * 1024  # лимит Kling на картинку
+
+# Готовые стили: промт движения + что запрещаем модели
+STYLES = {
+    "estate": {
+        "prompt": None,  # берётся из KLING_DEFAULT_PROMPT
+        "negative": "люди, лица, текст, водяные знаки, искажения, размытие",
+    },
+    "history": {
+        "prompt": ("Оживи старую архивную фотографию Москвы: прохожие медленно идут по улице, "
+                   "едут конные экипажи и трамваи, лёгкий дым из труб, лёгкое движение облаков, "
+                   "едва заметный плавный наезд камеры. Сохрани оригинальную чёрно-белую плёночную "
+                   "фактуру, зерно и архитектуру зданий без изменений."),
+        "negative": ("современные машины, современная одежда, цвет, деформация зданий, искажённые лица, "
+                     "лишние конечности, текст, водяные знаки, резкие движения камеры"),
+    },
+}
 
 
 class Kling:
@@ -43,14 +60,14 @@ class Kling:
             raise RuntimeError(f"Kling ошибка {body.get('code')}: {body.get('message')}")
         return body["data"]
 
-    def submit(self, image_path, prompt, duration, mode, model):
+    def submit(self, image_path, prompt, negative, duration, mode, model):
         payload = {
             "model_name": model,
             "mode": mode,
             "duration": str(duration),
             "image": base64.b64encode(Path(image_path).read_bytes()).decode(),
             "prompt": prompt,
-            "negative_prompt": "люди, лица, текст, водяные знаки, искажения, размытие",
+            "negative_prompt": negative,
         }
         r = requests.post(f"{self.base}/v1/videos/image2video", json=payload,
                           headers=self._headers(), timeout=60)
@@ -62,7 +79,7 @@ class Kling:
         return self._check(r)
 
 
-def animate(jobs, kling, prompt, duration, mode, model):
+def animate(jobs, kling, prompt, negative, duration, mode, model):
     """jobs: список словарей с ключом 'image' (локальный путь). Добавляет 'video'."""
     for job in jobs:
         size = job["image"].stat().st_size
@@ -70,7 +87,7 @@ def animate(jobs, kling, prompt, duration, mode, model):
             job["error"] = f"файл больше 10 МБ ({size // 1024 // 1024} МБ), сожми его"
             continue
         try:
-            job["task_id"] = kling.submit(job["image"], prompt, duration, mode, model)
+            job["task_id"] = kling.submit(job["image"], prompt, negative, duration, mode, model)
             print(f"  → отправлено в Kling: {job['image'].name}")
         except Exception as e:
             job["error"] = str(e)
@@ -108,8 +125,9 @@ def animate(jobs, kling, prompt, duration, mode, model):
 
 def main():
     parser = argparse.ArgumentParser(description="Агент 2: оживление фото через Kling")
-    parser.add_argument("-p", "--prompt", default=env("KLING_DEFAULT_PROMPT"),
-                        help="как двигаться камере и сцене (по умолчанию из .env)")
+    parser.add_argument("--style", choices=list(STYLES), default="estate",
+                        help="estate — недвижимость (без людей), history — старые фото с прохожими")
+    parser.add_argument("-p", "--prompt", help="как двигаться камере и сцене (иначе — из стиля / .env)")
     parser.add_argument("-d", "--duration", choices=["5", "10"], default=env("KLING_DURATION", "5"))
     parser.add_argument("-m", "--mode", choices=["std", "pro"], default=env("KLING_MODE", "std"))
     parser.add_argument("--model", default=env("KLING_MODEL", "kling-v2-1"))
@@ -117,7 +135,9 @@ def main():
     parser.add_argument("--no-drive", action="store_true", help="не загружать результат на Google Drive")
     args = parser.parse_args()
 
-    if not args.prompt:
+    style = STYLES[args.style]
+    prompt = args.prompt or style["prompt"] or env("KLING_DEFAULT_PROMPT")
+    if not prompt:
         parser.error("укажи промт движения (-p) или KLING_DEFAULT_PROMPT в .env")
     if args.input is None and args.no_drive:
         parser.error("без Google Drive укажи папку с фото: --input <папка>")
@@ -140,8 +160,8 @@ def main():
         print(f"Нет фото для оживления в {where}")
         return
 
-    print(f"Оживляю {len(jobs)} фото (Kling {args.model}, {args.mode}, {args.duration} сек)")
-    animate(jobs, kling, args.prompt, args.duration, args.mode, args.model)
+    print(f"Оживляю {len(jobs)} фото (Kling {args.model}, {args.mode}, {args.duration} сек, стиль {args.style})")
+    animate(jobs, kling, prompt, style["negative"], args.duration, args.mode, args.model)
 
     done = [j for j in jobs if "video" in j]
     if drive and done:
