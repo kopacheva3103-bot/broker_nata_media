@@ -82,9 +82,14 @@ def _media_segment(ep_dir, code, dur):
             seg["speed"] = round(length / dur, 3)
         return seg, f"видео {video.name}"
     still = _find(ep_dir / "2_выбрано", code, IMAGE_EXT) or _find(ep_dir / "исходники", code, IMAGE_EXT)
+    note = "фото"
+    if not still and (ep_dir / "1_кандидаты" / code).is_dir():
+        # ничего не выбрано — для аниматика берём первого кандидата, чтобы был виден ритм
+        still = _find(ep_dir / "1_кандидаты" / code, code, IMAGE_EXT)
+        note = "кандидат (не выбран)"
     if still:
         return {"src": str(still.relative_to(ep_dir)), "duration": round(dur, 2),
-                "motion": "zoom_in", "fit": "blur"}, f"фото {still.name}"
+                "motion": "zoom_in", "fit": "blur"}, f"{note} {still.name}"
     return None, None
 
 
@@ -109,21 +114,21 @@ def _find_voice(ep_dir):
                  and re.search(r"озвучк|voice", p.name, re.I)), None)
 
 
-def _sync_to_voice(rows, voice, ep_dir, report):
-    """Подгоняет строки таблицы под реальную озвучку. None — если распознать не удалось."""
+def _sync_to_voice(rows, voice, ep_dir, report, speed):
+    """Подгоняет строки и титры под реальную озвучку. None — если распознать не удалось."""
     import os
     import voice_align
     model = os.getenv("WHISPER_MODEL") or "small"
     try:
         words = voice_align.transcribe(voice, ep_dir / "исходники" / "_озвучка_слова.json", model)
-        spans, cut_at = voice_align.timings(rows, words)
+        spans, cut_at, phrases = voice_align.sync(rows, words, speed)
     except Exception as e:  # нет faster-whisper, не распознался текст и т. п.
         report.append(f"⚠️ синхронизация по голосу не удалась ({e}) — кадры стоят по таймкодам сценария")
         return None
-    synced = voice_align.prepare_voice(voice, ep_dir / "исходники" / "_озвучка_синхр.m4a", cut_at)
-    report.append(f"синхронизация по голосу: запись обрезана с {cut_at:.1f} с (выбран последний дубль хука), "
-                  f"ролик {spans[-1][1]:.1f} с")
-    return spans, synced
+    synced = voice_align.prepare_voice(voice, ep_dir / "исходники" / "_озвучка_синхр.m4a", cut_at, speed)
+    report.append(f"синхронизация по голосу: запись обрезана с {cut_at:.1f} с (последний дубль хука), "
+                  f"скорость {speed:g}×, ролик {spans[-1][1]:.1f} с, титры по словам")
+    return spans, synced, phrases
 
 
 def build(brief, number, ep_dir):
@@ -135,11 +140,12 @@ def build(brief, number, ep_dir):
     segments, cues, report = [], [], []
     title = None
     voice = _find_voice(ep_dir)
-    spans, voice_file = [_span(r["t"]) for r in rows], voice
+    spans, voice_file, phrases = [_span(r["t"]) for r in rows], voice, None
     if voice:
-        synced = _sync_to_voice(rows, voice, ep_dir, report)
+        synced = _sync_to_voice(rows, voice, ep_dir, report, float(brief["defaults"].get("voice_speed", 1.0)))
         if synced:
-            spans, voice_file = synced
+            spans, voice_file, phrases = synced
+    missing = []
     for row, (a, b) in zip(rows, spans):
         dur = round(b - a, 2)
         grade = GRADES.get(row.get("color", "warm"), GRADES["warm"])
@@ -172,6 +178,7 @@ def build(brief, number, ep_dir):
                        "title": " / ".join(row.get("shots", [])) or "КАДР", "text": body,
                        "animation": "none", "text_position": SLIDE_TEXT_Y}
                 what = f"ЗАГЛУШКА — нужно: {need}"
+                missing.append(f"{a:5.1f}–{b:5.1f} с  {need}")
             seg["grade"] = grade
             if row.get("screen") and title is None and a == 0:
                 # надпись первой строки — заголовок ролика по стандарту (белая строка + золото)
@@ -184,7 +191,7 @@ def build(brief, number, ep_dir):
             elif row.get("screen") and seg.get("type") != "slide":
                 seg["text"] = _texts(row["screen"], dur)
         segments.append(seg)
-        if row.get("voice"):
+        if row.get("voice") and phrases is None:  # без синхронизации — титры по строкам сценария
             cues.append({"start": a, "end": b, "text": row["voice"]})
         report.append(f"{a:5.1f}–{b:5.1f}  {what}")
 
@@ -195,7 +202,7 @@ def build(brief, number, ep_dir):
         "transition": {"type": "cut"},      # склейки встык, чтобы ролик совпадал с таймкодами
         "grade": "none",
         "audio": {"music_volume": 0.0},
-        "subtitles": {"items": cues},
+        "subtitles": {"items": phrases if phrases is not None else cues},
         "segments": segments,
     }
     if title:
@@ -205,6 +212,9 @@ def build(brief, number, ep_dir):
         report.append(f"озвучка: {voice_file.name}")
     else:
         report.append("озвучки нет — положи файл в «исходники» (имя со словом «озвучка»)")
+    if missing:
+        report.append(f"НЕ ХВАТАЕТ КАДРОВ ({len(missing)}):")
+        report += ["  " + m for m in missing]
     return project, report
 
 

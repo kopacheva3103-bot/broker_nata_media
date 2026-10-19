@@ -1,11 +1,12 @@
-"""Синхронизация выпуска по реальной озвучке.
+"""Синхронизация выпуска по реальной озвучке — до каждого слова.
 
-Распознаём запись (faster-whisper, время каждого слова) и сопоставляем слова со сценарием:
-так узнаём, на какой секунде начинается каждая строка покадровой таблицы. Текст титров
-при этом берётся из сценария — распознавание нужно только для времени.
+Распознаём запись (faster-whisper, время каждого слова) и сопоставляем слова со сценарием.
+Получаем: начало каждой строки покадровой таблицы (длительность кадров) и время каждого
+слова сценария — по нему титры (до 5 слов) появляются ровно тогда, когда слово звучит.
+Текст титров — дословно из сценария, распознавание нужно только для времени.
 
 Двойной дубль в начале записи (как просит сценарий для хука) отрезается: остаётся дубль,
-за которым сразу идёт следующая фраза.
+за которым сразу идёт следующая фраза. Голос можно ускорить (voice_speed), тембр сохраняется.
 """
 import json
 import re
@@ -18,15 +19,13 @@ REPO = Path(__file__).resolve().parent.parent
 LEAD = 0.15        # запас перед первым словом, сек
 TAIL = 0.45        # запас после последнего слова
 MIN_ROW = 0.8      # строка не короче — иначе кадр мелькнёт
+SUB_WORDS, SUB_CHARS = 5, 24   # титры по стандарту монтажа: до 5 слов / 24 знаков
+BREAK = ".,!?;:—…»"
 
 
 def norm(word):
     word = word.lower().replace("ё", "е")
     return re.sub(r"[^\w]", "", word)
-
-
-def tokens(text):
-    return [w for w in (norm(x) for x in str(text).split()) if w]
 
 
 def transcribe(voice, cache, model):
@@ -44,93 +43,118 @@ def transcribe(voice, cache, model):
     return words
 
 
-def align(rows, words):
-    """Начало каждой озвученной строки во времени записи + отметка, откуда резать запись.
+def _script(rows):
+    """Слова сценария: [(row, слово как в тексте, нормализованное)]."""
+    out = []
+    for i, r in enumerate(rows):
+        for w in str(r.get("voice") or "").split():
+            out.append((i, w, norm(w)))
+    return out
 
-    rows — строки таблицы с полем voice; возвращает (starts, cut_at, voice_end), где
-    starts[i] — секунда записи, на которой начинается строка i (None для строк без голоса).
-    """
-    voiced = [i for i, r in enumerate(rows) if r.get("voice")]
-    if not voiced or not words:
-        raise ValueError("нечего сопоставлять")
+
+def _word_times(script, words):
+    """Время начала каждого слова сценария в записи + индекс начала выбранного дубля."""
     trans = [norm(w[2]) for w in words]
-    row_words = {i: tokens(rows[i]["voice"]) for i in voiced}
-    first = voiced[0]
+    keyed = [k for k, s in enumerate(script) if s[2]]           # слова, которые можно сопоставлять
+    first_row = script[0][0]
+    head = [script[k][2] for k in keyed if script[k][0] == first_row]
+    rest = [k for k in keyed if script[k][0] != first_row]
 
-    # 1. Всё, кроме первой строки, сопоставляем целиком: так дубль хука не мешает
-    script, owner = [], []
-    for i in voiced[1:]:
-        script += row_words[i]
-        owner += [i] * len(row_words[i])
-    mapped = {}
-    for a, b, n in SequenceMatcher(None, script, trans, autojunk=False).get_matching_blocks():
-        for k in range(n):
-            mapped[a + k] = b + k
-
-    starts, pos = {}, 0
-    for i in voiced[1:]:
-        n = len(row_words[i])
-        hits = [(k, mapped[pos + k]) for k in range(n) if pos + k in mapped]
-        if hits:
-            k, j = hits[0]
-            per_word = (words[min(j + 1, len(words) - 1)][0] - words[j][0]) or 0.35
-            starts[i] = max(0.0, words[j][0] - k * per_word)  # первые слова не распознались — отступаем
-        pos += n
-
+    times = {}
+    # 1. Всё, кроме первой строки, — целиком: так повтор хука не сбивает сопоставление
+    for a, b, n in SequenceMatcher(None, [script[k][2] for k in rest], trans, autojunk=False).get_matching_blocks():
+        for m in range(n):
+            times[rest[a + m]] = words[b + m][0]
+    nxt = min(times.values(), default=words[-1][0])
     # 2. Первая строка: последний дубль перед второй строкой
-    nxt = min((s for s in starts.values()), default=words[-1][0])
-    head = row_words[first]
-    before = [k for k, w in enumerate(words) if w[0] < nxt]
-    best, best_score = None, 0.0
-    for k in before:
-        window = trans[k:k + len(head)]
-        score = SequenceMatcher(None, head, window, autojunk=False).ratio()
-        if score >= best_score - 1e-9 and score >= 0.45:  # ≥ — при равенстве берём более поздний дубль
-            best, best_score = k, score
-    starts[first] = words[best][0] if best is not None else (words[before[0]][0] if before else 0.0)
-
-    # 3. Строки без распознанных слов — между соседями пропорционально числу слов
-    for idx, i in enumerate(voiced):
-        if i in starts:
+    before = [j for j, w in enumerate(words) if w[0] < nxt] or [0]
+    best, best_score = before[0], -1.0
+    for j in before:
+        score = SequenceMatcher(None, head, trans[j:j + len(head)], autojunk=False).ratio()
+        if score >= best_score - 1e-9:      # при равенстве — более поздний дубль
+            best, best_score = j, score
+    head_keys = [k for k in keyed if script[k][0] == first_row]
+    window = trans[best:best + len(head) + 3]
+    for a, b, n in SequenceMatcher(None, head, window, autojunk=False).get_matching_blocks():
+        for m in range(n):
+            times[head_keys[a + m]] = words[best + b + m][0]
+    times.setdefault(0, words[best][0])
+    # 3. Нераспознанные слова — между соседями пропорционально
+    known = sorted(times)
+    end = words[-1][1]
+    full = []
+    for k in range(len(script)):
+        if k in times:
+            full.append(times[k])
             continue
-        prev_i = next(v for v in reversed(voiced[:idx]) if v in starts)
-        next_i = next((v for v in voiced[idx + 1:] if v in starts), None)
-        end = starts[next_i] if next_i is not None else words[-1][1]
-        span = voiced[voiced.index(prev_i):voiced.index(next_i) if next_i is not None else len(voiced)]
-        total = sum(len(row_words[v]) for v in span) or 1
-        before_n = sum(len(row_words[v]) for v in span[:span.index(i)])
-        starts[i] = starts[prev_i] + (end - starts[prev_i]) * before_n / total
+        prev = max((x for x in known if x < k), default=None)
+        nxt_k = min((x for x in known if x > k), default=None)
+        t0 = times[prev] if prev is not None else words[best][0]
+        t1 = times[nxt_k] if nxt_k is not None else end
+        k0 = prev if prev is not None else 0
+        k1 = nxt_k if nxt_k is not None else len(script)
+        full.append(t0 + (t1 - t0) * (k - k0) / max(k1 - k0, 1))
+    for k in range(1, len(full)):           # время не идёт назад
+        full[k] = max(full[k], full[k - 1])
+    return full, words[best][0]
 
-    # порядок строк должен сохраняться
-    last = -1.0
-    for i in voiced:
-        starts[i] = max(starts[i], last + MIN_ROW) if last >= 0 else starts[i]
-        last = starts[i]
-    cut_at = max(0.0, starts[first] - LEAD)
+
+def _phrases(script, times, end):
+    """Титры: куски до 5 слов / 24 знаков, разрыв на знаках препинания, внутри одной строки."""
+    out, cur = [], []
+
+    def flush(next_start):
+        if cur:
+            out.append([times[cur[0]], next_start, " ".join(script[k][1] for k in cur)])
+            cur.clear()
+
+    for k, (row, word, _) in enumerate(script):
+        if cur and (script[cur[0]][0] != row or len(cur) >= SUB_WORDS
+                    or len(" ".join(script[x][1] for x in cur + [k])) > SUB_CHARS):
+            if word.strip("—–-"):          # одинокое тире не переносим в начало нового куска
+                flush(times[k])
+        cur.append(k)
+        if word[-1:] in BREAK and len(cur) > 1:
+            flush(times[k + 1] if k + 1 < len(script) else end)
+    flush(end)
+    return [p for p in out if p[2].strip("—– ")]
+
+
+def sync(rows, words, speed=1.0):
+    """→ (spans, cut_at, phrases): время строк и титров в ролике, секунда обрезки записи."""
+    script = _script(rows)
+    if not script or not words:
+        raise ValueError("нечего сопоставлять")
+    times, take = _word_times(script, words)
+    cut_at = max(0.0, take - LEAD)
     voice_end = words[-1][1] + TAIL
-    return [starts.get(i) for i in range(len(rows))], cut_at, voice_end
 
+    def reel(t):  # секунда записи → секунда ролика (после обрезки и ускорения)
+        return round(max(0.0, t - cut_at) / speed, 2)
 
-def timings(rows, words):
-    """(start, end) каждой строки во времени ролика + отметка обрезки записи."""
-    starts, cut_at, voice_end = align(rows, words)
-    out, t_voice = [], [None] * len(rows)
-    voiced = [i for i, s in enumerate(starts) if s is not None]
+    row_start = {}
+    for k, (row, _, _) in enumerate(script):
+        row_start.setdefault(row, times[k])
+    voiced = sorted(row_start)
+    spans, t = [None] * len(rows), 0.0
     for n, i in enumerate(voiced):
-        a = starts[i] - cut_at
-        b = (starts[voiced[n + 1]] - cut_at) if n + 1 < len(voiced) else voice_end - cut_at
-        t_voice[i] = (round(a if n else 0.0, 2), round(max(b, a + MIN_ROW), 2))
-    t = t_voice[voiced[-1]][1]
+        a = 0.0 if n == 0 else reel(row_start[i])
+        b = reel(row_start[voiced[n + 1]]) if n + 1 < len(voiced) else reel(voice_end)
+        a = max(a, t)
+        spans[i] = (a, max(b, a + MIN_ROW))
+        t = spans[i][1]
     for i, row in enumerate(rows):  # строки без голоса (финальная карточка) — своей длины после голоса
-        if t_voice[i] is None:
+        if spans[i] is None:
             a, b = (float(x.replace(",", ".")) for x in str(row["t"]).split("-"))
-            t_voice[i] = (round(t, 2), round(t + (b - a), 2))
+            spans[i] = (round(t, 2), round(t + (b - a), 2))
             t += b - a
-    return t_voice, cut_at
+    phrases = [{"start": reel(a), "end": reel(b), "text": txt} for a, b, txt in _phrases(script, times, voice_end)]
+    return spans, cut_at, phrases
 
 
-def prepare_voice(src, dst, cut_at):
-    """Обрезка до выбранного дубля и мягкая чистка: срез гула и лёгкое шумоподавление."""
+def prepare_voice(src, dst, cut_at, speed=1.0):
+    """Обрезка до выбранного дубля, ускорение без изменения тембра и мягкая чистка голоса."""
+    af = "highpass=f=80,afftdn=nf=-25" + (f",atempo={speed:.3f}" if abs(speed - 1) > 1e-3 else "")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{cut_at:.2f}", "-i", str(src),
-                    "-af", "highpass=f=80,afftdn=nf=-25", "-c:a", "aac", "-b:a", "192k", str(dst)], check=True)
+                    "-af", af, "-c:a", "aac", "-b:a", "192k", str(dst)], check=True)
     return dst
