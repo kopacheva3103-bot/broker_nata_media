@@ -54,6 +54,13 @@ class Replicate:
         model = env("GENERATE_MODEL", "black-forest-labs/flux-1.1-pro")
         return self.run(model, {"prompt": prompt, "aspect_ratio": aspect_ratio, "output_format": "jpg"}, dest)
 
+    def edit(self, ref_image, prompt, dest, aspect_ratio="9:16"):
+        """Новая сцена по образцу: люди с фото-образца переносятся в сцену из промта (FLUX Kontext)."""
+        mime = mimetypes.guess_type(str(ref_image))[0] or "image/jpeg"
+        data_uri = f"data:{mime};base64,{base64.b64encode(Path(ref_image).read_bytes()).decode()}"
+        return self.run(self.model, {"prompt": prompt, "input_image": data_uri,
+                                     "aspect_ratio": aspect_ratio, "output_format": "jpg"}, dest)
+
     def run(self, model, model_input, dest):
         payload = {"input": model_input}
         r = requests.post(f"https://api.replicate.com/v1/models/{model}/predictions",

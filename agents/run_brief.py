@@ -21,6 +21,7 @@
 import argparse
 import csv
 import shutil
+import subprocess
 from pathlib import Path
 
 import requests
@@ -148,7 +149,7 @@ def search(query, brief, geo_cache, limit):
 VIDEO_EXT = {".mp4", ".mov", ".m4v"}
 
 
-def fetch_own(brief, number, code, shot, drive):
+def fetch_own(brief, number, code, shot, drive, dest=None):
     """Свой материал Натальи (use: путь в папке по ссылке assets.yadisk) — сразу под код.
 
     Видео кладётся в 3_монтаж (уже оживлено), фото — в 2_выбрано (выбирать не нужно).
@@ -166,7 +167,8 @@ def fetch_own(brief, number, code, shot, drive):
     ep = Episode(brief["series"], number, drive)
     name = path.rsplit("/", 1)[-1]
     folder = MONTAGE if Path(name).suffix.lower() in VIDEO_EXT else SELECTED
-    dest = ep.path(folder) / f"{code}_{name}"
+    publish = dest is None
+    dest = dest or ep.path(folder) / f"{code}_{name}"
     if dest.exists():
         return
     try:
@@ -174,8 +176,9 @@ def fetch_own(brief, number, code, shot, drive):
     except requests.RequestException as e:
         print(f"[{number}/{code}] ! не скачалось {shot['use']}: {e}")
         return
-    ep.publish([dest], folder)
-    print(f"[{number}/{code}] {shot['what']} ← свой файл {name} → {folder}")
+    if publish:
+        ep.publish([dest], folder)
+        print(f"[{number}/{code}] {shot['what']} ← свой файл {name} → {folder}")
 
 
 def step_find(brief, targets, drive, force):
@@ -233,6 +236,10 @@ def step_generate(brief, targets, drive, force):
     variants = brief["defaults"].get("variants", 3)
     replicate = None
     for number, code, shot in targets:
+        if shot.get("edit") and not shot.get("use"):
+            replicate = replicate or Replicate()
+            edit_scene(brief, number, code, shot, drive, replicate, variants, force)
+            continue
         if not shot.get("generate") or shot.get("use"):
             continue
         ep = Episode(brief["series"], number, drive)
@@ -250,6 +257,36 @@ def step_generate(brief, targets, drive, force):
                 print(f"    ! вариант {v}: {e}")
         ep.publish(made, CANDIDATES, code)
         print(f"    + {len(made)} вариантов")
+
+
+def edit_scene(brief, number, code, shot, drive, replicate, variants, force):
+    """Сцена с Натальей и мужем: образец (их фото или кадр из их видео) → новая эпоха, лица сохраняются."""
+    ep = Episode(brief["series"], number, drive)
+    if ep.has_candidates(code) and not force:
+        print(f"[{number}/{code}] уже сделано — пропускаю (--force, чтобы переделать)")
+        return
+    folder = ep.path(CANDIDATES, code)
+    ref = folder / ("_образец" + Path(shot["edit"]["ref"]).suffix.lower())
+    if not ref.exists():
+        fetch_own(brief, number, code, {"use": shot["edit"]["ref"], "what": "образец"}, drive, dest=ref)
+    if not ref.exists():
+        return
+    if ref.suffix in VIDEO_EXT:  # образец — видео: берём кадр с лицами
+        import montage_bridge
+        montage_bridge.ensure_ffmpeg()
+        still = folder / "_образец.jpg"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(shot["edit"].get("at", 1.0)), "-i", str(ref),
+                        "-frames:v", "1", "-q:v", "2", str(still)], check=True)
+        ref = still
+    print(f"[{number}/{code}] {shot['what']} — {variants} варианта по образцу")
+    made = []
+    for v in range(1, variants + 1):
+        try:
+            made.append(replicate.edit(ref, shot["edit"]["prompt"], folder / f"{code}_v{v}.jpg"))
+        except Exception as e:
+            print(f"    ! вариант {v}: {e}")
+    ep.publish(made, CANDIDATES, code)
+    print(f"    + {len(made)} вариантов")
 
 
 def step_animate(brief, targets, drive, force, variants=False):

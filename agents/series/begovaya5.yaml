@@ -303,23 +303,42 @@ episodes:
           Moscow 1958, construction of simple five-storey prefab apartment blocks, cranes,
           workers seen from afar, overcast day, sepia archival look, cinematic, vertical 9:16
         motion: "Медленная панорама влево, краны поворачиваются"
+      G3:
+        what: "Стройка сталинки с эркерами и лепниной, 1955 (вместо фасада)"
+        timecode: "0–10"
+        generate: >-
+          Moscow 1955, construction of a monumental Stalinist apartment building with bay windows, cornices and
+          stucco ornaments, scaffolding, workers seen from afar, sunny day, sepia archival look, 35mm film grain,
+          cinematic, vertical 9:16
+        motion: "Медленный подъём камеры по строящемуся фасаду, рабочие на лесах двигаются"
+      МЫ:
+        what: "Наталья и муж — архитекторы 1955 года над чертежом"
+        timecode: "14–18"
+        edit:
+          ref: "/a261972bb2811f1a1c6e21c62c85c43.mp4"
+          prompt: >-
+            Keep the faces, hairstyles and likeness of the man and the woman from the reference image exactly. Place them in a 1955 Soviet architecture bureau: they lean over a drafting table with a blueprint of
+            a decorated Stalinist facade, he holds a pencil, she points at the ornaments, 1950s clothing, warm lamp
+            light, sepia archival photo look, 35mm film grain, cinematic, vertical 9:16
+        motion: "Они переглядываются над чертежом, он откладывает карандаш, лёгкий наезд камеры"
+        negative: "искажённые лица, лишние руки, текст, водяные знаки, современная одежда, резкие движения камеры"
     timeline:
-      - {t: "0.0-4.0", shots: [С1, A3], color: sepia, screen: "УКРАШАТЬ УЖЕ ◆ЗАПРЕТИЛИ",
+      - {t: "0.0-4.0", shots: [С1, G3, A3], color: sepia, screen: "УКРАШАТЬ УЖЕ ◆ЗАПРЕТИЛИ",
          voice: "Этот дом достраивали, когда украшать дома в СССР уже запретили.", need: "фасад Беговой, 5 снизу"}
       - {t: "4.0-7.0", shots: [С4, С2], color: sepia, screen: "БЕГОВАЯ, 5 · ◆1955",
          voice: "Беговая, пять. Пятьдесят пятый год."}
-      - {t: "7.0-10.0", shots: [С2, С1], color: sepia, voice: "Проект готов, стены растут — с эркерами, карнизами, лепниной."}
+      - {t: "7.0-10.0", shots: [G3, С2, С1], color: sepia, voice: "Проект готов, стены растут — с эркерами, карнизами, лепниной."}
       - {t: "10.0-14.0", shots: [A1, G1], color: sepia, screen: "«ОБ УСТРАНЕНИИ ◆ИЗЛИШЕСТВ»",
          voice: "И тут, четвёртого ноября, выходит постановление «Об устранении излишеств»."}
-      - {t: "14.0-18.0", shots: [G1], color: sepia, screen: "◆ЛИШНЕЕ", voice: "Колонны, скульптуры, декор — всё объявлено лишним."}
+      - {t: "14.0-18.0", shots: [МЫ, G1], color: sepia, screen: "◆ЛИШНЕЕ", voice: "Колонны, скульптуры, декор — всё объявлено лишним."}
       - {t: "18.0-22.0", shots: [G2, A2], color: sepia, voice: "По всей Москве проекты режут на ходу."}
       - {t: "22.0-26.0", shots: [A2, G2], color: sepia, screen: "ВМЕСТО ДВОРЦОВ — ◆КОРОБКИ",
          voice: "Вместо дворцов — хрущёвки, простые коробки без единой детали."}
-      - {t: "26.0-30.0", shots: [С3, С1], color: warm, screen: "ЕГО ◆УСПЕЛИ",
+      - {t: "26.0-30.0", shots: [С3, С1, A3], color: warm, screen: "ЕГО ◆УСПЕЛИ",
          voice: "А этот дом успевают закончить таким, каким его нарисовали.", need: "фасад целиком в солнце"}
-      - {t: "30.0-34.0", shots: [С2, С1], color: warm, screen: "ОДИН ИЗ ◆ПОСЛЕДНИХ",
+      - {t: "30.0-34.0", shots: [С2, С1, С7], color: warm, screen: "ОДИН ИЗ ◆ПОСЛЕДНИХ",
          voice: "В пятьдесят шестом он встаёт — одним из последних в своём роде."}
-      - {t: "34.0-40.0", shots: [С3, С1], color: warm, screen: "БОЛЬШЕ ◆НЕ СТРОИЛИ",
+      - {t: "34.0-40.0", shots: [С3, С1, С6], color: warm, screen: "БОЛЬШЕ ◆НЕ СТРОИЛИ",
          voice: "Такие дома больше не строили. Поэтому их и называют «сталинками с фасадом»."}
       - {t: "40.0-43.0", shots: [С5, С7], color: warm, voice: "Внутри — всё то же: потолки, толстые стены,"}
       - {t: "43.0-46.0", shots: [С6], color: warm, screen: "◆5 КОМНАТ ВНУТРИ", voice: "пять комнат в квартире, которую я сейчас продаю."}
@@ -427,12 +446,23 @@ episodes:
           The same small Soviet cinema hall, cinema screen being replaced by a red theatre curtain
           and stage lights, 1990, cinematic, sepia tone, vertical 9:16
         motion: "Занавес медленно открывается, зажигается свет сцены"
+      МЫ:
+        what: "Наталья и муж в очереди в кинотеатр «Темп», 1957"
+        timecode: "11–15"
+        edit:
+          ref: "/a261972bb2811f1a1c6e21c62c85c43.mp4"
+          prompt: >-
+            Keep the faces, hairstyles and likeness of the man and the woman from the reference image exactly. Place them in a queue at the entrance of a 1957 Moscow cinema on the ground floor of a decorated
+            Stalinist building, she holds two cinema tickets, he smiles, 1950s coats, evening streetlights, neon sign
+            "ТЕМП", sepia archival photo look, 35mm film grain, cinematic, vertical 9:16
+        motion: "Очередь медленно движется ко входу, они улыбаются друг другу, неоновая вывеска мерцает"
+        negative: "искажённые лица, лишние руки, водяные знаки, современная одежда, резкие движения камеры"
     timeline:
       - {t: "0.0-4.0", shots: [С2, С1], color: warm, screen: "ЖИВУТ НАД ◆ТЕАТРОМ", voice: "Жители этого дома живут над театром."}
       - {t: "4.0-8.0", shots: [A1, G1], color: sepia, screen: "БЕГОВАЯ, 5 · ◆1956",
          voice: "Когда в пятьдесят шестом строили Беговую, пять, первый этаж сразу отдали под кино."}
       - {t: "8.0-11.0", shots: [G1], color: sepia, screen: "КИНОТЕАТР ◆«ТЕМП»", voice: "Кинотеатр «Темп»."}
-      - {t: "11.0-15.0", shots: [G2, A2], color: sepia, screen: "◆30 ЛЕТ КИНО", voice: "Больше тридцати лет москвичи спускались сюда на сеансы."}
+      - {t: "11.0-15.0", shots: [МЫ, G2, A2], color: sepia, screen: "◆30 ЛЕТ КИНО", voice: "Больше тридцати лет москвичи спускались сюда на сеансы."}
       - {t: "15.0-18.0", shots: [G2], color: sepia, voice: "А потом кино стало не нужно."}
       - {t: "18.0-24.0", shots: [G3], color: sepia, screen: "ЭКРАН → ◆СЦЕНА",
          voice: "В девяностом экран сняли, поставили сцену — театр «Вернисаж»."}
@@ -562,6 +592,17 @@ episodes:
           Moscow 1956, a family with suitcases and a rolled carpet entering a new decorated Stalinist apartment
           building, seen from behind, sunny day, sepia archival look, vertical 9:16
         motion: "Семья медленно входит в подъезд, лёгкое движение камеры"
+      МЫ:
+        what: "Наталья и муж — новосёлы 1956 года с ордером у подъезда"
+        timecode: "0–7"
+        edit:
+          ref: "/a261972bb2811f1a1c6e21c62c85c43.mp4"
+          prompt: >-
+            Keep the faces, hairstyles and likeness of the man and the woman from the reference image exactly. Place them as happy new residents in 1956 Moscow at the entrance of a new decorated Stalinist
+            apartment building, she holds a housing warrant paper with a round stamp, he carries a suitcase,
+            1950s clothing, sunny day, sepia archival photo look, 35mm film grain, cinematic, vertical 9:16
+        motion: "Она показывает ордер, он ставит чемодан, они входят в подъезд, лёгкое движение камеры"
+        negative: "искажённые лица, лишние руки, текст, водяные знаки, современная одежда, резкие движения камеры"
       С1:
         what: "Дверь квартиры открывается — вход"
         timecode: "7–12"
@@ -633,7 +674,7 @@ episodes:
     timeline:
       - {t: "0.0-4.0", shots: [A1], color: sepia, screen: "КУПИТЬ БЫЛО ◆НЕЛЬЗЯ",
          voice: "В пятьдесят шестом квартиру в этом доме нельзя было купить. Только получить по ордеру."}
-      - {t: "4.0-7.0", shots: [A2], color: sepia, screen: "◆1956", voice: "Кооперативы тогда были запрещены."}
+      - {t: "4.0-7.0", shots: [МЫ, A2], color: sepia, screen: "◆1956", voice: "Кооперативы тогда были запрещены."}
       - {t: "7.0-12.0", shots: [С1], color: warm, screen: "◆70 ЛЕТ СПУСТЯ",
          voice: "Прошло семьдесят лет. Теперь её можно купить. И вот что в ней осталось от того времени."}
       - {t: "12.0-15.0", shots: [С2], color: warm, screen: "СТЕНЫ ◆50 СМ", voice: "Кирпичные стены толщиной в полметра."}
