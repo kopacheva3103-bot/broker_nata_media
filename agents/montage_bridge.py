@@ -31,9 +31,12 @@ CAPTION_Y = 0.28      # надписи «ЭКРАН» — выше титров 
 SLIDE_TEXT_Y = 0.30   # текст слайдов и заглушек тоже над титрами, чтобы не наезжал
 
 
+_LOOKALIKE = str.maketrans("АВЕКМНОРСТХ", "ABEKMHOPCTX")
+
+
 def _latin(code):
-    """С (кириллица) и C (латиница) в кодах съёмки считаем одной буквой."""
-    return code.upper().replace("С", "C")
+    """Кириллические двойники латинских букв (А5 и A5, С1 и C1) в кодах считаем одной буквой."""
+    return code.upper().translate(_LOOKALIKE)
 
 
 def _span(t):

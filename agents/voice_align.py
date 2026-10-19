@@ -38,7 +38,8 @@ def transcribe(voice, cache, model):
     sys.path.insert(0, str(REPO))
     from montage import autosubs
     print(f"→ Распознаю озвучку (модель {model}, 1–3 минуты; при первом запуске скачается модель)…")
-    words = [w for cue in autosubs.transcribe(voice, model, "ru") for w in (cue.words or [])]
+    words = [(float(a), float(b), str(t))  # numpy-числа из распознавания не пишутся в project.yaml
+             for cue in autosubs.transcribe(voice, model, "ru") for a, b, t in (cue.words or [])]
     cache.write_text(json.dumps({"stamp": stamp, "words": words}, ensure_ascii=False), encoding="utf-8")
     return words
 

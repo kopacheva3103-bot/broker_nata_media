@@ -379,6 +379,9 @@ def step_montage(brief, targets, drive, force, final=False, render=True):
     for number in sorted({n for n, _, _ in targets} or brief["episodes"]):
         if not brief["episodes"][number].get("timeline"):
             continue
+        for code, shot in (brief["episodes"][number].get("shots") or {}).items():
+            if shot.get("use"):  # свои видео и фото Натальи — подтягиваем, если ещё не скачаны
+                fetch_own(brief, number, code, shot, drive)
         ep = Episode(brief["series"], number, None)
         montage_bridge.run(brief, number, ep.local, render=render, final=final)
 
