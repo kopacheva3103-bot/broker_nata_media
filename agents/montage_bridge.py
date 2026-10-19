@@ -230,6 +230,8 @@ def build(brief, number, ep_dir):
     project = {
         "preset": "premium",
         "output": "4_готово/аниматик.mp4",
+        # промежуточные файлы — локально, чтобы не гонять сотни МБ через облачный диск
+        "workdir": str(Path.home() / ".cache" / "broker_montage" / ep_dir.parent.name / ep_dir.name),
         "speed": 1.0,                       # таймкоды ТЗ — без ускорения пресета
         "transition": {"type": "cut"},      # склейки встык, чтобы ролик совпадал с таймкодами
         "grade": "none",
