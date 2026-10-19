@@ -44,6 +44,10 @@ class Episode:
         self._ids = {}
         if drive:
             self._ids["root"] = drive.folder(self.code, drive.folder(series))
+        else:
+            # Сразу создаём все три папки, чтобы было куда переносить выбранные кадры
+            for sub in (CANDIDATES, SELECTED, MONTAGE):
+                (self.local / sub).mkdir(parents=True, exist_ok=True)
 
     def path(self, *parts):
         p = self.local.joinpath(*parts)
