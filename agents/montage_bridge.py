@@ -169,6 +169,12 @@ def build(brief, number, ep_dir):
                 if seg:
                     what = f"{code}: {what}"
                     break
+            if seg is None and row.get("fallback_slide"):
+                fs = row["fallback_slide"]
+                seg = {"type": "slide", "duration": dur, "title": fs.get("title", ""), "text": fs.get("text", ""),
+                       "background": {"gradient": fs.get("colors", ["#1f3f8a", "#152d66"])}, "animation": "fade",
+                       "text_position": fs.get("position", 0.36)}
+                what = f"слайд «{fs.get('title', '')}» (вместо {', '.join(row.get('shots', []))})"
             if seg is None:
                 need = row.get("need") or ", ".join(row.get("shots", [])) or "кадр"
                 body = f"нужно: {need}"

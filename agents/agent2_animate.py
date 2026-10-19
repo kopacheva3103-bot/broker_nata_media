@@ -111,9 +111,10 @@ class ReplicateKling:
         self.headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
 
     def submit(self, image_path, prompt, negative, duration, mode, model):
-        import mimetypes
-        mime = mimetypes.guess_type(str(image_path))[0] or "image/jpeg"
-        image = f"data:{mime};base64,{base64.b64encode(Path(image_path).read_bytes()).decode()}"
+        data = Path(image_path).read_bytes()
+        mime = ("image/png" if data[:8] == b"\x89PNG\r\n\x1a\n" else
+                "image/webp" if data[8:12] == b"WEBP" else "image/jpeg")  # по содержимому, не по имени
+        image = f"data:{mime};base64,{base64.b64encode(data).decode()}"
         payload = {"input": {
             "prompt": prompt,
             "negative_prompt": negative,
