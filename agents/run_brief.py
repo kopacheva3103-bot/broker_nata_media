@@ -10,6 +10,7 @@
     <серия>/Выпуск_N/1_кандидаты/<код>/   варианты от агентов
     <серия>/Выпуск_N/2_выбрано/           ассистент переносит сюда по одному лучшему кадру на код
     <серия>/Выпуск_N/3_монтаж/            видео от Kling, монтажёр берёт отсюда + из 2_выбрано
+    <серия>/Выпуск_N/4_готово/            итоговый ролик от монтажёра
 
 Примеры:
     python run_brief.py series/begovaya5.yaml find
@@ -32,6 +33,7 @@ from common import IMAGE_EXT, OUTPUT_DIR, Drive, env, open_drive
 CANDIDATES = "1_кандидаты"
 SELECTED = "2_выбрано"
 MONTAGE = "3_монтаж"
+READY = "4_готово"  # монтажёр кладёт сюда итоговый ролик
 
 
 class Episode:
@@ -46,7 +48,7 @@ class Episode:
             self._ids["root"] = drive.folder(self.code, drive.folder(series))
         else:
             # Сразу создаём все три папки, чтобы было куда переносить выбранные кадры
-            for sub in (CANDIDATES, SELECTED, MONTAGE):
+            for sub in (CANDIDATES, SELECTED, MONTAGE, READY):
                 (self.local / sub).mkdir(parents=True, exist_ok=True)
 
     def path(self, *parts):
