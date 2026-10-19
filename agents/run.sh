@@ -2,6 +2,7 @@
 # Запуск агентов на Mac без активации окружения:
 #   ./run.sh update                                 — скачать свежую версию (ключи и установка сохраняются)
 #   ./run.sh keys                                   — ввести ключи (без редактирования .env)
+#   ./run.sh yandex                                 — подключить Яндекс.Диск (через приложение)
 #   ./run.sh drive                                  — подключить Google Drive (через приложение)
 #   ./run.sh check                                  — проверить доступы
 #   ./run.sh open                                   — открыть папку агентов в Finder
@@ -20,6 +21,7 @@ if [ "$1" = "update" ]; then
   # Ключи (.env, credentials.json, token.json) и установленное окружение (.venv) не трогаем
   rsync -a --exclude .env --exclude .venv --exclude credentials.json --exclude token.json \
     "$TMP"/broker_nata_media-*/agents/ ./
+  rsync -a --delete "$TMP"/broker_nata_media-*/montage/ ../montage/
   rm -rf "$TMP"
   chmod +x run.sh setup_mac.sh
   .venv/bin/pip install -q -r requirements.txt 2>/dev/null || true
@@ -32,7 +34,8 @@ PY=.venv/bin/python
 
 case "$1" in
   keys)     shift; exec "$PY" set_keys.py "$@" ;;
-  drive)    shift; exec "$PY" drive_sync.py "$@" ;;
+  drive)    shift; exec "$PY" drive_sync.py drive ;;
+  yandex)   shift; exec "$PY" drive_sync.py yandex ;;
   put)      shift; exec "$PY" put_clip.py "$@" ;;
   open)     shift; exec open "$("$PY" -c 'from common import OUTPUT_DIR; OUTPUT_DIR.mkdir(parents=True, exist_ok=True); print(OUTPUT_DIR)')" ;;
   check)    shift; exec "$PY" check_setup.py "$@" ;;

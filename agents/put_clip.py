@@ -3,8 +3,12 @@
     ./run.sh put <файл> <выпуск> <код> [описание]
     ./run.sh put ~/Downloads/utochkin.mp4 1 A4 уточкин
 
-Код — из ТЗ (A4, G2…) или ДОП для дополнительного кадра.
-Файл копируется в <серия>/Выпуск_N/3_монтаж/<КОД>_<описание>_наталья.<расширение>.
+Код — из ТЗ (A4, G2…), ДОП для дополнительного кадра, С1…С12 для съёмки,
+ОЗВУЧКА для записи голоса.
+Ролики (A, G, ДОП) кладутся в Выпуск_N/3_монтаж, съёмка и озвучка — в Выпуск_N/исходники.
+
+    ./run.sh put ~/Downloads/kony.mov 1 С1 кони снизу
+    ./run.sh put ~/Downloads/voice.m4a 1 ОЗВУЧКА черновик
 """
 import shutil
 import sys
@@ -29,14 +33,25 @@ def main():
     shots = (brief["episodes"].get(episode) or {}).get("shots") or {}
     if episode not in brief["episodes"]:
         sys.exit(f"❌ В серии нет выпуска {episode}")
-    if code != "ДОП" and code not in shots:
-        sys.exit(f"❌ В выпуске {episode} нет кода {code}. Есть: {', '.join(shots) or '—'} (или ДОП)")
+    code = code.replace("C", "С") if code[:1] == "C" and code[1:].isdigit() else code  # латинская C → С
+    filmed = {c for row in brief["episodes"][episode].get("timeline") or [] for c in row.get("shots", [])}
+    if code in ("ОЗВУЧКА", "VOICE"):
+        folder, name = rb.SOURCES, "_".join(x for x in ("озвучка", note) if x) + src.suffix.lower()
+    elif code.startswith("С"):
+        if filmed and code not in filmed:
+            sys.exit(f"❌ В выпуске {episode} нет кадра {code}. Съёмка: {', '.join(sorted(c for c in filmed if c.startswith('С')))}")
+        folder, name = rb.SOURCES, "_".join(x for x in (code, note) if x) + src.suffix.lower()
+    elif code == "ДОП" or code in shots:
+        folder, name = rb.MONTAGE, "_".join(x for x in (code, note, "наталья") if x) + src.suffix.lower()
+    else:
+        sys.exit(f"❌ В выпуске {episode} нет кода {code}. Есть: {', '.join(shots) or '—'} (или ДОП, С…, ОЗВУЧКА)")
 
     ep = rb.Episode(brief["series"], episode, None)
-    name = "_".join(x for x in (code, note, "наталья") if x) + src.suffix.lower()
-    dest = ep.path(rb.MONTAGE) / name
+    dest = ep.path(folder) / name
     shutil.copy2(src, dest)
-    print(f"✅ {src.name} → {brief['series']}/Выпуск_{episode}/3_монтаж/{name}")
+    print(f"✅ {src.name} → {brief['series']}/Выпуск_{episode}/{folder}/{name}")
+    if folder == rb.SOURCES:
+        print("   Подхватится при следующей сборке: ./run.sh begovaya montage -e " + str(episode))
     if code in shots:
         print(f"   Это кадр {code}: {shots[code].get('what', '')} ({shots[code].get('timecode', '')} с)")
 

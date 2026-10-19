@@ -86,10 +86,11 @@ def drive():
         probe = OUTPUT_DIR / ".check"
         probe.write_text("ok")
         probe.unlink()
-        return f"через приложение Google Drive, папка «{OUTPUT_DIR.name}»"
+        disk = "Яндекс.Диск" if "andex" in str(OUTPUT_DIR) else "Google Drive"
+        return f"через приложение {disk}, папка «{OUTPUT_DIR.parent.name} → {OUTPUT_DIR.name}»"
     from common import Drive
     if not env("DRIVE_ROOT_FOLDER_ID"):
-        raise RuntimeError("не подключён — запусти ./run.sh drive (нужно приложение Google Drive на Mac)")
+        raise RuntimeError("не подключён — запусти ./run.sh yandex (нужно приложение Яндекс.Диск на Mac)")
     d = Drive()
     folder = d.api.files().get(fileId=d.root, fields="name").execute()
     return f"папка «{folder['name']}» доступна"
@@ -119,7 +120,7 @@ def main():
         sys.exit("Нет файла agents/.env — скопируй .env.example в .env и впиши ключи")
 
     print("Проверяю доступы...\n")
-    check("Google Drive", "все агенты (папки для команды)", drive)
+    check("Диск", "все агенты (папки для команды)", drive)
     check("Replicate", "генерация G-кадров, оживление (Kling) и колоризация", replicate)
     if (env("ANIMATE_PROVIDER", "replicate") or "replicate").lower() == "kling":
         check("Kling", "оживление кадров", kling)
