@@ -144,6 +144,8 @@ def _overlay_ass(ctx: Ctx, idx: int, seg: dict, duration: float) -> str:
     doc = ass.AssDoc(ctx.width, ctx.height, ctx.font, ctx.styles)
     if seg["type"] == "slide":
         ass.slide_events(doc, seg, duration)
+        if seg.get("overlay"):  # дополнительные строки поверх слайда (например, мелкий титр авторов фото)
+            ass.caption_events(doc, {"text": seg["overlay"]}, duration)
     else:
         ass.caption_events(doc, seg, duration)
     if not doc.events:

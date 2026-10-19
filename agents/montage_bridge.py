@@ -104,6 +104,30 @@ def _texts(screen, dur):
              "end": dur, "animation": "rise"} for i, (t, st) in enumerate(lines)]
 
 
+def _credits(ep_dir, used):
+    """«Фото: Wikimedia Commons / автор, автор» для кадров под лицензией CC (по таблицам _авторы.csv)."""
+    import csv
+    licenses = {}
+    for table in (ep_dir / "1_кандидаты").glob("*/_авторы.csv"):
+        with open(table, encoding="utf-8-sig") as fh:
+            for row in csv.DictReader(fh):
+                key = Path(row["file"]).stem.rsplit("_", 1)[-1]   # номер снимка в источнике
+                licenses[(row["source"], key)] = (row.get("author", ""), row.get("license", ""))
+    by_source = {}
+    for name in used:
+        stem = Path(name).stem
+        source = "wiki" if "_wiki_" in stem else "pastvu" if "_pastvu_" in stem else None
+        if not source:
+            continue
+        author, lic = licenses.get((source, stem.rsplit("_", 1)[-1]), ("", ""))
+        if lic.upper().startswith("CC") and "CC0" not in lic.upper() and author:
+            author = re.sub(r"^User:", "", author).split(" from ")[0].strip()
+            by_source.setdefault(source, []).append(author) if author not in by_source.get(source, []) else None
+    names = {"wiki": "Wikimedia Commons", "pastvu": "PastVu"}
+    parts = [f"{names[src]} / {', '.join(authors)}" for src, authors in by_source.items()]
+    return ("Фото: " + "; ".join(parts)) if parts else ""
+
+
 def _find_voice(ep_dir):
     """Озвучка в «исходники» (имя со словом «озвучка» или «voice»); служебные файлы «_…» не в счёт."""
     folder = ep_dir / "исходники"
@@ -145,16 +169,17 @@ def build(brief, number, ep_dir):
         synced = _sync_to_voice(rows, voice, ep_dir, report, float(brief["defaults"].get("voice_speed", 1.0)))
         if synced:
             spans, voice_file, phrases = synced
-    missing = []
+    missing, used = [], []
     for row, (a, b) in zip(rows, spans):
         dur = round(b - a, 2)
         grade = GRADES.get(row.get("color", "warm"), GRADES["warm"])
         if row.get("final"):
             plain, accent = _split_accent(row["final"])
-            segments.append({"type": "slide", "duration": dur, "background": PLACEHOLDER_BG,
-                             "title": brief.get("nickname", ""),
-                             "text": f"{plain} {accent}".strip() + f"\n{number}/{brief.get('total', len(brief['episodes']))}",
-                             "animation": "fade", "text_position": SLIDE_TEXT_Y})
+            final_card = {"type": "slide", "duration": dur, "background": PLACEHOLDER_BG,
+                          "title": brief.get("nickname", ""),
+                          "text": f"{plain} {accent}".strip() + f"\n{number}/{brief.get('total', len(brief['episodes']))}",
+                          "animation": "fade", "text_position": SLIDE_TEXT_Y}
+            segments.append(final_card)
             report.append(f"{a:5.1f}–{b:5.1f}  финальная карточка")
             continue
         if row.get("slide"):
@@ -167,6 +192,7 @@ def build(brief, number, ep_dir):
             for code in row.get("shots", []):
                 seg, what = _media_segment(ep_dir, code, dur)
                 if seg:
+                    used.append(Path(seg["src"]).name)
                     what = f"{code}: {what}"
                     break
             if seg is None and row.get("fallback_slide"):
@@ -210,6 +236,9 @@ def build(brief, number, ep_dir):
         "audio": {"music_volume": 0.0},
         "subtitles": {"items": phrases if phrases is not None else cues},
         "segments": segments,
+        # мелкий серый титр авторов фото (лицензии CC требуют указывать автора)
+        "styles": {"credit": {"font": "Montserrat SemiBold", "bold": False, "size": 24, "color": "#8C8C8C",
+                              "outline": 0, "shadow": 0, "margin_x": 110}},
     }
     if title:
         project["title"] = title
@@ -218,6 +247,12 @@ def build(brief, number, ep_dir):
         report.append(f"озвучка: {voice_file.name}")
     else:
         report.append("озвучки нет — положи файл в «исходники» (имя со словом «озвучка»)")
+    credit = _credits(ep_dir, used)
+    final = next((sg for sg in reversed(segments) if sg.get("type") == "slide"), None)
+    if credit and final is not None:
+        final["overlay"] = [{"text": credit, "style": "credit", "position": 0.76, "start": 0.0,
+                             "end": final["duration"], "animation": "fade"}]
+        report.append(f"титр авторов на финальной карточке: {credit}")
     if missing:
         report.append(f"НЕ ХВАТАЕТ КАДРОВ ({len(missing)}):")
         report += ["  " + m for m in missing]
