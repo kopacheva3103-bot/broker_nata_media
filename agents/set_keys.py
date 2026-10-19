@@ -12,8 +12,10 @@ GROUPS = {
     "kling": [("KLING_API_KEY", "ключ Kling (API Key)")],
     "replicate": [("REPLICATE_API_TOKEN", "токен Replicate")],
     "drive": [("DRIVE_ROOT_FOLDER_ID", "ID папки Google Drive (из адреса папки после /folders/)")],
+    "assets": [("YADISK_BEGOVAYA", "ссылку на папку «Беговая 5» на Яндекс.Диске"),
+               ("YADISK_PERSONAL", "ссылку на папку «Личное — исходники» на Яндекс.Диске")],
 }
-SECRET = {"KLING_API_KEY", "REPLICATE_API_TOKEN"}
+SECRET = {"KLING_API_KEY", "REPLICATE_API_TOKEN"}  # ссылки на папки тоже приватные, но их удобнее видеть
 
 
 def save(key, value):
@@ -28,7 +30,7 @@ def save(key, value):
 
 
 def main():
-    groups = sys.argv[1:] or list(GROUPS)
+    groups = sys.argv[1:] or [g for g in GROUPS if g != "assets"]
     for group in groups:
         for key, label in GROUPS.get(group, []):
             if key in SECRET:

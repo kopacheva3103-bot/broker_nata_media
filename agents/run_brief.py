@@ -153,18 +153,24 @@ def fetch_own(brief, number, code, shot, drive):
 
     Видео кладётся в 3_монтаж (уже оживлено), фото — в 2_выбрано (выбирать не нужно).
     """
-    url = (brief.get("assets") or {}).get("yadisk")
+    # use: "/путь" — из папки assets.yadisk; "personal:/путь" — из папки assets.personal
+    source, path = "yadisk", shot["use"]
+    if not path.startswith("/") and ":/" in path:
+        source, path = path.split(":", 1)
+    url = (brief.get("assets") or {}).get(source) or ""
+    if url.startswith("env:"):  # ссылка хранится в .env, а не в публичном репозитории
+        url = env(url[4:]) or ""
     if not url:
-        print(f"[{number}/{code}] ! в брифе нет assets.yadisk — не знаю, откуда брать {shot['use']}")
+        print(f"[{number}/{code}] ! нет ссылки на папку «{source}» — введи её: ./run.sh keys assets")
         return
     ep = Episode(brief["series"], number, drive)
-    name = shot["use"].rsplit("/", 1)[-1]
+    name = path.rsplit("/", 1)[-1]
     folder = MONTAGE if Path(name).suffix.lower() in VIDEO_EXT else SELECTED
     dest = ep.path(folder) / f"{code}_{name}"
     if dest.exists():
         return
     try:
-        archivist.yadisk_file(url, shot["use"], dest)
+        archivist.yadisk_file(url, path, dest)
     except requests.RequestException as e:
         print(f"[{number}/{code}] ! не скачалось {shot['use']}: {e}")
         return
