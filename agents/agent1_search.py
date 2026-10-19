@@ -22,7 +22,7 @@ from pathlib import Path
 
 import requests
 
-from common import FOLDER_FOUND, OUTPUT_DIR, Drive, env, slugify
+from common import FOLDER_FOUND, OUTPUT_DIR, Drive, env, open_drive, slugify
 
 TIMEOUT = 30
 # Википедия и PastVu просят представляться в запросах
@@ -258,7 +258,7 @@ def main():
         lat, lng = (float(x) for x in args.geo.replace(" ", "").split(","))
         geo = (lat, lng)
 
-    drive = None if args.no_drive else Drive()
+    drive = open_drive(args.no_drive)
     for prompt in prompts:
         print(f"Ищу: «{prompt}» ({args.source})")
         run(prompt, args.source, args.limit, args.orientation, years, geo, drive)

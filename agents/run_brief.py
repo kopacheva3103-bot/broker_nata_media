@@ -27,7 +27,7 @@ import yaml
 import agent1_search as archivist
 import agent2_animate as animator
 from agent3_colorize import Replicate
-from common import IMAGE_EXT, OUTPUT_DIR, Drive, env
+from common import IMAGE_EXT, OUTPUT_DIR, Drive, env, open_drive
 
 CANDIDATES = "1_кандидаты"
 SELECTED = "2_выбрано"
@@ -274,7 +274,7 @@ def main():
 
     brief = load_brief(args.brief)
     targets = list(selected_shots(brief, args.episode, [s.upper() for s in args.shot or []]))
-    drive = None if args.no_drive else Drive()
+    drive = open_drive(args.no_drive)
     for step in (["find", "generate", "status"] if args.step == "all" else [args.step]):
         STEPS[step](brief, targets, drive, args.force)
 

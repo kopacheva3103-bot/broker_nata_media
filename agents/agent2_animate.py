@@ -18,7 +18,7 @@ from pathlib import Path
 import jwt
 import requests
 
-from common import FOLDER_EDIT, FOLDER_TO_ANIMATE, IMAGE_EXT, OUTPUT_DIR, Drive, env
+from common import FOLDER_EDIT, FOLDER_TO_ANIMATE, IMAGE_EXT, OUTPUT_DIR, Drive, env, open_drive
 
 POLL_EVERY = 15        # секунд между проверками статуса
 MAX_WAIT = 20 * 60     # максимум ждём одно видео
@@ -206,11 +206,13 @@ def main():
     prompt = args.prompt or style["prompt"] or env("KLING_DEFAULT_PROMPT")
     if not prompt:
         parser.error("укажи промт движения (-p) или KLING_DEFAULT_PROMPT в .env")
-    if args.input is None and args.no_drive:
-        parser.error("без Google Drive укажи папку с фото: --input <папка>")
 
     kling = make_client()
-    drive = None if args.no_drive else Drive()
+    drive = open_drive(args.no_drive)
+    if args.input is None and drive is None:
+        # Без Drive API берём фото из такой же папки локально (или в папке приложения Google Drive)
+        args.input = OUTPUT_DIR / FOLDER_TO_ANIMATE
+        args.input.mkdir(parents=True, exist_ok=True)
 
     if args.input:
         jobs = [{"image": p} for p in sorted(Path(args.input).iterdir()) if p.suffix.lower() in IMAGE_EXT]

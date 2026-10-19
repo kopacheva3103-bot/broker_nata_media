@@ -7,8 +7,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 AGENTS_DIR = Path(__file__).resolve().parent
-OUTPUT_DIR = AGENTS_DIR.parent / "output"
 load_dotenv(AGENTS_DIR / ".env")
+# Куда агенты складывают файлы. В режиме STORAGE=sync это папка приложения Google Drive
+# на компьютере: приложение само синхронизирует её с облаком (см. drive_sync.py)
+OUTPUT_DIR = Path(os.path.expanduser(os.getenv("OUTPUT_DIR") or AGENTS_DIR.parent / "output"))
 
 # Папки внутри корневой папки на Google Drive
 FOLDER_FOUND = "1_найдено"        # сюда агент 1 кладёт найденные фото
@@ -25,6 +27,13 @@ def env(name, default=None, required=False):
     if required and not value:
         raise SystemExit(f"Не задан {name} в agents/.env (см. agents/.env.example)")
     return value
+
+
+def open_drive(no_drive=False):
+    """Google Drive API или None, если работаем локально / через приложение Google Drive."""
+    if no_drive or (os.getenv("STORAGE") or "api").lower() == "sync":
+        return None
+    return Drive()
 
 
 def slugify(text, max_len=50):

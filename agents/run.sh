@@ -2,6 +2,7 @@
 # Запуск агентов на Mac без активации окружения:
 #   ./run.sh update                                 — скачать свежую версию (ключи и установка сохраняются)
 #   ./run.sh keys                                   — ввести ключи (без редактирования .env)
+#   ./run.sh drive                                  — подключить Google Drive (через приложение)
 #   ./run.sh check                                  — проверить доступы
 #   ./run.sh begovaya all                           — серия «Беговая, 5»: архив + генерация + статус
 #   ./run.sh begovaya animate | status              — оживление / таблица статуса
@@ -29,6 +30,7 @@ PY=.venv/bin/python
 
 case "$1" in
   keys)     shift; exec "$PY" set_keys.py "$@" ;;
+  drive)    shift; exec "$PY" drive_sync.py "$@" ;;
   check)    shift; exec "$PY" check_setup.py "$@" ;;
   begovaya) shift; exec "$PY" run_brief.py series/begovaya5.yaml "$@" ;;
   *)        exec "$PY" "$@" ;;

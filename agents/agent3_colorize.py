@@ -18,7 +18,7 @@ from pathlib import Path
 
 import requests
 
-from common import FOLDER_EDIT, FOLDER_TO_ANIMATE, FOLDER_TO_COLOR, IMAGE_EXT, OUTPUT_DIR, Drive, env
+from common import FOLDER_EDIT, FOLDER_TO_ANIMATE, FOLDER_TO_COLOR, IMAGE_EXT, OUTPUT_DIR, Drive, env, open_drive
 
 # FLUX лучше понимает промты на английском
 DEFAULT_PROMPT = (
@@ -83,11 +83,13 @@ def main():
     parser.add_argument("--input", help="локальная папка с фото (вместо Google Drive)")
     parser.add_argument("--no-drive", action="store_true", help="не загружать результат на Google Drive")
     args = parser.parse_args()
-    if args.input is None and args.no_drive:
-        parser.error("без Google Drive укажи папку с фото: --input <папка>")
 
     replicate = Replicate()
-    drive = None if args.no_drive else Drive()
+    drive = open_drive(args.no_drive)
+    if args.input is None and drive is None:
+        # Без Drive API берём фото из такой же папки локально (или в папке приложения Google Drive)
+        args.input = OUTPUT_DIR / FOLDER_TO_COLOR
+        args.input.mkdir(parents=True, exist_ok=True)
 
     if args.input:
         jobs = [{"image": p} for p in sorted(Path(args.input).iterdir()) if p.suffix.lower() in IMAGE_EXT]

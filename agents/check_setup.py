@@ -79,8 +79,17 @@ def replicate():
 
 
 def drive():
+    if (env("STORAGE") or "api").lower() == "sync":
+        from common import OUTPUT_DIR
+        if not OUTPUT_DIR.is_dir():
+            raise RuntimeError(f"папка {OUTPUT_DIR} не найдена — запусти ./run.sh drive")
+        probe = OUTPUT_DIR / ".check"
+        probe.write_text("ok")
+        probe.unlink()
+        return f"через приложение Google Drive, папка «{OUTPUT_DIR.name}»"
     from common import Drive
-    need("DRIVE_ROOT_FOLDER_ID")
+    if not env("DRIVE_ROOT_FOLDER_ID"):
+        raise RuntimeError("не подключён — запусти ./run.sh drive (нужно приложение Google Drive на Mac)")
     d = Drive()
     folder = d.api.files().get(fileId=d.root, fields="name").execute()
     return f"папка «{folder['name']}» доступна"
