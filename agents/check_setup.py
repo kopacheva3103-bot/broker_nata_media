@@ -111,8 +111,11 @@ def main():
 
     print("Проверяю доступы...\n")
     check("Google Drive", "все агенты (папки для команды)", drive)
-    check("Replicate", "генерация G-кадров и колоризация", replicate)
-    check("Kling", "оживление кадров", kling)
+    check("Replicate", "генерация G-кадров, оживление (Kling) и колоризация", replicate)
+    if (env("ANIMATE_PROVIDER", "replicate") or "replicate").lower() == "kling":
+        check("Kling", "оживление кадров", kling)
+    else:
+        results.append((True, "Оживление кадров", "через Replicate (модель Kling) — отдельный ключ Kling не нужен"))
     check("Wikimedia Commons", "поиск архива", site("https://commons.wikimedia.org/w/api.php?action=query&format=json"))
     check("PastVu", "поиск архива Москвы", site("https://pastvu.com/api2?method=photo.giveForPage&params=%7B%22cid%22%3A1%7D"))
     check("OpenStreetMap", "координаты для PastVu",

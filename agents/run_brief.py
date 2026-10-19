@@ -216,7 +216,7 @@ def step_animate(brief, targets, drive, force):
         print("Нечего оживлять: перенеси выбранные кадры с motion в 2_выбрано "
               "(имя файла должно начинаться с кода, например G1_v2.jpg)")
         return
-    kling = animator.Kling()
+    kling = animator.make_client()
     for number, (ep, jobs) in by_episode.items():
         print(f"Выпуск {number}: оживляю {len(jobs)} кадров")
         animator.animate(jobs, kling, "", "", env("KLING_DURATION", "5"), env("KLING_MODE", "pro"),

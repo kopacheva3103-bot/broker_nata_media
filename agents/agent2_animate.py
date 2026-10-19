@@ -92,6 +92,54 @@ class Kling:
         return self._check(r)
 
 
+
+class ReplicateKling:
+    """Та же модель Kling, но через Replicate: оплата за каждое видео, без пакетов API.
+
+    Повторяет интерфейс Kling (submit/status), поэтому animate() работает с обоими.
+    """
+
+    def __init__(self):
+        self.token = env("REPLICATE_API_TOKEN", required=True)
+        self.model = env("REPLICATE_VIDEO_MODEL", "kwaivgi/kling-v2.1")
+        self.headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+
+    def submit(self, image_path, prompt, negative, duration, mode, model):
+        import mimetypes
+        mime = mimetypes.guess_type(str(image_path))[0] or "image/jpeg"
+        image = f"data:{mime};base64,{base64.b64encode(Path(image_path).read_bytes()).decode()}"
+        payload = {"input": {
+            "prompt": prompt,
+            "negative_prompt": negative,
+            "start_image": image,
+            "duration": int(duration),
+            "mode": "pro" if mode == "pro" else "standard",
+        }}
+        r = requests.post(f"https://api.replicate.com/v1/models/{self.model}/predictions",
+                          json=payload, headers=self.headers, timeout=60)
+        if not r.ok:
+            raise RuntimeError(f"Replicate {r.status_code}: {r.text[:200]}")
+        return r.json()["id"]
+
+    def status(self, task_id):
+        r = requests.get(f"https://api.replicate.com/v1/predictions/{task_id}", headers=self.headers, timeout=30)
+        r.raise_for_status()
+        pred = r.json()
+        if pred["status"] == "succeeded":
+            output = pred["output"]
+            url = output[0] if isinstance(output, list) else output
+            return {"task_status": "succeed", "task_result": {"videos": [{"url": url}]}}
+        if pred["status"] in ("failed", "canceled"):
+            return {"task_status": "failed", "task_status_msg": pred.get("error") or pred["status"]}
+        return {"task_status": "processing"}
+
+
+def make_client():
+    """Чем оживлять: replicate (по умолчанию, оплата за видео) или kling (прямой API, нужен пакет)."""
+    provider = (env("ANIMATE_PROVIDER", "replicate") or "replicate").lower()
+    return Kling() if provider == "kling" else ReplicateKling()
+
+
 def animate(jobs, kling, prompt, negative, duration, mode, model, out_dir=None):
     """jobs: список словарей с ключом 'image' (локальный путь). Добавляет 'video'.
 
@@ -161,7 +209,7 @@ def main():
     if args.input is None and args.no_drive:
         parser.error("без Google Drive укажи папку с фото: --input <папка>")
 
-    kling = Kling()
+    kling = make_client()
     drive = None if args.no_drive else Drive()
 
     if args.input:
