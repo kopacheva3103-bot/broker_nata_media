@@ -192,7 +192,7 @@ def step_generate(brief, targets, drive, force):
         print(f"    + {len(made)} вариантов")
 
 
-def step_animate(brief, targets, drive, force):
+def step_animate(brief, targets, drive, force, variants=False):
     shots = {(n, c): s for n, c, s in targets}
     negative = brief["defaults"].get("negative", "")
     by_episode = {}
@@ -207,11 +207,19 @@ def step_animate(brief, targets, drive, force):
             files = [(p.name, None) for p in sorted(src_dir.iterdir()) if p.suffix.lower() in IMAGE_EXT]
             done = {p.stem for p in ep.path(MONTAGE).glob("*.mp4")}
         jobs = []
+        per_code = {}
+        for name, _ in files:
+            per_code.setdefault(name.split("_")[0].upper(), []).append(name)
         for name, file_id in files:
             code = name.split("_")[0].upper()
             shot = shots.get((number, code))
             if not shot or not shot.get("motion"):
                 continue  # статичный кадр — наезд/параллакс сделает монтажёр
+            if len(per_code[code]) > 1 and not variants:
+                if name == per_code[code][0]:
+                    print(f"[{number}/{code}] в 2_выбрано {len(per_code[code])} файла: {', '.join(per_code[code])}.\n"
+                          f"    Оставь один (каждое оживление платное) или запусти с --variants, чтобы оживить все")
+                continue
             if Path(name).stem in done and not force:
                 print(f"[{number}/{code}] видео уже есть — пропускаю")
                 continue
@@ -281,13 +289,18 @@ def main():
     parser.add_argument("-s", "--shot", action="append", help="только этот код кадра, например G3")
     parser.add_argument("--force", action="store_true", help="переделать, даже если уже есть результат")
     parser.add_argument("--no-drive", action="store_true", help="работать только локально в output/")
+    parser.add_argument("--variants", action="store_true",
+                        help="оживить все выбранные варианты одного кода (по умолчанию — только если он один)")
     args = parser.parse_args()
 
     brief = load_brief(args.brief)
     targets = list(selected_shots(brief, args.episode, [s.upper() for s in args.shot or []]))
     drive = open_drive(args.no_drive)
     for step in (["find", "generate", "status"] if args.step == "all" else [args.step]):
-        STEPS[step](brief, targets, drive, args.force)
+        if step == "animate":
+            step_animate(brief, targets, drive, args.force, args.variants)
+        else:
+            STEPS[step](brief, targets, drive, args.force)
 
 
 if __name__ == "__main__":

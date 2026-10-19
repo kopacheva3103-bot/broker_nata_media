@@ -99,9 +99,15 @@ class ReplicateKling:
     Повторяет интерфейс Kling (submit/status), поэтому animate() работает с обоими.
     """
 
+    DEFAULT_MODEL = "kwaivgi/kling-v3-video"
+    DISCONTINUED = {"kwaivgi/kling-v2.1"}
+
     def __init__(self):
         self.token = env("REPLICATE_API_TOKEN", required=True)
-        self.model = env("REPLICATE_VIDEO_MODEL", "kwaivgi/kling-v2.1")
+        self.model = env("REPLICATE_VIDEO_MODEL") or self.DEFAULT_MODEL
+        if self.model in self.DISCONTINUED:
+            print(f"  ! {self.model} отключена в Kling — использую {self.DEFAULT_MODEL}")
+            self.model = self.DEFAULT_MODEL
         self.headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
 
     def submit(self, image_path, prompt, negative, duration, mode, model):
@@ -114,9 +120,16 @@ class ReplicateKling:
             "start_image": image,
             "duration": int(duration),
             "mode": "pro" if mode == "pro" else "standard",
+            "generate_audio": False,  # звук делает монтажёр
         }}
-        r = requests.post(f"https://api.replicate.com/v1/models/{self.model}/predictions",
-                          json=payload, headers=self.headers, timeout=60)
+        for attempt in range(8):
+            r = requests.post(f"https://api.replicate.com/v1/models/{self.model}/predictions",
+                              json=payload, headers=self.headers, timeout=60)
+            if r.status_code != 429:
+                break
+            # Пока на балансе меньше $5, Replicate пускает 1 запуск за раз — ждём и повторяем
+            print("    …Replicate просит подождать, повторю через 12 сек")
+            time.sleep(12)
         if not r.ok:
             raise RuntimeError(f"Replicate {r.status_code}: {r.text[:200]}")
         return r.json()["id"]
