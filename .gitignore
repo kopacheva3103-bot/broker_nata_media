@@ -6,8 +6,10 @@ token.json
 *client_secret*.json
 *service_account*.json
 
-# Рабочие файлы агентов
+# Рабочие файлы агентов и монтажа
 output/
+out/
+.montage_cache/
 __pycache__/
 *.pyc
 .venv/

@@ -1,0 +1,370 @@
+"""Building .ass subtitle files: styles, captions, slide text, reels-style subtitles."""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+
+REF_H = 1920  # style sizes in configs are given for a 1080x1920 frame
+
+
+def ass_color(color: str, alpha: float = 0.0) -> str:
+    """'#RRGGBB' -> '&HAABBGGRR' (alpha 0 = opaque, 1 = transparent)."""
+    c = str(color).lstrip("#")
+    if len(c) != 6:
+        raise ValueError(f"Цвет должен быть в формате #RRGGBB, получено: {color}")
+    r, g, b = c[0:2], c[2:4], c[4:6]
+    a = f"{int(round(max(0, min(alpha, 1)) * 255)):02X}"
+    return f"&H{a}{b}{g}{r}".upper()
+
+
+def ts(seconds: float) -> str:
+    seconds = max(0.0, seconds)
+    cs = int(round(seconds * 100))
+    h, cs = divmod(cs, 360000)
+    m, cs = divmod(cs, 6000)
+    s, cs = divmod(cs, 100)
+    return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+
+def clean(text: str) -> str:
+    text = str(text).replace("\\", "/").replace("{", "(").replace("}", ")")
+    return text.replace("\r", "").replace("\n", r"\N")
+
+
+DEFAULT_STYLES: dict[str, dict] = {
+    "title": {"size": 96, "color": "#FFFFFF", "outline_color": "#000000", "outline": 0, "shadow": 3,
+              "bold": True, "margin_x": 90},
+    "text": {"size": 58, "color": "#F2F2F2", "outline_color": "#000000", "outline": 0, "shadow": 2,
+             "bold": False, "margin_x": 100},
+    "caption": {"size": 70, "color": "#FFFFFF", "outline_color": "#000000", "outline": 4, "shadow": 2,
+                "bold": True, "margin_x": 80, "box": False, "box_color": "#000000", "box_opacity": 0.45},
+    "accent": {"size": 112, "color": "#E7C9A0", "outline_color": "#000000", "outline": 0, "shadow": 0,
+               "bold": False, "italic": True, "margin_x": 40},
+    "subtitle": {"size": 78, "color": "#FFFFFF", "outline_color": "#000000", "outline": 5, "shadow": 2,
+                 "bold": True, "margin_x": 70, "highlight": "#FFD400", "box": False,
+                 "box_color": "#000000", "box_opacity": 0.45},
+}
+
+
+@dataclass
+class AssDoc:
+    width: int
+    height: int
+    font: str
+    styles: dict[str, dict]
+    events: list[str] = field(default_factory=list)
+
+    @property
+    def k(self) -> float:
+        return self.height / REF_H
+
+    def style(self, name: str) -> dict:
+        return {**DEFAULT_STYLES.get(name, DEFAULT_STYLES["text"]), **(self.styles.get(name) or {})}
+
+    def _style_line(self, name: str) -> str:
+        s = self.style(name)
+        k = self.k
+        box = bool(s.get("box"))
+        outline_col = ass_color(s["box_color"], s.get("box_opacity", 0.45)) if box else ass_color(s["outline_color"])
+        return (
+            f"Style: {name},{s.get('font', self.font)},{round(s['size'] * k)},{ass_color(s['color'])},"
+            f"{ass_color(s.get('highlight', s['color']))},{outline_col},{ass_color('#000000', 0.4)},"
+            f"{-1 if s.get('bold') else 0},{-1 if s.get('italic') else 0},0,0,100,100,{s.get('spacing', 0)},0,"
+            f"{3 if box else 1},{(s.get('box_padding', 14) if box else s['outline']) * k:.1f},"
+            f"{s['shadow'] * k:.1f},5,{round(s['margin_x'] * k)},{round(s['margin_x'] * k)},0,1"
+        )
+
+    def add(self, start: float, end: float, style: str, text: str, margins: tuple[int, int, int] = (0, 0, 0)) -> None:
+        if end - start <= 0.01:
+            return
+        ml, mr, mv = margins
+        st = self.style(style)
+        if st.get("glow"):
+            # soft dark halo on a lower layer instead of a hard outline (keeps glyphs crisp)
+            g = float(st.get("glow_opacity", 0.58))
+            halo = (r"{\1c&H000000&\3c&H000000&\shad0" + f"\\bord{st.get('glow_size', 7) * self.k:.1f}"
+                    + f"\\blur{st.get('glow_blur', 16) * self.k:.1f}\\1a&H{round((1 - g) * 255):02X}&"
+                    + f"\\3a&H{round((1 - g) * 255):02X}&}}")
+            glow_text = re.sub(r"\\(1?c|3c)&H[0-9A-Fa-f]+&", "", text).replace("{\\r}", "{\\r" + halo[1:])
+            self.events.append(f"Dialogue: 0,{ts(start)},{ts(end)},{style},,{ml},{mr},{mv},,{halo}{glow_text}")
+            self.events.append(f"Dialogue: 1,{ts(start)},{ts(end)},{style},,{ml},{mr},{mv},,{text}")
+            return
+        self.events.append(f"Dialogue: 0,{ts(start)},{ts(end)},{style},,{ml},{mr},{mv},,{text}")
+
+    def write(self, path: Path) -> Path:
+        head = [
+            "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {self.width}", f"PlayResY: {self.height}",
+            "WrapStyle: 0", "ScaledBorderAndShadow: yes", "YCbCr Matrix: TV.709", "",
+            "[V4+ Styles]",
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
+            "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
+            "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+            *(self._style_line(n) for n in dict.fromkeys([*DEFAULT_STYLES, *self.styles])),
+            "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+        ]
+        path.write_text("\n".join(head + self.events) + "\n", encoding="utf-8")
+        return path
+
+    # --- positions -------------------------------------------------------
+    def y_for(self, position: str | float) -> int:
+        if isinstance(position, (int, float)):
+            return round(self.height * float(position))
+        return round(self.height * {"top": 0.17, "upper": 0.3, "middle": 0.5, "center": 0.5,
+                                    "lower": 0.6, "bottom": 0.6}.get(position, 0.6))
+
+
+def intro_tags(animation: str, x: int, y: int, k: float) -> str:
+    anim = animation or "fade"
+    if anim == "none":
+        return rf"\pos({x},{y})"
+    if anim == "slide_up":
+        return rf"\move({x},{y + round(110 * k)},{x},{y},0,450)\fad(350,250)"
+    if anim == "slide_down":
+        return rf"\move({x},{y - round(110 * k)},{x},{y},0,450)\fad(350,250)"
+    if anim == "rise":  # premium: soft fade-in with a small upward drift
+        return rf"\move({x},{y + round(22 * k)},{x},{y},0,420)\fad(320,200)"
+    if anim == "soft":  # for subtitles that change every second: quick fade, tiny drift
+        return rf"\move({x},{y + round(10 * k)},{x},{y},0,260)\fad(160,100)"
+    if anim == "pop":
+        return rf"\pos({x},{y})\fscx60\fscy60\t(0,260,0.6,\fscx106\fscy106)\t(260,380,\fscx100\fscy100)\fad(150,250)"
+    return rf"\pos({x},{y})\fad(450,300)"
+
+
+def slide_events(doc: AssDoc, seg: dict, duration: float) -> None:
+    """Title + text + bullets as one centred block (so lines never overlap)."""
+    x = doc.width // 2
+    y = doc.y_for(seg.get("text_position", "middle"))
+    parts: list[str] = []
+    if seg.get("title"):
+        parts.append(r"{\rtitle}" + clean(seg["title"]))
+    if seg.get("text"):
+        parts.append(r"{\rtext}" + clean(seg["text"]))
+    bullets = seg.get("bullets") or []
+    start_ms = 600 if parts else 200
+    step = int(float(seg.get("bullet_delay", 0.45)) * 1000)
+    bullet_mark = seg.get("bullet", "•")
+    for i, b in enumerate(bullets):
+        t0 = start_ms + i * step
+        parts.append(rf"{{\rtext\alpha&HFF&\t({t0},{t0 + 300},\alpha&H00&)}}{bullet_mark} {clean(b)}")
+    if not parts:
+        return
+    spacer = r"\N{\fscy35} \N" if seg.get("title") and (seg.get("text") or bullets) else r"\N"
+    body = parts[0] + (spacer + r"\N".join(parts[1:]) if len(parts) > 1 else "")
+    tags = r"{\an5" + intro_tags(seg.get("animation", "slide_up"), x, y, doc.k) + "}"
+    doc.add(float(seg.get("text_start", 0.0)), duration, "title" if seg.get("title") else "text", tags + body)
+
+
+def caption_events(doc: AssDoc, seg: dict, duration: float) -> None:
+    """Text overlay on top of a video/photo segment."""
+    cap = seg.get("text")
+    if not cap:
+        return
+    items = cap if isinstance(cap, list) else [cap]
+    for item in items:
+        if isinstance(item, str):
+            item = {"text": item}
+        start = float(item.get("start", seg.get("text_start", 0.3)))
+        end = float(item.get("end", seg.get("text_end", duration)))
+        sty = item.get("style", seg.get("text_style", "caption"))
+        pos = item.get("position", seg.get("text_position", doc.style(sty).get("position", "top")))
+        anim = item.get("animation", seg.get("text_animation", "pop"))
+        tags = r"{\an5" + intro_tags(anim, doc.width // 2, doc.y_for(pos), doc.k) + "}"
+        doc.add(start, min(end, duration), item.get("style", seg.get("text_style", "caption")),
+                tags + clean(item["text"]))
+
+
+# --- subtitles --------------------------------------------------------------
+
+@dataclass
+class Cue:
+    start: float
+    end: float
+    text: str
+    words: list[tuple[float, float, str]] | None = None  # precise word timings (whisper)
+
+
+_TIME = re.compile(r"(\d+):(\d{2}):(\d{2})[,.](\d{1,3})")
+
+
+def _t(s: str) -> float:
+    m = _TIME.search(s)
+    if not m:
+        raise ValueError(f"Неверное время в SRT: {s}")
+    h, mi, se, ms = m.groups()
+    return int(h) * 3600 + int(mi) * 60 + int(se) + int(ms.ljust(3, "0")) / 1000
+
+
+def parse_srt(text: str) -> list[Cue]:
+    cues = []
+    for block in re.split(r"\n\s*\n", text.replace("\r", "").strip()):
+        lines = [l for l in block.split("\n") if l.strip()]
+        idx = next((i for i, l in enumerate(lines) if "-->" in l), None)
+        if idx is None:
+            continue
+        a, b = lines[idx].split("-->")
+        body = " ".join(lines[idx + 1:]).strip()
+        if body:
+            cues.append(Cue(_t(a), _t(b), re.sub(r"<[^>]+>", "", body)))
+    return cues
+
+
+def write_srt(cues: list[Cue], path: Path) -> Path:
+    def f(t: float) -> str:
+        ms = int(round(t * 1000))
+        h, ms = divmod(ms, 3600000)
+        m, ms = divmod(ms, 60000)
+        s, ms = divmod(ms, 1000)
+        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+    out = [f"{i}\n{f(c.start)} --> {f(c.end)}\n{c.text}\n" for i, c in enumerate(cues, 1)]
+    path.write_text("\n".join(out), encoding="utf-8")
+    return path
+
+
+def _word_times(cue: Cue) -> list[tuple[float, float, str]]:
+    if cue.words:
+        return cue.words
+    words = cue.text.split()
+    if not words:
+        return []
+    weights = [len(w) + 2 for w in words]
+    total = sum(weights)
+    out, t = [], cue.start
+    for w, wt in zip(words, weights):
+        d = (cue.end - cue.start) * wt / total
+        out.append((t, t + d, w))
+        t += d
+    return out
+
+
+def _even(words: list, max_words: int, max_chars: int) -> list[list]:
+    import math
+    chars = sum(len(x[2]) + 1 for x in words)
+    parts = max(math.ceil(len(words) / max_words), math.ceil(chars / max_chars), 1)
+    size = len(words) / parts
+    return [words[round(p * size):round((p + 1) * size)] for p in range(parts) if words[round(p * size):round((p + 1) * size)]]
+
+
+def _split_sentence(sentence: list, max_words: int, max_chars: int) -> list[list]:
+    """Break at commas first (meaning), then split long clauses evenly."""
+    clauses, cur = [], []
+    for w in sentence:
+        cur.append(w)
+        if w[2][-1:] in ",;:—":
+            clauses.append(cur)
+            cur = []
+    if cur:
+        clauses.append(cur)
+    out: list[list] = []
+    for cl in clauses:
+        if out and len(out[-1]) + len(cl) <= max_words and \
+                sum(len(x[2]) + 1 for x in out[-1] + cl) <= max_chars:
+            out[-1] = out[-1] + cl
+        else:
+            out += _even(cl, max_words, max_chars)
+    # glue a lonely trailing word to the previous phrase when it still fits on two lines
+    if len(out) > 1 and len(out[-1]) == 1 and len(out[-2]) + 1 <= max_words + 1:
+        out[-2] = out[-2] + out.pop()
+    return out
+
+
+def chunk(cues: list[Cue], max_words: int, max_chars: int) -> list[list[tuple[float, float, str]]]:
+    """Split cues into short on-screen phrases (reels style).
+
+    Every sentence is split into evenly sized pieces, so no phrase ends with a
+    lonely word on screen ("…и санузлом." -> "…и" / "санузлом.").
+    """
+    chunks = []
+    for cue in cues:
+        sentence: list[tuple[float, float, str]] = []
+        words = _word_times(cue)
+        for k, w in enumerate(words):
+            sentence.append(w)
+            if w[2][-1:] in ".!?…" or k == len(words) - 1:
+                chunks += _split_sentence(sentence, max_words, max_chars)
+                sentence = []
+    return chunks
+
+
+CORNERS = {"top_right": 9, "top_left": 7, "bottom_right": 3, "bottom_left": 1, "top": 8, "bottom_center": 2}
+
+
+def subtitle_events(doc: AssDoc, cues: list[Cue], cfg: dict) -> None:
+    style = doc.style("subtitle")
+    upper = cfg.get("uppercase", False)
+    karaoke = cfg.get("karaoke", True)
+    hl = ass_color(style.get("highlight", "#FFD400"))
+    pos = cfg.get("position", "bottom")
+    margins = (0, 0, 0)
+    if pos in CORNERS:
+        # Text box anchored to a corner. Margins are given in centimetres of a
+        # phone screen (the frame width is assumed to be ~6.6 cm when watched).
+        px_cm = doc.width / float(cfg.get("screen_width_cm", 6.6))
+        m = round(float(cfg.get("margin_cm", 0.5)) * px_cm)
+        box = round(doc.width * float(cfg.get("max_width", 0.6)))
+        an = CORNERS[pos]
+        left = an in (7, 1)
+        centre = an in (8, 2)
+        ml = m if left or centre else max(m, doc.width - m - box)
+        mr = m if not left or centre else max(m, doc.width - m - box)
+        margins = (ml, mr, m)
+        base = "{\\an" + str(an) + "}"
+    else:
+        y = doc.y_for({"bottom": 0.72, "middle": 0.55, "top": 0.2}.get(pos, pos) if isinstance(pos, str) else pos)
+        anim = cfg.get("animation")
+        base = (r"{\an5" + intro_tags(anim, doc.width // 2, y, doc.k) + "}") if anim else \
+            (r"{\an5\pos(" + f"{doc.width // 2},{y}" + ")}")
+    offset = float(cfg.get("offset", 0.0))
+    chunks = chunk(cues, int(cfg.get("max_words", 4)), int(cfg.get("max_chars", 26)))
+    for n, words in enumerate(chunks):
+        start = words[0][0] + offset
+        end = words[-1][1] + offset
+        # keep phrase on screen until the next one starts (no flicker), max +0.4s
+        if n + 1 < len(chunks):
+            end = max(end, min(chunks[n + 1][0][0] + offset, end + 0.4))
+        # libass wraps only at spaces, so a word is never split between lines
+        if start < float(cfg.get("_hide_until", 0)):
+            continue
+        tokens = [clean(w[2].upper() if upper else w[2]) for w in words]
+        if not karaoke:
+            doc.add(start, end, "subtitle", base + " ".join(tokens), margins)
+            continue
+        for i, (ws, we, _) in enumerate(words):
+            ws += offset
+            we = end if i == len(words) - 1 else words[i + 1][0] + offset
+            line = " ".join(
+                (r"{\c" + hl + r"\fscx108\fscy108}" + t + r"{\r}") if j == i else t
+                for j, t in enumerate(tokens)
+            )
+            doc.add(max(ws, start), we, "subtitle", base + line, margins)
+
+
+def title_events(doc: AssDoc, cfg: dict) -> None:
+    """Big multi-line title, every line with its own style (e.g. white + gold).
+
+    A line that would not fit the frame width is scaled down (never squeezed or
+    stretched), and an optional `animation` (fade / rise) is applied per line.
+    """
+    start, end = float(cfg.get("start", 0)), float(cfg.get("end", 3.5))
+    lines = [{"text": x} if isinstance(x, str) else x for x in cfg.get("lines") or []]
+    y0 = doc.y_for(cfg.get("y", 0.7))
+    gap = float(cfg.get("line_gap", 130)) * doc.k
+    top = y0 - gap * (len(lines) - 1) / 2
+    fin, fout = int(cfg.get("fade_in", 0.35) * 1000), int(cfg.get("fade_out", 0.4) * 1000)
+    anim = cfg.get("animation")
+    avail = doc.width * float(cfg.get("max_width", 0.84))
+    for i, line in enumerate(lines):
+        st = doc.style(line.get("style", "title"))
+        text = str(line["text"])
+        if cfg.get("uppercase") or line.get("uppercase"):
+            text = text.upper()
+        size = float(line.get("size", st["size"])) * doc.k
+        est = len(text) * float(st.get("char_width", 0.6)) * size  # rough glyph width
+        if cfg.get("fit") and est > avail:
+            size = max(size * avail / est, float(st.get("min_size", 0)) * doc.k)
+        x, y = doc.width // 2, round(top + i * gap)
+        if anim:
+            pos = intro_tags(anim, x, y, doc.k).replace("\\fad(320,200)", f"\\fad({fin},{fout})")
+        else:
+            pos = rf"\pos({x},{y})\fad({fin},{fout})"
+        doc.add(start, end, line.get("style", "title"), r"{\an5" + pos + rf"\fs{round(size)}" + "}" + clean(text))
