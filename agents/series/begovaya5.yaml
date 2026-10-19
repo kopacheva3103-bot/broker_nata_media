@@ -88,6 +88,7 @@ episodes:
       A1:
         what: "Бега на Ходынском поле, XIX век (гравюра, литография)"
         timecode: "9–15"
+        vertical: outpaint  # афиша: текст по всей ширине — не обрезать, только дорисовать верх и низ
         find:
           - {wiki: "Khodynka racing 19th century Moscow"}
           - {wiki: "Moscow Hippodrome 19th century"}
@@ -155,6 +156,7 @@ episodes:
       С3:
         what: "Рысак в качалке на дорожке ипподрома"
         timecode: "6–9"
+        focus: 0.3          # вертикаль: голова рысака слева — не срезать
         find:
           - {wiki: "harness racing Moscow hippodrome"}
           - {wiki: "trotting race Moscow"}

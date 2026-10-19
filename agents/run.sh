@@ -8,6 +8,7 @@
 #   ./run.sh open                                   — открыть папку агентов в Finder
 #   ./run.sh put <файл> <выпуск> <код> [описание]   — положить свой ролик в папку монтажа
 #   ./run.sh begovaya all                           — серия «Беговая, 5»: архив + генерация + статус
+#   ./run.sh begovaya vertical                      — горизонтальные кадры → вертикаль 9:16 (до оживления)
 #   ./run.sh begovaya animate | status              — оживление / таблица статуса
 #   ./run.sh agent1_search.py "Arbat 1900" -s wiki  — любой агент напрямую
 cd "$(dirname "$0")"

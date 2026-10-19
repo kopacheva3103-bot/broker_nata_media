@@ -61,8 +61,9 @@ def _find(folder, code, exts):
     if not folder.exists():
         return None
     want = _latin(code)
-    files = sorted(p for p in folder.iterdir()
-                   if p.suffix.lower() in exts and _latin(p.name.split("_")[0].split(".")[0]) == want)
+    files = sorted((p for p in folder.iterdir()
+                    if p.suffix.lower() in exts and _latin(p.name.split("_")[0].split(".")[0]) == want),
+                   key=lambda p: ("_9x16" not in p.stem, p.name))  # вертикальная версия — первой
     return files[0] if files else None
 
 

@@ -80,7 +80,8 @@ bash setup_mac.sh          # установка
 ./run.sh keys              # ввести ключи: Терминал спросит, вставляешь ⌘V
 ./run.sh check             # проверка доступов
 ./run.sh begovaya all      # серия «Беговая, 5»: архив + генерация + статус
-./run.sh begovaya animate  # оживление выбранных кадров
+./run.sh begovaya vertical # горизонтальные кадры → вертикаль 9:16 (_9x16.jpg), проверить глазами
+./run.sh begovaya animate  # оживление выбранных кадров (горизонтальные не оживляет)
 ./run.sh begovaya status   # таблица статуса
 ```
 
@@ -201,6 +202,7 @@ python agent2_animate.py --style history_color -m pro
 ```bash
 python run_brief.py series/begovaya5.yaml all          # найти архив + сгенерировать G-кадры + статус
 # ассистент переносит по одному лучшему кадру на код в Выпуск_N/2_выбрано
+python run_brief.py series/begovaya5.yaml vertical     # горизонтальные → 9:16: подрезка до 4:5 + дорисовка FLUX Fill
 python run_brief.py series/begovaya5.yaml animate      # Kling оживляет только кадры с motion
 python run_brief.py series/begovaya5.yaml status       # таблица: что готово, что осталось руками
 python run_brief.py series/begovaya5.yaml generate -e 1 -s G3 --force   # перегенерировать один кадр

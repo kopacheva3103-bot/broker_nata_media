@@ -3,6 +3,7 @@
 Шаги:
     find      — агент-архивист: ищет А-кадры (Wikimedia, PastVu) → 1_кандидаты/<код>
     generate  — агент-художник: рисует G-кадры (FLUX, 3 варианта, 9:16) → 1_кандидаты/<код>
+    vertical  — вертикальные версии 9:16 горизонтальных кадров (до оживления, проверить глазами)
     animate   — агент-аниматор: оживляет в Kling то, что ассистент перенёс в 2_выбрано → 3_монтаж
     status    — таблица: что найдено, выбрано, оживлено и что осталось сделать руками
 
@@ -289,8 +290,66 @@ def edit_scene(brief, number, code, shot, drive, replicate, variants, force):
     print(f"    + {len(made)} вариантов")
 
 
-def step_animate(brief, targets, drive, force, variants=False):
-    shots = {(n, c): s for n, c, s in targets}
+def _code_of(name):
+    """Код кадра из имени файла: «С1_01_wiki.jpg» → C1 (кириллица и латиница — одна буква)."""
+    import montage_bridge
+    return montage_bridge._latin(name.split("_")[0].split(".")[0])
+
+
+def _prefer_vertical(names):
+    """Если у кода есть вертикальная версия «…_9x16», горизонтальный оригинал не берём."""
+    import vertical
+    with_vertical = {_code_of(n) for n in names if vertical.is_derived(n)}
+    return [n for n in names if vertical.is_derived(n) or _code_of(n) not in with_vertical]
+
+
+def step_vertical(brief, targets, drive, force, statics=False):
+    """Горизонтальные кадры 2_выбрано → «<имя>_9x16.jpg» рядом (оживлять и монтировать будем их)."""
+    import montage_bridge
+    import vertical
+    if not montage_bridge.ensure_ffmpeg():
+        return
+    client, made = None, 0
+    for number, code, shot in targets:
+        mode = str(shot.get("vertical", "auto")).lower()
+        if (not shot.get("motion") and not statics) or mode == "keep":
+            continue
+        ep = Episode(brief["series"], number, drive)
+        if drive:
+            files = [(f["name"], f["id"]) for f in drive.list_images(ep.drive_folder(SELECTED))]
+        else:
+            files = [(p.name, None) for p in sorted(ep.path(SELECTED).iterdir()) if p.suffix.lower() in IMAGE_EXT]
+        names = {n for n, _ in files}
+        for name, file_id in files:
+            if _code_of(name) != _code_of(code) or vertical.is_derived(name):
+                continue
+            local = ep.path(SELECTED) / name
+            if file_id and not local.exists():
+                drive.download(file_id, local)
+            if vertical.target(local).name in names and not force:
+                print(f"[{number}/{code}] {name}: вертикаль уже есть")
+                continue
+            if vertical.is_vertical(local):
+                print(f"[{number}/{code}] {name}: уже вертикальный")
+                continue
+            if client is None and mode != "crop":
+                client = Replicate()
+            how = "обрезка 9:16" if mode == "crop" else "подрезка + дорисовка верха и низа"
+            print(f"[{number}/{code}] {name}: горизонтальный → {how}…")
+            out = vertical.make(client, local, shot)
+            if out:
+                ep.publish([out], SELECTED)
+                made += 1
+                print(f"    → {SELECTED}/{out.name}")
+    print(f"Готово: вертикальных версий {made}. Посмотри их в {SELECTED} до оживления: "
+          "если дорисовка не понравилась — удали файл _9x16 и поставь в брифе vertical: crop или keep.")
+
+
+def step_animate(brief, targets, drive, force, variants=False, horizontal=False):
+    import vertical
+    import montage_bridge
+    montage_bridge.ensure_ffmpeg()  # нужен ffprobe, чтобы проверить ориентацию кадров
+    shots = {(n, _code_of(c)): s for n, c, s in targets}
     negative = brief["defaults"].get("negative", "")
     by_episode = {}
     for number in sorted({n for n, _ in shots}):
@@ -305,10 +364,12 @@ def step_animate(brief, targets, drive, force, variants=False):
             done = {p.stem for p in ep.path(MONTAGE).glob("*.mp4")}
         jobs = []
         per_code = {}
+        keep = set(_prefer_vertical([n for n, _ in files]))
+        files = [(n, i) for n, i in files if n in keep]
         for name, _ in files:
-            per_code.setdefault(name.split("_")[0].upper(), []).append(name)
+            per_code.setdefault(_code_of(name), []).append(name)
         for name, file_id in files:
-            code = name.split("_")[0].upper()
+            code = _code_of(name)
             shot = shots.get((number, code))
             if not shot or not shot.get("motion"):
                 continue  # статичный кадр — наезд/параллакс сделает монтажёр
@@ -323,6 +384,11 @@ def step_animate(brief, targets, drive, force, variants=False):
             local = ep.path(SELECTED) / name
             if file_id and not local.exists():
                 drive.download(file_id, local)
+            if not horizontal and str(shot.get("vertical", "auto")).lower() != "keep" \
+                    and not vertical.is_vertical(local):
+                print(f"[{number}/{code}] {name} горизонтальный — не оживляю (в Reels будет полосой).\n"
+                      f"    Сначала: ./run.sh begovaya vertical -e {number}  (или --horizontal, чтобы оживить как есть)")
+                continue
             jobs.append({"image": local, "name": Path(name).stem,
                          "prompt": shot["motion"], "negative": shot.get("negative", negative)})
         if jobs:
@@ -386,8 +452,8 @@ def step_montage(brief, targets, drive, force, final=False, render=True):
         montage_bridge.run(brief, number, ep.local, render=render, final=final)
 
 
-STEPS = {"find": step_find, "generate": step_generate, "animate": step_animate, "status": step_status,
-         "montage": step_montage}
+STEPS = {"find": step_find, "generate": step_generate, "vertical": step_vertical, "animate": step_animate,
+         "status": step_status, "montage": step_montage}
 
 
 def main():
@@ -403,6 +469,8 @@ def main():
     parser.add_argument("--no-render", action="store_true", help="montage: только собрать project.yaml")
     parser.add_argument("--variants", action="store_true",
                         help="оживить все выбранные варианты одного кода (по умолчанию — только если он один)")
+    parser.add_argument("--horizontal", action="store_true", help="animate: оживлять и горизонтальные кадры как есть")
+    parser.add_argument("--statics", action="store_true", help="vertical: и для статичных кадров (без оживления)")
     args = parser.parse_args()
 
     brief = load_brief(args.brief)
@@ -412,7 +480,9 @@ def main():
     drive = open_drive(args.no_drive)
     for step in (["find", "generate", "status"] if args.step == "all" else [args.step]):
         if step == "animate":
-            step_animate(brief, targets, drive, args.force, args.variants)
+            step_animate(brief, targets, drive, args.force, args.variants, args.horizontal)
+        elif step == "vertical":
+            step_vertical(brief, targets, drive, args.force, args.statics)
         elif step == "montage":
             step_montage(brief, targets, drive, args.force, final=args.final, render=not args.no_render)
         else:
