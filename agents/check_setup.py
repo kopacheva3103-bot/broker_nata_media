@@ -32,20 +32,41 @@ def need(key):
     return value
 
 
+KLING_BASES = [
+    "https://api-singapore.klingai.com",
+    "https://api.klingai.com",
+    "https://api-global.klingai.com",
+    "https://api-beijing.klingai.com",
+]
+
+
 def kling():
     import agent2_animate
+    from set_keys import save
     if not env("KLING_API_KEY"):
         need("KLING_ACCESS_KEY"), need("KLING_SECRET_KEY")
     k = agent2_animate.Kling()
-    r = requests.get(f"{k.base}/v1/videos/image2video", params={"pageNum": 1, "pageSize": 1},
-                     headers=k._headers(), timeout=30)
-    if r.status_code == 401:
-        raise RuntimeError("Kling не принял ключ: проверь, что скопировала его целиком")
-    r.raise_for_status()
-    body = r.json()
-    if body.get("code") != 0:
-        raise RuntimeError(f"Kling: {body.get('message')}")
-    return f"ключи приняты ({k.base}). Баланс API смотри в кабинете Kling"
+    bases = [k.base] + [b for b in KLING_BASES if b != k.base]
+    answers = []
+    for base in bases:
+        try:
+            r = requests.get(f"{base}/v1/videos/image2video", params={"pageNum": 1, "pageSize": 1},
+                             headers=k._headers(), timeout=20)
+        except requests.RequestException as e:
+            answers.append(f"{base}: не открывается ({type(e).__name__})")
+            continue
+        try:
+            body = r.json()
+        except ValueError:
+            body = {}
+        if r.ok and body.get("code") == 0:
+            if base != k.base:
+                save("KLING_API_BASE", base)
+                return f"ключ принят на {base} — адрес сохранён в .env"
+            return f"ключ принят ({base}). Баланс API смотри в кабинете Kling"
+        answers.append(f"{base}: HTTP {r.status_code}, code={body.get('code')}, "
+                       f"{body.get('message') or r.text[:120]}")
+    raise RuntimeError("Kling не принял ключ ни на одном адресе. Ответы:\n      " + "\n      ".join(answers))
 
 
 def replicate():
