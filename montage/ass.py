@@ -264,7 +264,8 @@ def _split_sentence(sentence: list, max_words: int, max_chars: int) -> list[list
             out += _even(cl, max_words, max_chars)
     # glue a lonely trailing word to the previous phrase when it still fits on two lines
     if len(out) > 1 and len(out[-1]) == 1 and len(out[-2]) + 1 <= max_words + 1:
-        out[-2] = out[-2] + out.pop()
+        last = out.pop()
+        out[-1] = out[-1] + last
     return out
 
 

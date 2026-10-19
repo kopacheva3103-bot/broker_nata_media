@@ -34,6 +34,7 @@ CANDIDATES = "1_кандидаты"
 SELECTED = "2_выбрано"
 MONTAGE = "3_монтаж"
 READY = "4_готово"  # монтажёр кладёт сюда итоговый ролик
+SOURCES = "исходники"  # съёмка (коды С…) и озвучка
 
 
 class Episode:
@@ -48,7 +49,7 @@ class Episode:
             self._ids["root"] = drive.folder(self.code, drive.folder(series))
         else:
             # Сразу создаём все три папки, чтобы было куда переносить выбранные кадры
-            for sub in (CANDIDATES, SELECTED, MONTAGE, READY):
+            for sub in (SOURCES, CANDIDATES, SELECTED, MONTAGE, READY):
                 (self.local / sub).mkdir(parents=True, exist_ok=True)
 
     def path(self, *parts):
@@ -277,7 +278,17 @@ def step_status(brief, targets, drive, _force):
     print(f"\nСохранено: {report}")
 
 
-STEPS = {"find": step_find, "generate": step_generate, "animate": step_animate, "status": step_status}
+def step_montage(brief, targets, drive, force, final=False, render=True):
+    import montage_bridge
+    for number in sorted({n for n, _, _ in targets} or brief["episodes"]):
+        if not brief["episodes"][number].get("timeline"):
+            continue
+        ep = Episode(brief["series"], number, None)
+        montage_bridge.run(brief, number, ep.local, render=render, final=final)
+
+
+STEPS = {"find": step_find, "generate": step_generate, "animate": step_animate, "status": step_status,
+         "montage": step_montage}
 
 
 def main():
@@ -289,6 +300,8 @@ def main():
     parser.add_argument("-s", "--shot", action="append", help="только этот код кадра, например G3")
     parser.add_argument("--force", action="store_true", help="переделать, даже если уже есть результат")
     parser.add_argument("--no-drive", action="store_true", help="работать только локально в output/")
+    parser.add_argument("--final", action="store_true", help="montage: финальный рендер 1080×1920 (иначе черновик)")
+    parser.add_argument("--no-render", action="store_true", help="montage: только собрать project.yaml")
     parser.add_argument("--variants", action="store_true",
                         help="оживить все выбранные варианты одного кода (по умолчанию — только если он один)")
     args = parser.parse_args()
@@ -299,6 +312,8 @@ def main():
     for step in (["find", "generate", "status"] if args.step == "all" else [args.step]):
         if step == "animate":
             step_animate(brief, targets, drive, args.force, args.variants)
+        elif step == "montage":
+            step_montage(brief, targets, drive, args.force, final=args.final, render=not args.no_render)
         else:
             STEPS[step](brief, targets, drive, args.force)
 
