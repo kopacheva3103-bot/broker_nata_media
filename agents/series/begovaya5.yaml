@@ -123,6 +123,52 @@ episodes:
         what: "Скриншот заголовка СМИ об открытии ипподрома 17.09.2026"
         timecode: "55–62"
         manual: "m24.ru / iz.ru / rg.ru — скриншот заголовка с датой"
+      # Съёмки не будет: С-кадры собираем из современных фото (Wikimedia) и генерации, оживляем в Kling
+      С1:
+        what: "Кони на крыше ипподрома сегодня, снизу вверх"
+        timecode: "0–4, 48–50"
+        find:
+          - {wiki: "Moscow Hippodrome horses sculpture roof"}
+          - {wiki: "Central Moscow Hippodrome"}
+        generate: >-
+          Bronze sculptures of rearing horses on the roof of the Central Moscow Hippodrome, monumental
+          neoclassical Stalinist building, low angle looking up, clear morning sky, warm sunlight,
+          present day, photorealistic, no people, vertical 9:16
+        motion: "Медленный подъём камеры снизу вверх к скульптурам коней на крыше, утреннее солнце, лёгкие облака"
+        negative: "люди, лица, текст, водяные знаки, деформация скульптур и здания, резкие движения камеры"
+      С2:
+        what: "Табличка «Беговая ул.» на доме"
+        timecode: "4–6"
+        generate: >-
+          Close-up of a classic blue Moscow street name sign with white letters "БЕГОВАЯ УЛ." mounted on a
+          beige stucco wall of a Stalinist building, soft morning light, present day, photorealistic, vertical 9:16
+        motion: "Едва заметный наезд камеры на табличку, по стене скользит солнечный блик"
+        negative: "люди, лица, искажённые буквы, лишний текст, водяные знаки, резкие движения камеры"
+        fallback: "слайд «БЕГОВАЯ УЛ.» (если буквы на генерации кривые)"
+      С3:
+        what: "Рысак в качалке на дорожке ипподрома"
+        timecode: "6–9"
+        find:
+          - {wiki: "harness racing Moscow hippodrome"}
+          - {wiki: "trotting race Moscow"}
+        generate: >-
+          A trotter horse pulling a light racing sulky with a driver seen from behind, racing on a sand track
+          of the Moscow hippodrome, grandstand in the background, motion, golden hour, present day,
+          cinematic, vertical 9:16
+        motion: "Рысак бежит рысью по дорожке, эффект замедленной съёмки, камера плавно ведёт за ним"
+        negative: "узнаваемые лица, текст, водяные знаки, лишние ноги у лошади, деформация, резкие движения камеры"
+      С4:
+        what: "Главное здание ипподрома сегодня: фасад, трибуны"
+        timecode: "54–62"
+        find:
+          - {wiki: "Central Moscow Hippodrome building"}
+          - {wiki: "Moscow Hippodrome facade Begovaya"}
+        motion: "Плавный пролёт камеры вдоль фасада, солнечный день, лёгкое движение облаков"
+        negative: "люди крупным планом, текст, водяные знаки, деформация здания, резкие движения камеры"
+      С5:
+        what: "Наталья — финал серии (вместо съёмки на аллее)"
+        timecode: "65–72,5"
+        manual: "положить своё фото (фотосессия) в Выпуск_1/2_выбрано с именем С5_….jpg — будет плавный наезд"
       G1:
         what: "1834, бега на открытом поле"
         timecode: "15–19"

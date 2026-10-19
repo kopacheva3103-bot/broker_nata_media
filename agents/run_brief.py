@@ -330,7 +330,9 @@ def main():
     args = parser.parse_args()
 
     brief = load_brief(args.brief)
-    targets = list(selected_shots(brief, args.episode, [s.upper() for s in args.shot or []]))
+    codes = [c.upper() for c in args.shot or []]
+    codes = ["С" + c[1:] if c[:1] == "C" and c[1:].isdigit() else c for c in codes]  # латинская C → С
+    targets = list(selected_shots(brief, args.episode, codes))
     drive = open_drive(args.no_drive)
     for step in (["find", "generate", "status"] if args.step == "all" else [args.step]):
         if step == "animate":
