@@ -169,6 +169,7 @@ episodes:
       С4:
         what: "Главное здание ипподрома сегодня: фасад, трибуны"
         timecode: "54–62"
+        focus: 0.68         # вертикаль: портик с конями правее центра
         find:
           - {wiki: "Central Moscow Hippodrome building"}
           - {wiki: "Moscow Hippodrome facade Begovaya"}
