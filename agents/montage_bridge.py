@@ -99,6 +99,33 @@ def _texts(screen, dur):
              "end": dur, "animation": "rise"} for i, (t, st) in enumerate(lines)]
 
 
+def _find_voice(ep_dir):
+    """Озвучка в «исходники» (имя со словом «озвучка» или «voice»); служебные файлы «_…» не в счёт."""
+    folder = ep_dir / "исходники"
+    if not folder.exists():
+        return None
+    return next((p for p in sorted(folder.iterdir())
+                 if p.suffix.lower() in AUDIO_EXT and not p.name.startswith("_")
+                 and re.search(r"озвучк|voice", p.name, re.I)), None)
+
+
+def _sync_to_voice(rows, voice, ep_dir, report):
+    """Подгоняет строки таблицы под реальную озвучку. None — если распознать не удалось."""
+    import os
+    import voice_align
+    model = os.getenv("WHISPER_MODEL") or "small"
+    try:
+        words = voice_align.transcribe(voice, ep_dir / "исходники" / "_озвучка_слова.json", model)
+        spans, cut_at = voice_align.timings(rows, words)
+    except Exception as e:  # нет faster-whisper, не распознался текст и т. п.
+        report.append(f"⚠️ синхронизация по голосу не удалась ({e}) — кадры стоят по таймкодам сценария")
+        return None
+    synced = voice_align.prepare_voice(voice, ep_dir / "исходники" / "_озвучка_синхр.m4a", cut_at)
+    report.append(f"синхронизация по голосу: запись обрезана с {cut_at:.1f} с (выбран последний дубль хука), "
+                  f"ролик {spans[-1][1]:.1f} с")
+    return spans, synced
+
+
 def build(brief, number, ep_dir):
     """Возвращает (project: dict, report: list[str])."""
     ep = brief["episodes"][number]
@@ -107,9 +134,14 @@ def build(brief, number, ep_dir):
         raise SystemExit(f"В брифе у выпуска {number} нет таблицы timeline — нечего монтировать")
     segments, cues, report = [], [], []
     title = None
-    for row in rows:
-        a, b = _span(row["t"])
-        dur = b - a
+    voice = _find_voice(ep_dir)
+    spans, voice_file = [_span(r["t"]) for r in rows], voice
+    if voice:
+        synced = _sync_to_voice(rows, voice, ep_dir, report)
+        if synced:
+            spans, voice_file = synced
+    for row, (a, b) in zip(rows, spans):
+        dur = round(b - a, 2)
         grade = GRADES.get(row.get("color", "warm"), GRADES["warm"])
         if row.get("final"):
             plain, accent = _split_accent(row["final"])
@@ -117,7 +149,7 @@ def build(brief, number, ep_dir):
                              "title": brief.get("nickname", ""),
                              "text": f"{plain} {accent}".strip() + f"\n{number}/{brief.get('total', len(brief['episodes']))}",
                              "animation": "fade", "text_position": SLIDE_TEXT_Y})
-            report.append(f"{row['t']:>10}  финальная карточка")
+            report.append(f"{a:5.1f}–{b:5.1f}  финальная карточка")
             continue
         if row.get("slide"):
             seg = {"type": "slide", "duration": dur, "background": {"gradient": ["#3a2f22", "#14110d"]},
@@ -154,7 +186,7 @@ def build(brief, number, ep_dir):
         segments.append(seg)
         if row.get("voice"):
             cues.append({"start": a, "end": b, "text": row["voice"]})
-        report.append(f"{row['t']:>10}  {what}")
+        report.append(f"{a:5.1f}–{b:5.1f}  {what}")
 
     project = {
         "preset": "premium",
@@ -168,12 +200,9 @@ def build(brief, number, ep_dir):
     }
     if title:
         project["title"] = title
-    voice = next((p for p in sorted((ep_dir / "исходники").glob("*"))
-                  if p.suffix.lower() in AUDIO_EXT and re.search(r"озвучк|voice", p.name, re.I)), None) \
-        if (ep_dir / "исходники").exists() else None
-    if voice:
-        project["audio"]["voiceover"] = str(voice.relative_to(ep_dir))
-        report.append(f"озвучка: {voice.name}")
+    if voice_file:
+        project["audio"]["voiceover"] = str(voice_file.relative_to(ep_dir))
+        report.append(f"озвучка: {voice_file.name}")
     else:
         report.append("озвучки нет — положи файл в «исходники» (имя со словом «озвучка»)")
     return project, report

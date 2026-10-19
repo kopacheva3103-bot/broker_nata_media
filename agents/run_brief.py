@@ -20,6 +20,7 @@
 """
 import argparse
 import csv
+import shutil
 from pathlib import Path
 
 import requests
@@ -83,7 +84,29 @@ def load_brief(path):
     brief = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     brief.setdefault("defaults", {})
     brief.setdefault("places", {})
+    adopt_renamed(brief)
     return brief
+
+
+def adopt_renamed(brief):
+    """Серию переименовали в брифе — переносим её папку на диске под новое имя.
+
+    Новой папки нет — просто переименовываем старую. Есть обе (часть файлов уже легла в новую) —
+    копируем старую поверх, а саму старую оставляем с пометкой, ничего не удаляя.
+    """
+    old_name = brief.get("renamed_from")
+    if not old_name:
+        return
+    old, new = OUTPUT_DIR / old_name, OUTPUT_DIR / brief["series"]
+    if not old.is_dir():
+        return
+    if not new.exists():
+        old.rename(new)
+        print(f"→ Папка серии переименована: «{old_name}» → «{brief['series']}»")
+        return
+    shutil.copytree(old, new, dirs_exist_ok=True)
+    old.rename(old.with_name(old_name + " (перенесено)"))
+    print(f"→ Файлы из «{old_name}» перенесены в «{brief['series']}»; старая папка помечена «(перенесено)»")
 
 
 def selected_shots(brief, episodes, shots):

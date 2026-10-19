@@ -5,3 +5,4 @@ google-api-python-client>=2.100
 google-auth-oauthlib>=1.2
 PyYAML>=6.0
 static-ffmpeg>=2.5   # ffmpeg для монтажа без Homebrew (скачивается при первом запуске)
+faster-whisper>=1.0   # синхронизация монтажа по озвучке (время каждого слова)
