@@ -98,7 +98,10 @@ def years_range(text):
 
 def search(query, brief, geo_cache, limit):
     if "wiki" in query:
-        return archivist.search_wiki(query["wiki"], limit, years_range(query.get("years")))
+        found, used = archivist.search_wiki_relaxed(query["wiki"], limit, years_range(query.get("years")))
+        note = f" (искал как «{used}»)" if used != query["wiki"] else ""
+        print(f"    Wikimedia «{query['wiki']}»: {len(found)}{note}")
+        return found
     if "pastvu_cid" in query:
         return archivist.pastvu_photo(query["pastvu_cid"])
     if "pastvu" in query:
@@ -106,7 +109,9 @@ def search(query, brief, geo_cache, limit):
         if place not in geo_cache:
             geo_cache[place] = archivist.geocode(place)
             print(f"    координаты «{place}»: {geo_cache[place][0]:.5f}, {geo_cache[place][1]:.5f}")
-        return archivist.search_pastvu(geo_cache[place], limit, years_range(query.get("years")))
+        found = archivist.search_pastvu(geo_cache[place], limit, years_range(query.get("years")))
+        print(f"    PastVu «{query['pastvu']}» {query.get('years', '')}: {len(found)}")
+        return found
     raise ValueError(f"непонятный запрос: {query}")
 
 

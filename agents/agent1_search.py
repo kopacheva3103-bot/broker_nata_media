@@ -18,6 +18,7 @@ import csv
 import html
 import json
 import re
+import time
 from pathlib import Path
 
 import requests
@@ -159,15 +160,35 @@ def pastvu_photo(cid):
 
 
 def geocode(place):
-    """Адрес → координаты через OpenStreetMap, чтобы не искать их вручную."""
-    r = requests.get("https://nominatim.openstreetmap.org/search",
-                     params={"q": place, "format": "json", "limit": 1},
-                     headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT)
-    r.raise_for_status()
-    found = r.json()
-    if not found:
-        raise RuntimeError(f"не нашёл координаты для «{place}» — укажи geo вручную")
-    return float(found[0]["lat"]), float(found[0]["lon"])
+    """Адрес → координаты через OpenStreetMap, чтобы не искать их вручную.
+
+    Карты плохо понимают название в начале адреса («Московский ипподром, Беговая, 22»),
+    поэтому при неудаче пробуем адрес без первых частей и с «Россия» в конце.
+    """
+    parts = [p.strip() for p in place.split(",") if p.strip()]
+    variants = [", ".join(parts[i:]) for i in range(len(parts) - 1)] or [place]
+    variants += [v + ", Россия" for v in variants]
+    for i, query in enumerate(dict.fromkeys(variants)):
+        if i:
+            time.sleep(1.1)  # правило OpenStreetMap: не чаще запроса в секунду
+        r = requests.get("https://nominatim.openstreetmap.org/search",
+                         params={"q": query, "format": "json", "limit": 1},
+                         headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT)
+        r.raise_for_status()
+        found = r.json()
+        if found:
+            return float(found[0]["lat"]), float(found[0]["lon"])
+    raise RuntimeError(f"не нашёл координаты для «{place}» — укажи geo вручную")
+
+
+def search_wiki_relaxed(query, limit, years):
+    """Commons ищет файлы, где есть ВСЕ слова запроса. Если пусто — убираем слова с конца."""
+    words = query.split()
+    for n in range(len(words), 1, -1):
+        found = search_wiki(" ".join(words[:n]), limit, years)
+        if found:
+            return found, " ".join(words[:n])
+    return [], query
 
 
 def download(item, folder):
