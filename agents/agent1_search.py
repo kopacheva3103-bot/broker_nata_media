@@ -191,6 +191,17 @@ def search_wiki_relaxed(query, limit, years):
     return [], query
 
 
+def yadisk_file(public_url, path, dest):
+    """Скачивает файл из публичной папки Яндекс.Диска (ссылка вида disk.360.yandex.ru/d/…)."""
+    r = requests.get("https://cloud-api.yandex.net/v1/disk/public/resources/download",
+                     params={"public_key": public_url, "path": path}, timeout=TIMEOUT)
+    r.raise_for_status()
+    data = requests.get(r.json()["href"], timeout=300)
+    data.raise_for_status()
+    Path(dest).write_bytes(data.content)
+    return dest
+
+
 def download(item, folder):
     path = folder / f"{item['source']}_{item['id']}.jpg"
     r = requests.get(item["url"], headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT)

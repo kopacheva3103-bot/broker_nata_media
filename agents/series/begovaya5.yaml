@@ -25,6 +25,10 @@ defaults:
     узнаваемые лица, крупные портреты, современные машины, современная одежда, яркие цвета,
     деформация зданий, лишние конечности, текст, водяные знаки, резкие движения камеры
 
+# Свои материалы Натальи: публичная папка на Яндекс.Диске. use: путь к файлу внутри неё
+assets:
+  yadisk: "https://disk.360.yandex.ru/d/lzIzYAyqGkWH4w"
+
 places:
   hippodrome: "Беговая улица, 22, Москва"   # Московский ипподром
   begovaya5: "Беговая улица, 5, Москва"
@@ -46,10 +50,10 @@ episodes:
          need: "С3 рысак в качалке, рапид"}
       - {t: "9.0-15.0", shots: [A1, G1], color: sepia, screen: "◆1834 · ХОДЫНКА",
          voice: "Первого августа тысяча восемьсот тридцать четвёртого года на Ходынском поле прошёл первый рысистый бег."}
-      - {t: "15.0-19.0", shots: [G1], color: sepia, screen: "ЧЕЙ РЫСАК ◆БЫСТРЕЕ",
+      - {t: "15.0-19.0", shots: [ДОП2, G1], color: sepia, screen: "ЧЕЙ РЫСАК ◆БЫСТРЕЕ",
          voice: "Николаевская Москва едет за город — смотреть, чей рысак быстрее."}
       - {t: "19.0-21.0", shots: [G2], color: sepia, voice: "И вот тут начинаются большие деньги."}
-      - {t: "21.0-26.0", shots: [A2, G4], color: sepia, screen: "◆1 000 000 РУБЛЕЙ",
+      - {t: "21.0-26.0", shots: [ДОП1, A2, G4], color: sepia, screen: "◆1 000 000 РУБЛЕЙ",
          voice: "В конце века здесь поднимают каменные трибуны с башенками. Больше миллиона рублей."}
       - {t: "26.0-33.0", color: sepia, slide: {title: "≈ 9 МЛРД ₽", text: "≈ 100 КВАРТИР"},
          voice: "Запомните эту цифру. Сегодня это семь с половиной — девять миллиардов. Около ста пятикомнатных квартир на этой улице.",
@@ -180,6 +184,7 @@ episodes:
       G2:
         what: "Гроссбух и монеты"
         timecode: "19–21"
+        use: "/349a082bb7611f1853112b3f6efdfff.mp4"   # своё оживлённое видео Натальи
         generate: >-
           19th century ledger book and a pile of Russian imperial gold and silver coins on a wooden
           desk, candle light, cinematic, sepia, vertical 9:16
@@ -194,20 +199,79 @@ episodes:
       G4:
         what: "Пожар трибун, 1949"
         timecode: "43–48"
+        use: "/59d7214bb7711f188d42a7693f982c4.mp4"   # своё оживлённое видео Натальи
         generate: >-
           Night fire at an old hippodrome grandstand with small towers, 1949 Moscow,
           silhouettes of firefighters from behind, sparks, cinematic, sepia, vertical 9:16
         motion: "Пламя колышется, искры поднимаются вверх, дым медленно идёт"
 
+      ДОП1:
+        what: "Бега и трибуны с башенками (своё видео)"
+        timecode: "21–26"
+        use: "/999ac2abb7311f1a1c6e21c62c85c43.mp4"
+      ДОП2:
+        what: "Зрители с биноклем на трибуне (своё видео)"
+        timecode: "15–19"
+        use: "/a261972bb2811f1a1c6e21c62c85c43.mp4"
+
   2:
     title: "Как дом успели украсить до запрета"
     shots:
+      С1:
+        what: "Фасад Беговой, 5 снизу вверх: лепнина, эркеры"
+        timecode: "0–4, 30–34"
+        find:
+          - {wiki: "Begovaya Street 5 Moscow"}
+          - {wiki: "Begovaya Street Moscow Stalinist building"}
+          - {pastvu: begovaya5, years: "1956-2025"}
+        motion: "Медленный подъём камеры снизу вверх по фасаду, лепнина и эркеры, утреннее солнце"
+        manual: "лучше всего — своё фото фасада (телефон, любое) в 2_выбрано с именем С1_….jpg"
+      С2:
+        what: "Детали декора: эркер, карниз, лепнина"
+        timecode: "4–10, 26–34"
+        find:
+          - {wiki: "Stalinist architecture Moscow stucco cornice"}
+        manual: "детали именно этого дома — со своего фото фасада"
+      С3:
+        what: "Фасад целиком в солнце"
+        timecode: "26–30, 34–40"
+        find:
+          - {pastvu: begovaya5, years: "1956-2025"}
+        manual: "своё фото фасада целиком"
+      С4:
+        what: "Табличка «Беговая ул., 5»"
+        timecode: "4–7"
+        generate: >-
+          Close-up of a classic blue Moscow house number sign with white letters "БЕГОВАЯ УЛ. 5" on a beige
+          stucco wall of a Stalinist building, soft morning light, present day, photorealistic, vertical 9:16
+        motion: "Едва заметный наезд камеры на табличку, солнечный блик"
+      С5:
+        what: "Входная дверь квартиры открывается"
+        timecode: "40–43"
+        use: "/фото объекта/13-large_landscape.png"
+        motion: "Входная дверь квартиры медленно открывается внутрь, камера едва заметно движется вперёд, тёплый свет"
+        negative: "люди, лица, текст, водяные знаки, деформация двери и стен, резкие движения камеры"
+      С6:
+        what: "Гостиная с люстрами — пролёт к окнам"
+        timecode: "43–46"
+        use: "/фото объекта/01-large_landscape.png"
+        motion: "Плавный пролёт камеры через гостиную к окнам, хрусталь люстр мерцает, мягкий дневной свет"
+        negative: "люди, лица, текст, водяные знаки, деформация мебели и стен, резкие движения камеры"
+      С7:
+        what: "Потолок с подсветкой и люстрой"
+        timecode: "40–43"
+        use: "/фото объекта/04-large_landscape.png"
+      С8:
+        what: "Наталья — финальная фраза"
+        timecode: "46–48,5"
+        manual: "своё фото в 2_выбрано с именем С8_….jpg"
       A1:
         what: "Текст / обложка постановления «Об устранении излишеств…» (4.11.1955)"
         timecode: "10–14"
         find:
           - {wiki: "Об устранении излишеств в проектировании и строительстве"}
-        manual: "docs.historyrussia.org, rusneb.ru. Не нашли — заголовок машинописью + штамп «ИЗЛИШЕСТВО» (монтажёр)"
+        manual: "docs.historyrussia.org, rusneb.ru. Не нашли — слайд машинописью + штамп «ИЗЛИШЕСТВО»"
+        fallback: G1
       A2:
         what: "Ранние хрущёвки (1957–1960)"
         timecode: "18–26"
@@ -237,10 +301,82 @@ episodes:
           Moscow 1958, construction of simple five-storey prefab apartment blocks, cranes,
           workers seen from afar, overcast day, sepia archival look, cinematic, vertical 9:16
         motion: "Медленная панорама влево, краны поворачиваются"
+    timeline:
+      - {t: "0.0-4.0", shots: [С1, A3], color: sepia, screen: "УКРАШАТЬ УЖЕ ◆ЗАПРЕТИЛИ",
+         voice: "Этот дом достраивали, когда украшать дома в СССР уже запретили.", need: "фасад Беговой, 5 снизу"}
+      - {t: "4.0-7.0", shots: [С4, С2], color: sepia, screen: "БЕГОВАЯ, 5 · ◆1955",
+         voice: "Беговая, пять. Пятьдесят пятый год."}
+      - {t: "7.0-10.0", shots: [С2, С1], color: sepia, voice: "Проект готов, стены растут — с эркерами, карнизами, лепниной."}
+      - {t: "10.0-14.0", shots: [A1, G1], color: sepia, screen: "«ОБ УСТРАНЕНИИ ◆ИЗЛИШЕСТВ»",
+         voice: "И тут, четвёртого ноября, выходит постановление «Об устранении излишеств»."}
+      - {t: "14.0-18.0", shots: [G1], color: sepia, screen: "◆ЛИШНЕЕ", voice: "Колонны, скульптуры, декор — всё объявлено лишним."}
+      - {t: "18.0-22.0", shots: [G2, A2], color: sepia, voice: "По всей Москве проекты режут на ходу."}
+      - {t: "22.0-26.0", shots: [A2, G2], color: sepia, screen: "ВМЕСТО ДВОРЦОВ — ◆КОРОБКИ",
+         voice: "Вместо дворцов — хрущёвки, простые коробки без единой детали."}
+      - {t: "26.0-30.0", shots: [С3, С1], color: warm, screen: "ЕГО ◆УСПЕЛИ",
+         voice: "А этот дом успевают закончить таким, каким его нарисовали.", need: "фасад целиком в солнце"}
+      - {t: "30.0-34.0", shots: [С2, С1], color: warm, screen: "ОДИН ИЗ ◆ПОСЛЕДНИХ",
+         voice: "В пятьдесят шестом он встаёт — одним из последних в своём роде."}
+      - {t: "34.0-40.0", shots: [С3, С1], color: warm, screen: "БОЛЬШЕ ◆НЕ СТРОИЛИ",
+         voice: "Такие дома больше не строили. Поэтому их и называют «сталинками с фасадом»."}
+      - {t: "40.0-43.0", shots: [С5, С7], color: warm, voice: "Внутри — всё то же: потолки, толстые стены,"}
+      - {t: "43.0-46.0", shots: [С6], color: warm, screen: "◆5 КОМНАТ ВНУТРИ", voice: "пять комнат в квартире, которую я сейчас продаю."}
+      - {t: "46.0-48.5", shots: [С8], color: warm, screen: "ЧТО ◆ВНИЗУ? →",
+         voice: "Подпишитесь: в следующем ролике — что было на первом этаже этого дома.", need: "твоё фото"}
+      - {t: "48.5-50.0", final: "Что было ◆внизу — в следующем ролике"}
 
   3:
     title: "Кинотеатр, который стал театром"
     shots:
+      С1:
+        what: "Фасад дома, камера опускается ко входу в театр"
+        timecode: "0–4"
+        find:
+          - {wiki: "Theatre Centre of Drama and Directing Moscow Begovaya"}
+          - {wiki: "Центр драматургии и режиссуры"}
+        manual: "своё фото входа в театр / фасада"
+      С2:
+        what: "Вход в театр с вывеской и афишей"
+        timecode: "0–4, 24–28"
+        find:
+          - {wiki: "Центр драматургии и режиссуры Беговая"}
+        generate: >-
+          Entrance of a small Moscow drama theatre on the ground floor of a decorated Stalinist apartment
+          building, glass doors, warm light inside, theatre posters, early evening, present day,
+          photorealistic, no readable text, vertical 9:16
+        motion: "Медленный наезд ко входу, тёплый свет в дверях, лёгкое движение людей вдали"
+      С3:
+        what: "Фойе театра с колоннами"
+        timecode: "28–33"
+        generate: >-
+          Small elegant theatre foyer with white columns and warm chandeliers, empty, evening, present day,
+          photorealistic, vertical 9:16
+        motion: "Плавный пролёт камеры через фойе между колоннами"
+      С4:
+        what: "Пустой зал, один луч света на сцене"
+        timecode: "40–43"
+        generate: >-
+          Empty small theatre hall with dark red seats, a single spotlight beam on an empty stage, dust in the
+          light, cinematic, present day, vertical 9:16
+        motion: "Луч прожектора медленно зажигается, пылинки в свете, камера неподвижна"
+      С5:
+        what: "Календарь «13 января», ёлочная игрушка, бокал"
+        timecode: "36,5–40"
+        generate: >-
+          Elegant table in a luxurious cream-colored living room with a crystal chandelier, a small desk calendar
+          showing January 13, a vintage glass Christmas ornament and a champagne glass, soft warm light, shallow
+          depth of field, present day, photorealistic, vertical 9:16
+        motion: "Едва заметный наезд, блик на ёлочной игрушке, пузырьки в бокале"
+      С6:
+        what: "Квартира этажами выше: гостиная"
+        timecode: "43–47"
+        use: "/фото объекта/07-large_landscape.png"
+        motion: "Плавный пролёт камеры по гостиной к окнам, мягкий дневной свет"
+        negative: "люди, лица, текст, водяные знаки, деформация мебели и стен, резкие движения камеры"
+      С7:
+        what: "Наталья — призыв «БЕГОВАЯ»"
+        timecode: "47–53,5"
+        manual: "своё фото в 2_выбрано с именем С7_….jpg"
       A1:
         what: "Кинотеатр «Темп» на Беговой"
         timecode: "4–8"
@@ -259,11 +395,14 @@ episodes:
         timecode: "28–33"
         find:
           - {wiki: "Mikhail Roshchin playwright"}
-        fallback: "типографическая карточка «МИХАИЛ РОЩИН · драматург · 1933–2010»"
+        fallback: "слайд «МИХАИЛ РОЩИН · драматург · 1933–2010»"
       A4:
         what: "Книга / сборник пьес Рощина"
         timecode: "33–36,5"
-        manual: "сфотографировать физическую книгу"
+        generate: >-
+          An old Soviet hardcover book of plays lying on a wooden table next to a theatre ticket, warm lamp light,
+          shallow depth of field, no readable text, vertical 9:16
+        manual: "лучше — фото настоящей книги"
       G1:
         what: "Очередь у кинотеатра «Темп», 1957"
         timecode: "8–11"
@@ -286,10 +425,117 @@ episodes:
           The same small Soviet cinema hall, cinema screen being replaced by a red theatre curtain
           and stage lights, 1990, cinematic, sepia tone, vertical 9:16
         motion: "Занавес медленно открывается, зажигается свет сцены"
+    timeline:
+      - {t: "0.0-4.0", shots: [С2, С1], color: warm, screen: "ЖИВУТ НАД ◆ТЕАТРОМ", voice: "Жители этого дома живут над театром."}
+      - {t: "4.0-8.0", shots: [A1, G1], color: sepia, screen: "БЕГОВАЯ, 5 · ◆1956",
+         voice: "Когда в пятьдесят шестом строили Беговую, пять, первый этаж сразу отдали под кино."}
+      - {t: "8.0-11.0", shots: [G1], color: sepia, screen: "КИНОТЕАТР ◆«ТЕМП»", voice: "Кинотеатр «Темп»."}
+      - {t: "11.0-15.0", shots: [G2, A2], color: sepia, screen: "◆30 ЛЕТ КИНО", voice: "Больше тридцати лет москвичи спускались сюда на сеансы."}
+      - {t: "15.0-18.0", shots: [G2], color: sepia, voice: "А потом кино стало не нужно."}
+      - {t: "18.0-24.0", shots: [G3], color: sepia, screen: "ЭКРАН → ◆СЦЕНА",
+         voice: "В девяностом экран сняли, поставили сцену — театр «Вернисаж»."}
+      - {t: "24.0-28.0", shots: [С2], color: warm, voice: "Но настоящая история началась позже."}
+      - {t: "28.0-33.0", shots: [A3, С3], color: warm, screen: "КАЗАНЦЕВ И ◆РОЩИН",
+         voice: "Сюда пришёл театр, который основали драматурги Алексей Казанцев и Михаил Рощин."}
+      - {t: "33.0-36.5", shots: [A4], color: warm, screen: "«СТАРЫЙ ◆НОВЫЙ ГОД»", voice: "Рощин — это автор «Старого Нового года»."}
+      - {t: "36.5-40.0", shots: [С5], color: warm, screen: "◆13 ЯНВАРЯ",
+         voice: "Той самой комедии, которую каждый год показывают тринадцатого января."}
+      - {t: "40.0-43.0", shots: [С4], color: warm, voice: "Так что вечером здесь — спектакль."}
+      - {t: "43.0-47.0", shots: [С6], color: warm, screen: "А ◆ЭТАЖАМИ ВЫШЕ…", voice: "А этажами выше — пятикомнатная квартира, которую я продаю."}
+      - {t: "47.0-53.5", shots: [С7], color: warm, screen: "ПИШИТЕ «◆БЕГОВАЯ»",
+         voice: "Хотите посмотреть — напишите в директ «БЕГОВАЯ». Пришлю планировку и цену.", need: "твоё фото"}
+      - {t: "53.5-55.0", final: "Пишите «◆БЕГОВАЯ»"}
 
   4:
     title: "Внизу — спектакль. Здесь — тишина"
-    shots: {}   # весь ролик — съёмка в квартире и театре, агентам задач нет
+    # Голос — всего три фразы: для синхронизации записать их подряд с паузами (или без голоса).
+    shots:
+      С1:
+        what: "Вход в театр вечером, горит вывеска"
+        timecode: "0–3"
+        generate: >-
+          Evening entrance of a small Moscow theatre on the ground floor of a Stalinist building, warm glowing
+          glass doors, silhouettes of spectators entering seen from behind, blue hour, present day,
+          photorealistic, no readable text, vertical 9:16
+        motion: "Зрители медленно входят в двери, тёплый свет мерцает, камера неподвижна"
+      С2:
+        what: "Дверь квартиры закрывается изнутри"
+        timecode: "3–5"
+        use: "/фото объекта/13-large_landscape.png"
+        motion: "Входная дверь медленно закрывается, свет из подъезда исчезает, камера неподвижна"
+        negative: "люди, лица, текст, водяные знаки, деформация двери и стен, резкие движения камеры"
+      С3:
+        what: "Гостиная: светильники зажигаются"
+        timecode: "5–8"
+        use: "/фото объекта/07-large_landscape.png"
+        motion: "Вечер, светильники и люстры зажигаются по очереди, комната наполняется тёплым светом, камера неподвижна"
+        negative: "люди, лица, текст, водяные знаки, деформация мебели, резкие движения камеры"
+      С4:
+        what: "Потолок и люстра, камера поднимается"
+        timecode: "8–11"
+        use: "/фото объекта/05-large_landscape.png"
+        motion: "Камера медленно поднимается к хрустальной люстре, подсветка потолка мягко светится"
+        negative: "люди, лица, текст, водяные знаки, деформация, резкие движения камеры"
+      С5:
+        what: "Окно в глубокой нише — видна толщина стены"
+        timecode: "11–14"
+        use: "/фото объекта/14-large_landscape.png"
+      С6:
+        what: "Закрытое окно, за ним вечерняя улица"
+        timecode: "14–17"
+        use: "/фото объекта/06-large_landscape.png"
+        motion: "За окнами сгущается вечер, шторы едва колышутся, в комнате мягкий тёплый свет, камера неподвижна"
+        negative: "люди, лица, текст, водяные знаки, деформация, резкие движения камеры"
+      С7:
+        what: "Кухня общим планом"
+        timecode: "17–19"
+        use: "/фото объекта/04-large_landscape.png"
+      С8:
+        what: "Кофемашина варит кофе"
+        timecode: "19–21"
+        generate: >-
+          Close-up of a built-in premium coffee machine in a white classic kitchen pouring espresso into a white cup,
+          steam rising, warm evening light, macro, photorealistic, no logos, vertical 9:16
+        motion: "Кофе льётся в чашку, поднимается пар"
+      С9:
+        what: "Босые ноги на тёплом полу"
+        timecode: "21–24"
+        generate: >-
+          Low angle close-up of a woman's bare feet stepping slowly on warm oak herringbone parquet in a cream
+          classic interior, soft evening light, no face visible, photorealistic, vertical 9:16
+        motion: "Ноги медленно ступают по паркету, мягкий свет"
+      С10:
+        what: "Коридор: двери комнат одна за другой"
+        timecode: "24–27"
+        use: "/фото объекта/12-large_landscape.png"
+        motion: "Плавный пролёт камеры по коридору вдоль дверей и зеркальных шкафов"
+        negative: "люди, лица, текст, водяные знаки, деформация, резкие движения камеры"
+      С11:
+        what: "Шторы задёргиваются, мягкий свет лампы"
+        timecode: "27–30"
+        use: "/фото объекта/03-large_landscape.png"
+        motion: "Шторы медленно задёргиваются, свет становится мягче и теплее, камера неподвижна"
+        negative: "люди, лица, текст, водяные знаки, деформация, резкие движения камеры"
+      С12:
+        what: "Книга и бокал на столе у окна, камера отъезжает"
+        timecode: "30–33"
+        generate: >-
+          A book and a glass of red wine on a marble table by a tall window with cream curtains in a classic
+          luxurious apartment, evening, warm lamp light, photorealistic, vertical 9:16
+        motion: "Камера медленно отъезжает от стола, огни вечерней улицы за окном"
+    timeline:
+      - {t: "0.0-3.0", shots: [С1], color: warm, screen: "ВНИЗУ — ◆СПЕКТАКЛЬ", voice: "Вечер. Внизу, в театре, скоро третий звонок."}
+      - {t: "3.0-5.0", shots: [С2], color: warm}
+      - {t: "5.0-8.0", shots: [С3], color: warm, screen: "ЗДЕСЬ — ◆ТИШИНА"}
+      - {t: "8.0-11.0", shots: [С4], color: warm, screen: "ПОТОЛКИ ◆3 М"}
+      - {t: "11.0-14.0", shots: [С5], color: warm, screen: "СТЕНЫ ◆50 СМ"}
+      - {t: "14.0-17.0", shots: [С6], color: warm, screen: "ТРОЙНОЕ ◆СТЕКЛО"}
+      - {t: "17.0-21.0", shots: [С8, С7], color: warm, screen: "КУХНЯ ◆30 М²", voice: "А здесь слышно только, как варится кофе."}
+      - {t: "21.0-24.0", shots: [С9], color: warm, screen: "◆ТЁПЛЫЙ ПОЛ"}
+      - {t: "24.0-27.0", shots: [С10], color: warm, screen: "◆5 КОМНАТ"}
+      - {t: "27.0-30.0", shots: [С11], color: warm}
+      - {t: "30.0-33.0", shots: [С12], color: warm, screen: "◆СОХРАНИТЕ", voice: "Сохраните — чтобы вернуться в этот вечер."}
+      - {t: "33.0-35.0", final: "◆Беговая, 5"}
 
   5:
     title: "Раньше её нельзя было купить"
@@ -299,12 +545,112 @@ episodes:
         timecode: "0–4"
         find:
           - {wiki: "Soviet housing warrant order 1950s"}
+        generate: >-
+          A 1950s Soviet housing warrant document on old yellowed paper with a round stamp, typewriter text not
+          readable, lying on a wooden desk, warm lamp light, sepia, vertical 9:16
+        motion: "Печать опускается на документ, лёгкий наезд камеры"
         manual: "goskatalog.ru: «ордер на жилую площадь», семейные архивы (с разрешения)"
-        fallback: "типографика: бланк ордера на старой бумаге + штамп (монтажёр)"
       A2:
         what: "Новосёлы у подъезда сталинки, 1950-е"
         timecode: "4–7"
         find:
           - {wiki: "Moscow housewarming 1956"}
           - {pastvu: begovaya5, years: "1955-1958"}
-        fallback: "фасад Беговой, 5 (С1 из выпуска 2) в сепии"
+        generate: >-
+          Moscow 1956, a family with suitcases and a rolled carpet entering a new decorated Stalinist apartment
+          building, seen from behind, sunny day, sepia archival look, vertical 9:16
+        motion: "Семья медленно входит в подъезд, лёгкое движение камеры"
+      С1:
+        what: "Дверь квартиры открывается — вход"
+        timecode: "7–12"
+        use: "/фото объекта/13-large_landscape.png"
+        motion: "Входная дверь медленно открывается, камера входит в прихожую, тёплый свет"
+        negative: "люди, лица, текст, водяные знаки, деформация двери и стен, резкие движения камеры"
+      С2:
+        what: "Откос окна — толщина стены"
+        timecode: "12–15"
+        use: "/фото объекта/14-large_landscape.png"
+      С3:
+        what: "Потолок с люстрой"
+        timecode: "15–17"
+        use: "/фото объекта/01-large_landscape.png"
+      С4:
+        what: "Коридор: двери комнат"
+        timecode: "17–21"
+        use: "/фото объекта/11-large_landscape.png"
+        motion: "Плавный пролёт камеры по коридору вдоль дверей"
+        negative: "люди, лица, текст, водяные знаки, деформация, резкие движения камеры"
+      С5:
+        what: "Окна закрыты — тихо (спальня с эркером)"
+        timecode: "21–29"
+        use: "/фото объекта/06-large_landscape.png"
+        motion: "Шторы едва колышутся от приточной вентиляции, мягкий дневной свет, камера неподвижна"
+        negative: "люди, лица, текст, водяные знаки, деформация, резкие движения камеры"
+      С6:
+        what: "Техника Miele, постирочная"
+        timecode: "29–33"
+        use: "/фото объекта/15-large_landscape.png"
+      С7:
+        what: "Кухня общим планом"
+        timecode: "33–37"
+        use: "/фото объекта/04-large_landscape.png"
+      С8:
+        what: "Санузел"
+        timecode: "33–37"
+        use: "/фото объекта/19-large_landscape.png"
+      С9:
+        what: "Детская — комната для каждого"
+        timecode: "37–40"
+        use: "/фото объекта/10-large_landscape.png"
+      С10:
+        what: "Спальня / кабинет"
+        timecode: "40–43"
+        use: "/фото объекта/17-large_landscape.png"
+      С11:
+        what: "Метро «Беговая»"
+        timecode: "43–44,5"
+        find:
+          - {wiki: "Begovaya metro station Moscow entrance"}
+      С12:
+        what: "Вход в театр на доме"
+        timecode: "44,5–46"
+        find:
+          - {wiki: "Центр драматургии и режиссуры Беговая"}
+        generate: >-
+          Entrance of a small Moscow drama theatre on the ground floor of a decorated Stalinist apartment building,
+          glass doors, present day, photorealistic, no readable text, vertical 9:16
+      С13:
+        what: "Кони ипподрома"
+        timecode: "46–48"
+        find:
+          - {wiki: "Moscow Hippodrome horses sculpture roof"}
+      С14:
+        what: "Наталья — призыв «БЕГОВАЯ»"
+        timecode: "48–52,5"
+        manual: "своё фото в 2_выбрано с именем С14_….jpg"
+    timeline:
+      - {t: "0.0-4.0", shots: [A1], color: sepia, screen: "КУПИТЬ БЫЛО ◆НЕЛЬЗЯ",
+         voice: "В пятьдесят шестом квартиру в этом доме нельзя было купить. Только получить по ордеру."}
+      - {t: "4.0-7.0", shots: [A2], color: sepia, screen: "◆1956", voice: "Кооперативы тогда были запрещены."}
+      - {t: "7.0-12.0", shots: [С1], color: warm, screen: "◆70 ЛЕТ СПУСТЯ",
+         voice: "Прошло семьдесят лет. Теперь её можно купить. И вот что в ней осталось от того времени."}
+      - {t: "12.0-15.0", shots: [С2], color: warm, screen: "СТЕНЫ ◆50 СМ", voice: "Кирпичные стены толщиной в полметра."}
+      - {t: "15.0-17.0", shots: [С3], color: warm, screen: "ПОТОЛКИ ◆3 М", voice: "Потолки три метра."}
+      - {t: "17.0-21.0", shots: [С4], color: warm, screen: "◆5 ИЗОЛИРОВАННЫХ",
+         voice: "Пять комнат — и ни одной проходной. Сегодня так строят редко."}
+      - {t: "21.0-23.0", shots: [С5], color: warm, voice: "А вот чего в пятьдесят шестом не было."}
+      - {t: "23.0-29.0", shots: [С5], color: warm, screen: "ТИХО И ◆СВЕЖО",
+         voice: "Тройные стеклопакеты и приточная вентиляция: окна закрыты, а в комнатах тихо и свежо."}
+      - {t: "29.0-33.0", shots: [С6], color: warm, screen: "◆ЗАЕЗЖАЙТЕ И ЖИВИТЕ",
+         voice: "Тёплые полы, техника Miele, дизайнерский ремонт — заезжаете и живёте."}
+      - {t: "33.0-35.0", shots: [С7], color: warm, screen: "КУХНЯ ◆30 М²", voice: "Кухня тридцать метров,"}
+      - {t: "35.0-37.0", shots: [С8], color: warm, voice: "два санузла, четвёртый этаж."}
+      - {t: "37.0-40.0", shots: [С9], color: warm, screen: "ДЛЯ ◆БОЛЬШОЙ СЕМЬИ",
+         voice: "Кому подойдёт? Большой семье, где у каждого своя комната."}
+      - {t: "40.0-43.0", shots: [С10], color: warm, voice: "Или тем, кому нужны кабинет и гостевая."}
+      - {t: "43.0-44.5", shots: [С11], color: warm, screen: "МЕТРО ◆5 МИНУТ", voice: "Метро — пять минут."}
+      - {t: "44.5-46.0", shots: [С12], color: warm, voice: "Театр — в этом же доме."}
+      - {t: "46.0-48.0", shots: [С13], color: warm, voice: "Ипподром — на этой же улице."}
+      - {t: "48.0-52.5", shots: [С14], color: warm, screen: "ПИШИТЕ «◆БЕГОВАЯ»",
+         voice: "Хотите посмотреть — напишите «БЕГОВАЯ». Пришлю планировку и приглашу на показ.", need: "твоё фото"}
+      - {t: "52.5-54.0", final: "Пишите «◆БЕГОВАЯ»"}

@@ -145,10 +145,40 @@ def search(query, brief, geo_cache, limit):
     raise ValueError(f"непонятный запрос: {query}")
 
 
+VIDEO_EXT = {".mp4", ".mov", ".m4v"}
+
+
+def fetch_own(brief, number, code, shot, drive):
+    """Свой материал Натальи (use: путь в папке по ссылке assets.yadisk) — сразу под код.
+
+    Видео кладётся в 3_монтаж (уже оживлено), фото — в 2_выбрано (выбирать не нужно).
+    """
+    url = (brief.get("assets") or {}).get("yadisk")
+    if not url:
+        print(f"[{number}/{code}] ! в брифе нет assets.yadisk — не знаю, откуда брать {shot['use']}")
+        return
+    ep = Episode(brief["series"], number, drive)
+    name = shot["use"].rsplit("/", 1)[-1]
+    folder = MONTAGE if Path(name).suffix.lower() in VIDEO_EXT else SELECTED
+    dest = ep.path(folder) / f"{code}_{name}"
+    if dest.exists():
+        return
+    try:
+        archivist.yadisk_file(url, shot["use"], dest)
+    except requests.RequestException as e:
+        print(f"[{number}/{code}] ! не скачалось {shot['use']}: {e}")
+        return
+    ep.publish([dest], folder)
+    print(f"[{number}/{code}] {shot['what']} ← свой файл {name} → {folder}")
+
+
 def step_find(brief, targets, drive, force):
     limit = brief["defaults"].get("candidates", 8)
     geo_cache = {}
     for number, code, shot in targets:
+        if shot.get("use"):
+            fetch_own(brief, number, code, shot, drive)
+            continue
         if not shot.get("find"):
             continue
         ep = Episode(brief["series"], number, drive)
@@ -197,7 +227,7 @@ def step_generate(brief, targets, drive, force):
     variants = brief["defaults"].get("variants", 3)
     replicate = None
     for number, code, shot in targets:
-        if not shot.get("generate"):
+        if not shot.get("generate") or shot.get("use"):
             continue
         ep = Episode(brief["series"], number, drive)
         if ep.has_candidates(code) and not force:

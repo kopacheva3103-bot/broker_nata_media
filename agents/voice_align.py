@@ -136,20 +136,33 @@ def sync(rows, words, speed=1.0):
     for k, (row, _, _) in enumerate(script):
         row_start.setdefault(row, times[k])
     voiced = sorted(row_start)
-    spans, t = [None] * len(rows), 0.0
+    script_len = [_span_len(r) for r in rows]
+    spans = [None] * len(rows)
+    # Между двумя озвученными строками время делится на все строки между ними (и «тихие» тоже)
+    # пропорционально их длине по сценарию; после последней фразы — до конца голоса
     for n, i in enumerate(voiced):
+        j = voiced[n + 1] if n + 1 < len(voiced) else None
         a = 0.0 if n == 0 else reel(row_start[i])
-        b = reel(row_start[voiced[n + 1]]) if n + 1 < len(voiced) else reel(voice_end)
-        a = max(a, t)
-        spans[i] = (a, max(b, a + MIN_ROW))
-        t = spans[i][1]
-    for i, row in enumerate(rows):  # строки без голоса (финальная карточка) — своей длины после голоса
+        b = reel(row_start[j]) if j is not None else reel(voice_end)
+        group = list(range(i, j)) if j is not None else [i]
+        total = sum(script_len[g] for g in group) or 1
+        t = a
+        for g in group:
+            d = (b - a) * script_len[g] / total
+            spans[g] = (round(t, 2), round(t + max(d, MIN_ROW), 2))
+            t = spans[g][1]
+    t = max(sp[1] for sp in spans if sp)
+    for i in range(len(rows)):  # строки до первой фразы и после голоса (финальная карточка) — своей длины
         if spans[i] is None:
-            a, b = (float(x.replace(",", ".")) for x in str(row["t"]).split("-"))
-            spans[i] = (round(t, 2), round(t + (b - a), 2))
-            t += b - a
+            spans[i] = (round(t, 2), round(t + script_len[i], 2))
+            t = spans[i][1]
     phrases = [{"start": reel(a), "end": reel(b), "text": txt} for a, b, txt in _phrases(script, times, voice_end)]
     return spans, cut_at, phrases
+
+
+def _span_len(row):
+    a, b = (float(x.replace(",", ".")) for x in str(row["t"]).split("-"))
+    return b - a
 
 
 def prepare_voice(src, dst, cut_at, speed=1.0):
