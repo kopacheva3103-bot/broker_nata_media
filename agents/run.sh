@@ -8,6 +8,7 @@
 #   ./run.sh open                                   — открыть папку агентов в Finder
 #   ./run.sh put <файл> <выпуск> <код> [описание]   — положить свой ролик в папку монтажа
 #   ./run.sh begovaya all                           — серия «Беговая, 5»: архив + генерация + статус
+#   ./run.sh realty fetch <ссылка Яндекс Недвижимости> — картинки ЖК → вертикаль → оживление (см. realty.py)
 #   ./run.sh begovaya vertical                      — горизонтальные кадры → вертикаль 9:16 (до оживления)
 #   ./run.sh begovaya animate | status              — оживление / таблица статуса
 #   ./run.sh agent1_search.py "Arbat 1900" -s wiki  — любой агент напрямую
@@ -41,5 +42,6 @@ case "$1" in
   open)     shift; exec open "$("$PY" -c 'from common import OUTPUT_DIR; OUTPUT_DIR.mkdir(parents=True, exist_ok=True); print(OUTPUT_DIR)')" ;;
   check)    shift; exec "$PY" check_setup.py "$@" ;;
   begovaya) shift; exec "$PY" run_brief.py series/begovaya5.yaml "$@" ;;
+  realty)   shift; exec "$PY" realty.py "$@" ;;
   *)        exec "$PY" "$@" ;;
 esac
