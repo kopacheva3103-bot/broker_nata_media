@@ -15,26 +15,31 @@ beauty: {skin_smooth: 0.17, skin_tone: 0.5}
 title:                         # первый кадр
   start: 0
   end: 3.5
-  y: 0.40                      # ниже верхней части кадра, ближе к титрам
-  line_gap: 66                 # строки заголовка близко друг к другу
-  darken: 0.55                 # мягкое затемнение, без цветных подложек
+  # Хук по образцу «ЖК Время» (папка «готово», 22.10): 2–4 строки заглавными
+  # в нижней трети, по левому краю; последняя строка золотом; кадр не затемняем.
+  align: left
+  margin_x: 82                 # отступ слева, px
+  anchor: bottom               # y — это последняя (золотая) строка, длинный хук растёт вверх
+  y: 0.786
+  line_gap: 100                # шаг строк хука, px
+  darken: 0
   uppercase: true
   animation: rise              # плавное проявление и лёгкое движение вверх
   fit: true                    # длинная строка уменьшается, не сжимается
-  max_width: 0.84
-  # строки задаются в проекте: lines: [{text: ..., style: title}, {text: ..., style: accent}]
+  max_width: 0.80
+  # строки задаются в проекте: lines: [{text: ..., style: title}, ..., {text: ..., style: title_gold}]
 
 subtitles:
   model: large-v3
   language: ru
-  position: 0.52               # по центру кадра
+  position: 0.727              # по центру по горизонтали, ниже середины — как в образце «ЖК Время»
   karaoke: false
   lowercase: false             # формулировки не меняем
   hide_during_title: true
-  max_words: 5
-  max_chars: 24                # короткие фразы, перенос на две строки
+  max_words: 3                 # 2–3 слова, одна строка
+  max_chars: 18
   animation: soft              # мягкое проявление без мигания
-  scrim: 0.42                  # мягкое затемнение полосы под титрами (не плашка)
+  scrim: 0                     # без подложки, только лёгкая тень
 
 styles:
   title:                       # заголовок, строка 1: белый, ExtraBold 800, 64–76 px
@@ -49,6 +54,21 @@ styles:
     shadow: 0
     margin_x: 90
     glow: true                 # мягкая чёрная тень 35–45%
+    glow_opacity: 0.40
+    glow_size: 6
+    glow_blur: 14
+  title_gold:                  # последняя строка хука: золото #E6B450, ExtraBold
+    font: Montserrat ExtraBold
+    bold: false
+    italic: false
+    size: 72
+    min_size: 60
+    char_width: 0.66
+    color: "#E6B450"
+    outline: 0
+    shadow: 0
+    margin_x: 82
+    glow: true
     glow_opacity: 0.40
     glow_size: 6
     glow_blur: 14
@@ -67,20 +87,20 @@ styles:
     glow_opacity: 0.40
     glow_size: 5
     glow_blur: 12
-  subtitle:                    # основные титры: SemiBold 600, 60 px — крупно и читаемо с телефона
+  subtitle:                    # основные титры: SemiBold 600, 64 px, обычный регистр, одна строка
     font: Montserrat SemiBold
     bold: false
     italic: false
-    size: 60
-    spacing: 0.6               # чуть свободнее межбуквенный интервал
+    size: 64
+    spacing: 0
     color: "#FFFFFF"
     highlight: "#E6B450"
     outline: 0
     shadow: 2                  # чёткая мягкая тень под буквами
     margin_x: 110              # безопасные поля + иконки Reels справа
     glow: true
-    glow_opacity: 0.6
-    glow_size: 6
+    glow_opacity: 0.45
+    glow_size: 5
     glow_blur: 9
   phrase:                      # короткие связки «А вы знали, что»: 36–40 px
     position: 0.468            # сразу над основными титрами, без большой щели

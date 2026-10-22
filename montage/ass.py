@@ -349,7 +349,12 @@ def title_events(doc: AssDoc, cfg: dict) -> None:
     lines = [{"text": x} if isinstance(x, str) else x for x in cfg.get("lines") or []]
     y0 = doc.y_for(cfg.get("y", 0.7))
     gap = float(cfg.get("line_gap", 130)) * doc.k
-    top = y0 - gap * (len(lines) - 1) / 2
+    if cfg.get("anchor") == "bottom":  # y is the last line; longer hooks grow upwards
+        top = y0 - gap * (len(lines) - 1)
+    else:
+        top = y0 - gap * (len(lines) - 1) / 2
+    left = cfg.get("align") == "left"
+    xl = round(float(cfg.get("margin_x", 82)) * doc.k)
     fin, fout = int(cfg.get("fade_in", 0.35) * 1000), int(cfg.get("fade_out", 0.4) * 1000)
     anim = cfg.get("animation")
     avail = doc.width * float(cfg.get("max_width", 0.84))
@@ -362,9 +367,9 @@ def title_events(doc: AssDoc, cfg: dict) -> None:
         est = len(text) * float(st.get("char_width", 0.6)) * size  # rough glyph width
         if cfg.get("fit") and est > avail:
             size = max(size * avail / est, float(st.get("min_size", 0)) * doc.k)
-        x, y = doc.width // 2, round(top + i * gap)
+        x, y = (xl if left else doc.width // 2), round(top + i * gap)
         if anim:
             pos = intro_tags(anim, x, y, doc.k).replace("\\fad(320,200)", f"\\fad({fin},{fout})")
         else:
             pos = rf"\pos({x},{y})\fad({fin},{fout})"
-        doc.add(start, end, line.get("style", "title"), r"{\an5" + pos + rf"\fs{round(size)}" + "}" + clean(text))
+        doc.add(start, end, line.get("style", "title"), (r"{\an4" if left else r"{\an5") + pos + rf"\fs{round(size)}" + "}" + clean(text))
