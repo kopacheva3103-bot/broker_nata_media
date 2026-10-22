@@ -35,6 +35,7 @@ subtitles:
   position: 0.727              # по центру по горизонтали, ниже середины — как в образце «ЖК Время»
   karaoke: false
   lowercase: false             # формулировки не меняем
+  capitalize: true             # каждая фраза с заглавной буквы, как в образце
   hide_during_title: true
   max_words: 3                 # 2–3 слова, одна строка
   max_chars: 17

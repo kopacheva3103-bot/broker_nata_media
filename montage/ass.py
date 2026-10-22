@@ -263,8 +263,10 @@ def _split_sentence(sentence: list, max_words: int, max_chars: int) -> list[list
         else:
             out += _even(cl, max_words, max_chars)
     # glue a lonely trailing word to the previous phrase when it still fits on two lines
-    if len(out) > 1 and len(out[-1]) == 1 and len(out[-2]) + 1 <= max_words + 1:
-        out[-2] = out[-2] + out.pop()
+    if len(out) > 1 and len(out[-1]) == 1 and len(out[-2]) + 1 <= max_words + 1 and \
+            sum(len(x[2]) + 1 for x in out[-2] + out[-1]) <= max_chars + 4:
+        last = out.pop()
+        out[-1] = out[-1] + last
     return out
 
 
@@ -283,7 +285,17 @@ def chunk(cues: list[Cue], max_words: int, max_chars: int) -> list[list[tuple[fl
             if w[2][-1:] in ".!?…" or k == len(words) - 1:
                 chunks += _split_sentence(sentence, max_words, max_chars)
                 sentence = []
-    return chunks
+    # a phrase longer than max_chars is split further, so it always stays on one line
+    out, todo = [], chunks[::-1]
+    while todo:
+        c = todo.pop()
+        if len(c) > 1 and sum(len(x[2]) + 1 for x in c) - 1 > max_chars:
+            cut = min(range(1, len(c)), key=lambda i: abs(sum(len(x[2]) + 1 for x in c[:i])
+                                                         - sum(len(x[2]) + 1 for x in c[i:])))
+            todo += [c[cut:], c[:cut]]
+        else:
+            out.append(c)
+    return out
 
 
 CORNERS = {"top_right": 9, "top_left": 7, "bottom_right": 3, "bottom_left": 1, "top": 8, "bottom_center": 2}
@@ -326,6 +338,8 @@ def subtitle_events(doc: AssDoc, cues: list[Cue], cfg: dict) -> None:
         if start < float(cfg.get("_hide_until", 0)):
             continue
         tokens = [clean(w[2].upper() if upper else w[2]) for w in words]
+        if cfg.get("capitalize") and tokens:  # each phrase starts with a capital, like in the sample reels
+            tokens[0] = tokens[0][:1].upper() + tokens[0][1:]
         if not karaoke:
             doc.add(start, end, "subtitle", base + " ".join(tokens), margins)
             continue

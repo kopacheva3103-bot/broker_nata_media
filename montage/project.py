@@ -317,8 +317,11 @@ def _resolve_broll(p: dict) -> None:
             else:
                 sub["start"] = float(br.get("start", 0))
                 sub["_src_duration"] = probe(src).duration
-                sub["end"] = min(sub["start"] + d, sub["_src_duration"])
-                d = sub["end"] - sub["start"]
+                sp = float(br.get("speed", 1.0))  # <1 — slow motion, e.g. to cover the voice up to the end
+                sub["end"] = min(sub["start"] + d * sp, sub["_src_duration"])
+                d = (sub["end"] - sub["start"]) / sp
+                if sp != 1.0:
+                    sub["speed"] = sp
                 sub.pop("duration")
             for key in ("focus_x", "focus_y"):
                 if key in br:
