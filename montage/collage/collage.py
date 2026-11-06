@@ -256,8 +256,13 @@ def put_sticker(canvas, rgba, x, bottom, alpha=1.0):
 
 
 # ---------- subtitles ----------
-FIX = {13: "ЖК", 14: "«Время»,", 15: "Преображенская", 37: "ЖК"}
+import os as _os
+SPEC = {}
+if _os.environ.get("REEL"):
+    exec(open(_os.environ["REEL"], encoding="utf-8").read(), SPEC)
+FIX = SPEC.get("FIX", {13: "ЖК", 14: "«Время»,", 15: "Преображенская", 37: "ЖК"})
 wl = [(s, e, FIX.get(i, w)) for i, (s, e, w) in enumerate(words)]
+wl = [x for x in wl if x[2]]  # a fix can glue two words: the second becomes ""
 chunks, cur = [], []
 for i, wd in enumerate(wl):
     cur.append(wd)
@@ -274,7 +279,7 @@ for k, c in enumerate(chunks):
         t1 = max(t1, min(chunks[k + 1][0][0], t1 + 0.4))
     text = " ".join(x[2] for x in c)
     subs.append((t0, t1, text[:1].upper() + text[1:]))
-HIDE = [(0, WT(13) - 0.05), (WT(98) - 0.05, WT(118) - 0.05)]  # hook, checklist (the text is on screen)
+HIDE = [(WT(i) - 0.05 if i else 0, WT(j) - 0.05) for i, j in SPEC.get("HIDE_IDX", [(0, 13), (98, 118)])]
 
 
 def sub_at(t):
@@ -295,26 +300,30 @@ def sc(t0, t1, kind, **p):
 
 
 T = WT
-sc(0, T(13), "hook")
-sc(T(13), T(19), "zk")
-sc(T(19), T(26), "area")
-sc(T(26), T(35), "docs")
-sc(T(35), T(42), "korpus")
-sc(T(42), T(54), "talk")
-sc(T(54), T(65), "invest")
-sc(T(65), T(81), "ad")
-sc(T(81), T(87), "search")
-sc(T(87), T(98), "team")
-sc(T(98), T(118), "check")
-sc(T(118), T(132), "papers")
-sc(T(132), T(150), "question")
-sc(T(150), T(157), "talk")
-sc(T(157), T(164), "comments")
-sc(T(164), TOTAL + 1, "cta")
+if "scenes" in SPEC:
+    SPEC["scenes"](T, sc, TOTAL)
+else:
+  sc(0, T(13), "hook")
+  sc(T(13), T(19), "zk")
+  sc(T(19), T(26), "area")
+  sc(T(26), T(35), "docs")
+  sc(T(35), T(42), "korpus")
+  sc(T(42), T(54), "talk")
+  sc(T(54), T(65), "invest")
+  sc(T(65), T(81), "ad")
+  sc(T(81), T(87), "search")
+  sc(T(87), T(98), "team")
+  sc(T(98), T(118), "check")
+  sc(T(118), T(132), "papers")
+  sc(T(132), T(150), "question")
+  sc(T(150), T(157), "talk")
+  sc(T(157), T(164), "comments")
+  sc(T(164), TOTAL + 1, "cta")
 
-import os as _os
-HOOK = _os.environ.get("HOOK", "КАК ПРОДАТЬ 756 М²,|КОТОРЫЕ НИКОМУ|НЕ НУЖНЫ?").split("|")
+HOOK = _os.environ.get("HOOK", SPEC.get("HOOK", "КАК ПРОДАТЬ|756 М²?")).split("|")
 HOOK_STRIKE = _os.environ.get("HOOK_STRIKE") == "1"
+HOOK_BIG = SPEC.get("HOOK_BIG", "756 м²?")
+HOOK_CUT = SPEC.get("HOOK_CUT", 6)
 readers = {}
 
 
@@ -324,7 +333,8 @@ def rd(key, *a, **k):
     return readers[key]
 
 
-def render(t, frame, mask, kind, t0, canvas):
+def render(t, frame, mask, kind, t0, canvas, P=None):
+    P = P or {}
     """frame, mask: current speaker frame and matte"""
     if kind == "talk":
         canvas[:] = CUR["room"]
@@ -335,27 +345,27 @@ def render(t, frame, mask, kind, t0, canvas):
         return None
     if kind == "hook":
         lines = HOOK[1:]
-        if t < T(6):  # beat 1: the premises with a fast push-in, the number and the first line slam in
+        if t < T(HOOK_CUT):  # beat 1: the premises with a fast push-in, the number and the first line slam in
             f = rd("3109h", SRC / "IMG_3109.mov", W, H, 0.4, 0.9).next().astype(np.float32)
-            z = 1.0 + 0.16 * ease_out(t / T(6))
+            z = 1.0 + 0.16 * ease_out(t / T(HOOK_CUT))
             zw, zh = int(W / z), int(H / z)
             x0, y0 = (W - zw) // 2, (H - zh) // 2
             canvas[:] = cv2.resize(f[y0:y0 + zh, x0:x0 + zw], (W, H)) * 0.5
             place(canvas, strip(HOOK[0], "champ", 96), 540, 640, t, 0.0, -3)
             s, a = pop(t, 0.35, 0.3)
             if a > 0:
-                num = big_text("756 м²", 250, GOLD)
+                num = big_text(HOOK_BIG, 230, GOLD)
                 num = rotate_rgba(num, 0, s)
                 over(canvas, num, int(540 - num.shape[1] / 2), int(900 - num.shape[0] / 2), a)
             if HOOK_STRIKE and t > T(5):
                 draw_lines(canvas, [[(160, 1010), (920, 800)]], (t - T(5)) / 0.22, (200, 50, 40), 22)
             return None
         canvas[:] = CUR["bg"]  # beat 2: hard cut, big sticker slides up, the whole hook above the head
-        rise = ease_out((t - T(6)) / 0.3)
+        rise = ease_out((t - T(HOOK_CUT)) / 0.3)
         big_sticker(canvas, frame, mask, 1.1, int(260 * (1 - rise)))
         allx = [HOOK[0]] + lines
         for k, txt in enumerate(allx):
-            p = ease_out((t - T(6) - k * 0.25) / 0.22)
+            p = ease_out((t - T(HOOK_CUT) - k * 0.25) / 0.22)
             if p > 0:
                 st = strip(txt, "gold" if k == len(allx) - 1 else "champ", 74, 1000)
                 over(canvas, with_shadow(rotate_rgba(st, (-1.5, 1, -1, 1.5)[k % 4]))[0], int(30 - 60 * (1 - p)), 80 + k * 100, p)
@@ -499,6 +509,87 @@ def render(t, frame, mask, kind, t0, canvas):
         place(canvas, strip("СЕЙЧАС В ПРОДАЖЕ", "champ", 68), 540, 1160, t, T(175), 2)
         place(canvas, strip("НАПИШИТЕ МНЕ В ДИРЕКТ", "gold", 68), 540, 1275, t, T(178), -1.5)
         return None
+    return generic(t, frame, mask, kind, t0, canvas, P)
+
+
+def strip_stack(canvas, t, items, y0, step=100, x=40, size=66, maxw=1000, center=False):
+    """items: (text, kind, word_index) appearing one by one, slightly rotated"""
+    for k, (txt, kd, wi) in enumerate(items):
+        p = ease_out((t - T(wi)) / 0.22)
+        if p <= 0:
+            continue
+        st = with_shadow(rotate_rgba(strip(txt, kd, size, maxw), (-1.5, 1.2, -1, 1.5, -0.8)[k % 5]))[0]
+        xx = int(540 - st.shape[1] / 2) if center else int(x - 60 * (1 - p))
+        over(canvas, st, xx, y0 + k * step, p)
+
+
+def generic(t, frame, mask, kind, t0, canvas, P):
+    if kind == "sticker":
+        canvas[:] = CUR["bg"]
+        big_sticker(canvas, frame, mask, 1.1)
+        strip_stack(canvas, t, P.get("strips", []), 90, 100, 30, P.get("size", 64), 1000)
+        if P.get("lens"):
+            draw_lines(canvas, [circle(880, 300, 105)] + [[(955, 375), (1050, 470)]], (t - T(P["lens"])) / 0.5, GOLD, 16)
+        if P.get("q"):
+            place(canvas, big_text("?", 380, GOLD), 960, 300, t, T(P["q"]), 10, False)
+        return None
+    if kind == "card":
+        canvas[:] = CUR["bg"]
+        key, path, st0 = P["clip"]
+        f = rd(key, SRC / path, 700, 960, st0, P.get("speed", 0.85)).next()
+        place(canvas, card(f), 540, P.get("cy", 640), t, t0, P.get("rot", -2.5))
+        strip_stack(canvas, t, P.get("strips", []), P.get("sy", 1070), 95, 50, P.get("size", 64), 980)
+        return None
+    if kind == "cards":
+        canvas[:] = CUR["bg"]
+        for key, path, st0, cx, cy, rot, wi in P["cards"]:
+            if t >= T(wi):
+                f = rd(key, SRC / path, 520, 700, st0, 0.85).next()
+                place(canvas, card(f), cx, cy, t, T(wi), rot)
+        strip_stack(canvas, t, P.get("strips", []), P.get("sy", 1180), 100, 50, P.get("size", 62), 980)
+        return None
+    if kind == "paper":
+        canvas[:] = BG["paper"]
+        if P.get("doc"):
+            x0, y0, w, h = 290, 260, 500, 600
+            page = [[(x0, y0), (x0 + w - 90, y0), (x0 + w, y0 + 90), (x0 + w, y0 + h), (x0, y0 + h), (x0, y0)],
+                    [(x0 + w - 90, y0), (x0 + w - 90, y0 + 90), (x0 + w, y0 + 90)]]
+            draw_lines(canvas, page, (t - t0) / 0.6, INK, 8)
+            draw_lines(canvas, [[(x0 + 60, y0 + 160 + i * 70), (x0 + w - 60 - (i % 3) * 60, y0 + 160 + i * 70)] for i in range(5)],
+                       (t - t0 - 0.4) / 0.8, INK, 6)
+        if P.get("plan"):  # floor plan splitting into small lots
+            x0, y0, w, h = 140, 300, 800, 620
+            draw_lines(canvas, [[(x0, y0), (x0 + w, y0), (x0 + w, y0 + h), (x0, y0 + h), (x0, y0)]], (t - t0) / 0.5, INK, 9)
+            cols, rows = 4, 2
+            cuts = [[(x0 + w * c / cols, y0), (x0 + w * c / cols, y0 + h)] for c in range(1, cols)]
+            cuts += [[(x0, y0 + h * r / rows), (x0 + w, y0 + h * r / rows)] for r in range(1, rows)]
+            draw_lines(canvas, cuts, (t - T(P["plan"])) / 1.0, GOLD, 8)
+        strip_stack(canvas, t, P.get("strips", []), P.get("sy", 980), P.get("step", 115), 0, P.get("size", 72), 980, True)
+        return "dark"
+    if kind == "checklist":
+        canvas[:] = BG["paper"]
+        place(canvas, strip(P["title"], "emer", 64, 980), 540, 230, t, t0, -2)
+        f = ImageFont.truetype(SB, 52)
+        for k, (txt, wi) in enumerate(P["items"]):
+            p = ease_out((t - T(wi)) / 0.3)
+            if p <= 0:
+                continue
+            y = 400 + k * 125
+            img = Image.new("RGBA", (1000, 100), (0, 0, 0, 0))
+            d = ImageDraw.Draw(img)
+            d.rounded_rectangle((8, 18, 72, 82), 10, outline=INK + (255,), width=6)
+            d.text((105, 22), txt, font=f, fill=INK + (255,))
+            over(canvas, pil_rgba(img), int(50 + 40 * (1 - p)), y, p)
+            draw_lines(canvas, [[(70, y + 50), (90, y + 75), (130, y + 22)]], (t - T(wi) - 0.25) / 0.25, GOLD, 12)
+        st = sticker(frame, mask, 0.55)
+        put_sticker(canvas, st, W - st.shape[1] + 60, H)
+        return "dark"
+    if kind == "facts":  # dark premises, facts stack up in the middle
+        key, path, st0 = P["clip"]
+        f = rd(key, SRC / path, W, H, st0, 0.8).next().astype(np.float32)
+        canvas[:] = f * 0.35 + CUR["bg"] * 0.35
+        strip_stack(canvas, t, P["strips"], P.get("sy", 420), P.get("step", 150), 0, P.get("size", 84), 1000, True)
+        return None
     raise ValueError(kind)
 
 
@@ -529,7 +620,7 @@ for i in range(NF):
         break
     if PREV is not None and i not in PREV:
         continue
-    tone = render(t, frame, mask, kind, t0, canvas)
+    tone = render(t, frame, mask, kind, t0, canvas, p)
     st = sub_at(t)
     if st:
         text, a = st
