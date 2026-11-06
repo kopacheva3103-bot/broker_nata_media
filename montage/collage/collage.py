@@ -242,6 +242,11 @@ def sticker(frame, mask, scale=1.0):
     return rgba
 
 
+def big_sticker(canvas, frame, mask, scale=1.1, drop=0):
+    rgba = sticker(frame, mask, scale)
+    put_sticker(canvas, rgba, (W - rgba.shape[1]) // 2, H + drop)
+
+
 def put_sticker(canvas, rgba, x, bottom, alpha=1.0):
     h, w = rgba.shape[:2]
     sh = np.zeros_like(rgba)
@@ -307,6 +312,9 @@ sc(T(150), T(157), "talk")
 sc(T(157), T(164), "comments")
 sc(T(164), TOTAL + 1, "cta")
 
+import os as _os
+HOOK = _os.environ.get("HOOK", "КАК ПРОДАТЬ 756 М²,|КОТОРЫЕ НИКОМУ|НЕ НУЖНЫ?").split("|")
+HOOK_STRIKE = _os.environ.get("HOOK_STRIKE") == "1"
 readers = {}
 
 
@@ -319,16 +327,38 @@ def rd(key, *a, **k):
 def render(t, frame, mask, kind, t0, canvas):
     """frame, mask: current speaker frame and matte"""
     if kind == "talk":
-        canvas[:] = frame
-        return "light"
+        canvas[:] = CUR["room"]
+        a = cv2.resize(mask, (W, H), interpolation=cv2.INTER_LINEAR).astype(np.float32)
+        a = clean_mask(frame, np.clip((a - 40) * 1.4, 0, 255))
+        a = cv2.GaussianBlur(a, (0, 0), 2.0)[..., None] / 255
+        canvas[:] = frame * a + canvas * (1 - a)
+        return None
     if kind == "hook":
-        canvas[:] = CUR["bg"]
-        put_sticker(canvas, sticker(frame, mask), 0, H)
-        for k, (txt, kd) in enumerate([("ДЕТСАД,", "champ"), ("КОТОРОГО", "champ"), ("НЕ БУДЕТ", "gold")]):
-            s = strip(txt, kd, 84)
-            p = ease_out((t - 0.15 - k * 0.3) / 0.3)
+        lines = HOOK[1:]
+        if t < T(6):  # beat 1: the premises with a fast push-in, the number and the first line slam in
+            f = rd("3109h", SRC / "IMG_3109.mov", W, H, 0.4, 0.9).next().astype(np.float32)
+            z = 1.0 + 0.16 * ease_out(t / T(6))
+            zw, zh = int(W / z), int(H / z)
+            x0, y0 = (W - zw) // 2, (H - zh) // 2
+            canvas[:] = cv2.resize(f[y0:y0 + zh, x0:x0 + zw], (W, H)) * 0.5
+            place(canvas, strip(HOOK[0], "champ", 96), 540, 640, t, 0.0, -3)
+            s, a = pop(t, 0.35, 0.3)
+            if a > 0:
+                num = big_text("756 м²", 250, GOLD)
+                num = rotate_rgba(num, 0, s)
+                over(canvas, num, int(540 - num.shape[1] / 2), int(900 - num.shape[0] / 2), a)
+            if HOOK_STRIKE and t > T(5):
+                draw_lines(canvas, [[(160, 1010), (920, 800)]], (t - T(5)) / 0.22, (200, 50, 40), 22)
+            return None
+        canvas[:] = CUR["bg"]  # beat 2: hard cut, big sticker slides up, the whole hook above the head
+        rise = ease_out((t - T(6)) / 0.3)
+        big_sticker(canvas, frame, mask, 1.1, int(260 * (1 - rise)))
+        allx = [HOOK[0]] + lines
+        for k, txt in enumerate(allx):
+            p = ease_out((t - T(6) - k * 0.25) / 0.22)
             if p > 0:
-                over(canvas, with_shadow(rotate_rgba(s, (-1.5, 1, -1)[k]))[0], int(40 - 60 * (1 - p)), 1080 + k * 125, p)
+                st = strip(txt, "gold" if k == len(allx) - 1 else "champ", 74, 1000)
+                over(canvas, with_shadow(rotate_rgba(st, (-1.5, 1, -1, 1.5)[k % 4]))[0], int(30 - 60 * (1 - p)), 80 + k * 100, p)
         return None
     if kind == "zk":
         canvas[:] = CUR["bg"]
@@ -342,7 +372,7 @@ def render(t, frame, mask, kind, t0, canvas):
                 over(canvas, with_shadow(rotate_rgba(s, (2, -1.5, 1.5)[k]))[0], int(60 - 60 * (1 - p)), 1010 + k * 95, p)
         return None
     if kind == "area":
-        f = rd("3109a", SRC / "IMG_3109.mov", W, H, 0.5, 0.8).next().astype(np.float32)
+        f = rd("4131a", SRC / "IMG_4131.mov", W, H, 2.0, 0.8).next().astype(np.float32)
         canvas[:] = f * 0.38 + CUR["bg"] * 0.35
         p = ease_out((t - T(23)) / 1.1)
         if p > 0:
@@ -373,13 +403,13 @@ def render(t, frame, mask, kind, t0, canvas):
         return None
     if kind == "invest":
         canvas[:] = CUR["bg"]
-        put_sticker(canvas, sticker(frame, mask), 0, H)
+        big_sticker(canvas, frame, mask, 1.1)
         for k, (txt, kd, wi) in enumerate([("ОГРОМНЫЕ ВЛОЖЕНИЯ", "champ", 54), ("В КРИЗИС", "champ", 56),
                                            ("НИКОМУ НЕ ПОДОЙДЁТ", "gold", 61)]):
             s = strip(txt, kd, 66)
             p = ease_out((t - T(wi)) / 0.25)
             if p > 0:
-                over(canvas, with_shadow(rotate_rgba(s, (-1.5, 1.5, -1)[k]))[0], int(50 - 60 * (1 - p)), 170 + k * 110, p)
+                over(canvas, with_shadow(rotate_rgba(s, (-1.5, 1.5, -1)[k]))[0], int(50 - 60 * (1 - p)), 100 + k * 100, p)
         return None
     if kind == "ad":
         canvas[:] = BG["paper"]
@@ -398,16 +428,16 @@ def render(t, frame, mask, kind, t0, canvas):
         return "dark"
     if kind == "search":
         canvas[:] = CUR["bg"]
-        put_sticker(canvas, sticker(frame, mask, 0.92), 0, H)
-        lens = [circle(820, 380, 120)] + [[(905, 465), (1030, 590)]]
+        big_sticker(canvas, frame, mask, 1.1)
+        lens = [circle(880, 300, 105)] + [[(955, 375), (1050, 470)]]
         draw_lines(canvas, lens, (t - T(85)) / 0.5, GOLD, 16)
-        place(canvas, strip("ИСКАТЬ ПОКУПАТЕЛЯ", "gold", 60), 400, 220, t, T(85), -2)
+        place(canvas, strip("ИСКАТЬ ПОКУПАТЕЛЯ", "gold", 60), 380, 150, t, T(85), -2)
         return None
     if kind == "team":
         canvas[:] = CUR["bg"]
         for key, path, st, cx, cy, rot, wi in [("4127", "IMG_4127.mov", 12.0, 330, 560, -5, 87),
                                               ("4129", "IMG_4129.mov", 2.0, 740, 780, 4, 92),
-                                              ("3109b", "IMG_3109.mov", 3.0, 430, 1000, -2, 95)]:
+                                              ("4127b", "IMG_4127.mov", 3.0, 430, 1000, -2, 95)]:
             if t >= T(wi):
                 f = rd(key, SRC / path, 520, 700, st, 0.85).next()
                 place(canvas, card(f), cx, cy, t, T(wi), rot)
@@ -429,7 +459,7 @@ def render(t, frame, mask, kind, t0, canvas):
             d.text((105, 22), txt, font=f, fill=INK + (255,))
             over(canvas, pil_rgba(img), int(60 + 40 * (1 - p)), y, p)
             draw_lines(canvas, [[(80, y + 50), (100, y + 75), (140, y + 22)]], (t - T(wi) - 0.25) / 0.25, GOLD, 12)
-        st = sticker(frame, mask, 0.42)
+        st = sticker(frame, mask, 0.55)
         put_sticker(canvas, st, W - st.shape[1] + 60, H)
         return "dark"
     if kind == "papers":
@@ -446,21 +476,21 @@ def render(t, frame, mask, kind, t0, canvas):
         return None
     if kind == "question":
         canvas[:] = CUR["bg"]
-        put_sticker(canvas, sticker(frame, mask), 0, H)
+        big_sticker(canvas, frame, mask, 1.1)
         q = big_text("?", 380, GOLD)
-        place(canvas, q, 900, 640, t, T(133), 10, False)
+        place(canvas, q, 960, 300, t, T(133), 10, False)
         for k, (txt, kd, wi) in enumerate([("НУЖНО ДАЖЕ В КРИЗИС", "champ", 137), ("ЗАЕХАЛ БЫСТРО", "champ", 144),
                                            ("СРАЗУ ОКУПИЛ", "gold", 147)]):
             p = ease_out((t - T(wi)) / 0.25)
             if p > 0:
                 s = strip(txt, kd, 60, 760)
-                over(canvas, with_shadow(rotate_rgba(s, (-1.5, 1.5, -1)[k]))[0], int(40 - 60 * (1 - p)), 170 + k * 105, p)
+                over(canvas, with_shadow(rotate_rgba(s, (-1.5, 1.5, -1)[k]))[0], int(40 - 60 * (1 - p)), 100 + k * 100, p)
         return None
     if kind == "comments":
         canvas[:] = CUR["bg"]
-        put_sticker(canvas, sticker(frame, mask), 0, H)
-        place(canvas, strip("ПИШИТЕ В КОММЕНТАРИЯХ", "gold", 62), 540, 260, t, T(157), -2)
-        place(canvas, strip("РАЗБОР В СЛЕДУЮЩЕМ РОЛИКЕ", "champ", 54), 540, 380, t, T(160), 1.5)
+        big_sticker(canvas, frame, mask, 1.1)
+        place(canvas, strip("ПИШИТЕ В КОММЕНТАРИЯХ", "gold", 62), 540, 150, t, T(157), -2)
+        place(canvas, strip("РАЗБОР В СЛЕДУЮЩЕМ РОЛИКЕ", "champ", 54), 540, 260, t, T(160), 1.5)
         return None
     if kind == "cta":
         canvas[:] = CUR["bg"]
@@ -476,6 +506,8 @@ def render(t, frame, mask, kind, t0, canvas):
 talk = Reader(WORK / "talk.mp4", W, H)
 CUR = {}
 TINT = np.array((12, 40, 34), np.float32) * 0.35
+roomv = subprocess.Popen(["ffmpeg", "-v", "error", "-stream_loop", "-1", "-i", str(WORK / "bgroom.mp4"), "-vf",
+                          f"scale={W}:{H}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
 bgv = subprocess.Popen(["ffmpeg", "-v", "error", "-stream_loop", "-1", "-i", str(WORK / "bgloop.mp4"), "-vf",
                         f"scale={W}:{H}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
 matte = Reader(WORK / "matte.mp4", 432, 768, gray=True)
@@ -490,8 +522,11 @@ for i in range(NF):
     t = i / FPS
     frame = talk.next().astype(np.float32)
     CUR["bg"] = np.frombuffer(bgv.stdout.read(W * H * 3), np.uint8).reshape(H, W, 3).astype(np.float32) * 0.45 + TINT
+    CUR["room"] = np.frombuffer(roomv.stdout.read(W * H * 3), np.uint8).reshape(H, W, 3).astype(np.float32) * 0.8
     mask = matte.next()[..., 0]
     t0, t1, kind, p = next(s for s in S if s[0] <= t < s[1])
+    if PREV is not None and i > max(PREV):
+        break
     if PREV is not None and i not in PREV:
         continue
     tone = render(t, frame, mask, kind, t0, canvas)
