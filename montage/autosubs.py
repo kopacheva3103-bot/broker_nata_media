@@ -14,9 +14,16 @@ def transcribe(audio: str | Path, model: str = "small", language: str | None = "
             "Для автосубтитров установите faster-whisper: pip install faster-whisper\n"
             "(или отключите subtitles.auto и подключите готовый .srt)"
         ) from e
+    import subprocess
+
+    import numpy as np
+
+    # decode with ffmpeg ourselves: faster-whisper's own PyAV decoding breaks on some PyAV versions
+    pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", str(audio), "-ac", "1", "-ar", "16000", "-f", "f32le", "-"],
+                         capture_output=True, check=True).stdout
     wm = WhisperModel(model, device="auto", compute_type="auto")
-    segments, _ = wm.transcribe(str(audio), language=language or None, word_timestamps=True, vad_filter=True,
-                                condition_on_previous_text=False)
+    segments, _ = wm.transcribe(np.frombuffer(pcm, np.float32), language=language or None, word_timestamps=True,
+                                vad_filter=True, condition_on_previous_text=False)
     cues = []
     for s in segments:
         words: list[tuple[float, float, str]] = []
